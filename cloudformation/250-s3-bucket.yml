@@ -1,0 +1,44 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates an s3 bucket to hold Checkmarx dependencies, logs, and other data.
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: s3
+      Parameters:
+      - pBucketName
+    ParameterLabels:
+      pBucketName:
+        default: Bucket name
+Parameters:
+  pBucketName:
+    Type: String
+    Description: "Enter a name for the s3 bucket that will hold Checkmarx dependencies. It will name an s3 bucket so must be unique. Suggested: checkmarx-$yourname"
+    Default: checkmarx
+Resources:
+  ##########################
+  # s3
+  ##########################
+  rCxS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties: 
+      AccessControl: Private 
+      BucketEncryption: 
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      BucketName: !Ref pBucketName
+      PublicAccessBlockConfiguration: 
+        BlockPublicAcls: true
+        BlockPublicPolicy: true 
+        IgnorePublicAcls: true 
+        RestrictPublicBuckets: true
+      VersioningConfiguration: 
+        Status: Suspended
+
+Outputs:
+  s3BucketId:
+    Description: s3 bucket id for the created bucket
+    Value: !Ref rCxS3Bucket

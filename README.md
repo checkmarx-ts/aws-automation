@@ -1,1 +1,89 @@
 # aws-automation
+Resources and documentation on how to run Checkmarx in AWS.
+
+# Getting started
+To begin, you should have access to an AWS account. This getting started guide will walk you through creating infrastructure to run Checkmarx. Your account must be able to provision the infrastructure needed. Using the resources in this repo will cause you to use AWS Services which will incur cost - be careful. 
+
+## Deploy the network
+First, create a VPC with 2 public and 2 private subnets using the Cloud Formation Template ```100-network.yml```. If you already have a network set up that you want to deploy Checkmarx into then skip this step.
+
+Use the AWS Console to create this Cloud Formation Template or use the AWS CLI as shown below. 
+
+```powershell
+# Create the network stack
+aws cloudformation create-stack --stack-name stokes-vpc --template-body file://100-network.yml --parameters ParameterKey=ClassB,ParameterValue=77 --tags Key=Owner,Value=Ben Key=Environment,Value=Development
+```
+
+## Deploy Directory Services
+It is not required to run Checkmarx on a domain but most people do. We will use the AWS Managed AD service to obtain domain services. If you already have a domain then skip this step.
+
+Deploy the Cloud Formation template ```200-DirectoryServicesMicrosoftAD.yml``` using the AWS Console or CLI. Using the CLI we will obtain many parameters values from our previously created stack.
+
+```powershell
+# Pull parameters from previous stacks, but you can also manually set values
+$vpc = (aws cloudformation describe-stacks --stack-name stokes-vpc | ConvertFrom-Json).Stacks[0].Outputs
+$vpcid = $vpc | where-object {$_.OutputKey -eq "VPC"} | select -ExpandProperty OutputValue 
+$subnet1 =  $vpc | where-object {$_.OutputKey -eq "SubnetAPrivate"} | select -ExpandProperty OutputValue 
+$subnet2 = $vpc | where-object {$_.OutputKey -eq "SubnetBPrivate"} | select -ExpandProperty OutputValue 
+$AdPassword = "use a strong password!"
+$domainname = "corp.dev.checkmarx-ts.com" 
+aws cloudformation create-stack --stack-name stokes-active-directory --template-body file://200-DirectoryServicesMicrosoftAD.yml --parameters ParameterKey=pDomainName,ParameterValue=${domainname} ParameterKey=pMicrosoftADShortName,ParameterValue=corp ParameterKey=pMicrosoftADPW,ParameterValue=${AdPassword} ParameterKey=pEdition,ParameterValue=Standard ParameterKey=pCreateAlias,ParameterValue=false ParameterKey=pEnableSingleSignOn,ParameterValue=false ParameterKey=pPrivateSubnet1,ParameterValue="${subnet1}" ParameterKey=pPrivateSubnet2,ParameterValue="${subnet2}" ParameterKey=pVPCID,ParameterValue="${vpcid}" --tags Key=Owner,Value=Ben Key=Environment,Value=Development
+```
+
+## Deploy FSX shares
+FSX provides a file share (NAS) that Checkmarx will use to satisfy part of its storage requirements. FSX also provides flexibility in deployment options. If you already have a plan for storage then skip this step. 
+
+Deploy the Cloud Formation template ```210-fsx-windows.yml``` using the AWS Console or CLI. Using the CLI we will obtain many parameters values from our previously created stack.
+
+```powershell
+$vpc =(aws cloudformation describe-stacks --stack-name stokes-vpc | ConvertFrom-Json).Stacks[0].Outputs
+$vpcid = $vpc | where-object {$_.OutputKey -eq "VPC"} | select -ExpandProperty OutputValue 
+$subnet1 =  $vpc | where-object {$_.OutputKey -eq "SubnetAPrivate"} | select -ExpandProperty OutputValue 
+$subnet2 = $vpc| where-object {$_.OutputKey -eq "SubnetBPrivate"} | select -ExpandProperty OutputValue 
+$fsx_connections_cidr = $vpc | where-object {$_.OutputKey -eq "CidrBlock"} | select -ExpandProperty OutputValue 
+
+$ad = (aws cloudformation describe-stacks --stack-name stokes-active-directory | ConvertFrom-Json).Stacks[0].Outputs
+$ActiveDirectoryId =  $ad | where-object {$_.OutputKey -eq "DirectoryID"} | select -ExpandProperty OutputValue 
+$domainsg = (aws ec2 describe-security-groups --filters Name=description,Values=*${ActiveDirectoryId}* | ConvertFrom-Json).SecurityGroups[0] | Select -ExpandProperty GroupId
+
+aws cloudformation create-stack --stack-name stokes-fsx --template-body file://210-fsx-windows.yml --parameters ParameterKey=PrivateSubnet1ID,ParameterValue="${subnet1}" ParameterKey=PrivateSubnet2ID,ParameterValue="${subnet2}" ParameterKey=VPCID,ParameterValue="${vpcid}" ParameterKey=ActiveDirectoryId,ParameterValue="${ActiveDirectoryId}" ParameterKey=FSxAllowedCIDR,ParameterValue="${fsx_connections_cidr}" ParameterKey=DomainMembersSG,ParameterValue="${domainsg}" --tags Key=Owner,Value=Ben Key=Environment,Value=Development
+```
+
+## Create your s3 bucket
+Checkmarx automation will use s3 to store dependencies, installers, configuration files, write logs, etc. 
+
+If you need to use an existing s3 bucket then continue to the inflation step but you may need to adjust some IAM policies if the paths that Checkmarx uses need to change.
+
+Deploy the Cloud Formation template ```250-s3-bucket.yml``` using the AWS Console or CLI. 
+
+```powershell
+aws cloudformation create-stack --stack-name stokes-s3 --template-body file://250-s3-bucket.yml --parameters ParameterKey=pBucketName,ParameterValue="checkmarx-stokes" --tags Key=Owner,Value=Ben Key=Environment,Value=Development
+```
+## Inflate your s3 bucket
+Now that your s3 bucket is up, you need to load it with dependencies - things that this Checkmarx automation will use. 
+
+Follow the steps in [cloudformation/251-inflate-s3-bucket.md](cloudformation/251-inflate-s3-bucket.md) to populate your bucket.
+
+## Deploy Checkmarx security
+The security template includes things like security groups and IAM roles. These resources are required however you may customize them so long as you do not break component-to-component communication (e.g. you can - and should - lock down your users CIDR block). 
+
+Deploy the Cloud Formation template ```300-checkmarx-security.yml``` using the AWS Console or CLI. Using the CLI we will obtain many parameters values from our previously created stack.
+
+```powershell
+# security/iam
+$vpc =(aws cloudformation describe-stacks --stack-name stokes-vpc | ConvertFrom-Json).Stacks[0].Outputs
+$vpcid = $vpc | where-object {$_.OutputKey -eq "VPC"} | select -ExpandProperty OutputValue 
+$key_arn = (aws kms describe-key --key-id alias/aws/ssm | ConvertFrom-Json).KeyMetaData | Select -ExpandProperty Arn
+aws cloudformation create-stack --stack-name stokes-cx-security --template-body file://300-checkmarx-security.yml --parameters ParameterKey=pCheckmarxBucket,ParameterValue="arn:aws:s3:::checkmarx-stokes" ParameterKey=pCxSASTUsersCIDR,ParameterValue="0.0.0.0/0" ParameterKey=pVPCID,ParameterValue="${vpcid}" ParameterKey=pParameterStoreKey,ParameterValue="${key_arn}" --capabilities CAPABILITY_NAMED_IAM
+```
+
+## Deploy Checkmarx Image Builder
+Checkmarx will create AMIs using the EC2 Image Builder service. Create this stack manually or by deploying the ```400-image-builder.yml``` using the CLI. Many parameter inputs to this template will be sourced from previous templates. 
+
+```powershell
+# Image Builder
+$vpc =(aws cloudformation describe-stacks --stack-name stokes-vpc | ConvertFrom-Json).Stacks[0].Outputs
+$vpcid = $vpc | where-object {$_.OutputKey -eq "VPC"} | select -ExpandProperty OutputValue 
+$subnet1 =  $vpc | where-object {$_.OutputKey -eq "SubnetAPrivate"} | select -ExpandProperty OutputValue 
+aws cloudformation create-stack --stack-name stokes-checkmarx-factory --template-body file://400-image-builder.yml --parameters ParameterKey=pS3Bucket,ParameterValue="checkmarx-stokes" ParameterKey=pEngineBaseAmi,ParameterValue="arn:aws:imagebuilder:us-east-2:aws:image/windows-server-2016-english-core-base-x86/x.x.x" ParameterKey=pManagerBaseAmi,ParameterValue="arn:aws:imagebuilder:us-east-2:aws:image/windows-server-2016-english-full-base-x86/x.x.x" ParameterKey=pRemoteDesktopCIDR,ParameterValue="0.0.0.0/0" ParameterKey=pVpcId,ParameterValue="${vpcid}" ParameterKey=pBuilderSubnet,ParameterValue="${subnet1}" ParameterKey=pBuilderKeypair,ParameterValue=cxbs ParameterKey=pAmiDistributionRegion,ParameterValue=us-east-2 --tags Key=Owner,Value=Ben Key=Environment,Value=Development
+```
