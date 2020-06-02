@@ -1,0 +1,290 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Create Checkmarx SAST servers
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: Network
+      Parameters:
+      - pVpcId
+      - pManagerSubnets
+      - pEngineSubnets
+      - pManagerAvailabilityZones
+      - pEngineAvailabilityZones
+    - Label:
+        default: Environment
+      Parameters:
+      - pS3Bucket
+      - pEbsKey
+      - pEc2Key      
+    - Label: 
+        default: Database
+      Parameters:
+      - pSqlServerHost    
+    - Label:
+        default: Manager
+      Parameters:
+      - pManagerAmi
+      - pManagerInstanceType
+      - pManagerIamProfile
+      - pManagerSecurityGroups  
+    - Label:
+        default: Engines
+      Parameters:
+      - pEngineAmi
+      - pEngineIamProfile
+      - pEngineSecurityGroups
+      - pEngineSmallInstanceType
+
+Parameters:
+  pManagerAmi:
+    Description: AMI for the Checkmarx Manager
+    Type: String
+    Default: ami-0ca53eb940479b0b9
+  pEngineAmi:
+    Description: AMI for the Checkmarx Engines
+    Type: String
+    Default: ami-0cfe24e95e484fa4c
+  pManagerSubnets:
+    Description: Subnets into which to deploy the manager server(s)
+    Type: List<AWS::EC2::Subnet::Id>
+    Default: subnet-07af776b4c0432034, subnet-0dcb2bf661216b285
+  pEngineSubnets:
+    Description: Subnets into which to deploy the engine server(s)
+    Type: List<AWS::EC2::Subnet::Id>
+    Default: subnet-07af776b4c0432034, subnet-0dcb2bf661216b285
+  pVpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VpcId into which to deploy
+    Default: vpc-03fcc783b081498d9
+  pSqlServerHost:
+    Type: String
+    Description: The sql server hostname, port to connect to
+    Default: sqlserverdev.ckbq3owrgyjd.us-east-1.rds.amazonaws.com,10001
+  pS3Bucket: 
+    Type: String 
+    Description: The checkmarx s3 bucket
+    Default: checkmarx-us-east-1-213611284282
+  pManagerInstanceType:
+    Type: String
+    Description: The instance type of the manager server
+    Default: t3.large
+  pEngineSmallInstanceType:
+    Type: String
+    Description: Instance type of the small engine servers
+    Default: t3.large
+  pEbsKey:
+    Type: String
+    Description: The key used to encrypt ebs volumes. Find the default key arn with aws kms describe-key --key-id alias/aws/ebs
+    Default: arn:aws:kms:us-east-1:213611284282:key/e4a9a443-febd-4f97-abdb-2ced64df395a
+  pManagerIamProfile:
+    Type: String
+    Description: IAM Profile for the manager. Format of arn:aws:iam::<account-id>:instance-profile/<instance-profile-name>.
+    Default: arn:aws:iam::213611284282:instance-profile/checkmarx-cxsast-manager
+  pEngineIamProfile:
+    Type: String
+    Description: IAM Profile for the engine. Format of arn:aws:iam::<account-id>:instance-profile/<instance-profile-name>.
+    Default: arn:aws:iam::213611284282:instance-profile/checkmarx-cxsast-engine
+  pEc2Key:
+    Type: String
+    Default: cxbs
+    Description: The key for ec2 instances
+  pManagerSecurityGroups:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Manager security groups
+    Default: sg-04a9345758d510fb0, sg-0a2771a87f57be756
+  pEngineSecurityGroups:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Manager security groups 
+    Default: sg-0d9467fb3bfe94fbc, sg-0a2771a87f57be756
+  pManagerAvailabilityZones:
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+    Description: AZs for the manager servers
+    Default: us-east-2a, us-east-2b
+  pEngineAvailabilityZones:
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+    Description: AZs for the engine servers
+    Default: us-east-2a, us-east-2b    
+  
+Resources:
+###############################################################################
+# Checkmarx Manager Server
+#  - Launch template
+#  - Auto scaling group
+#  - Target group
+#  - Network loadbalancer
+#  - NLB Listener
+###############################################################################
+  CxManagerLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs:
+              VolumeSize: 100
+              Encrypted: true
+              KmsKeyId: !Ref pEbsKey
+              VolumeType: gp2
+          - DeviceName: /dev/sdm
+            Ebs:
+              VolumeSize: 250
+              Encrypted: true
+              KmsKeyId: !Ref pEbsKey
+              VolumeType: gp2
+        EbsOptimized: true
+        IamInstanceProfile:
+          Arn: !Ref pManagerIamProfile
+        ImageId: !Ref pManagerAmi
+        InstanceType: !Ref pManagerInstanceType
+        KeyName: !Ref pEc2Key
+        SecurityGroupIds: !Ref pManagerSecurityGroups
+        UserData: 
+          Fn::Base64: 
+            Fn::Sub: |
+              <powershell>
+              # Automatic License Generator
+              Read-S3Object -BucketName ${pS3Bucket} -KeyPrefix installation/field/alg -Folder c:\programdata\checkmarx\alg
+              C:\programdata\checkmarx\alg\license-from-alg.ps1
+              # Cloudwatch Logs Configuration
+              Read-S3Object -BucketName ${pS3Bucket} -KeyPrefix installation/field/cloudwatchlogs -Folder c:\programdata\checkmarx\cloudwatchlogs
+              c:\programdata\checkmarx\cloudwatchlogs\configure-cloudwatch-logs.ps1 -ConfigFile c:\programdata\checkmarx\cloudwatchlogs\cloudwatch-logs-config.json
+              # Database Connection String Configuration
+              Read-S3Object -BucketName ${pS3Bucket} -KeyPrefix installation/field/configuration -Folder c:\programdata\checkmarx\configuration
+              c:\programdata\checkmarx\configuration\configure-connection-strings.ps1 -username /checkmarx/dev/sql/username -password /checkmarx/dev/sql/password -dbhost "sqlserverdev.ckbq3owrgyjd.us-east-1.rds.amazonaws.com"
+              # Install Lab Toolset
+              Read-S3Object -BucketName ${pS3Bucket} -KeyPrefix installation/lab -Folder c:\programdata\checkmarx\lab
+              c:\programdata\checkmarx\lab\install-lab-tools.ps1 `
+              </powershell>
+      LaunchTemplateName: CxManagerTemplate
+
+
+  CxManagerAsg:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    CreationPolicy:
+      ResourceSignal:
+        Count: '1'
+        Timeout: PT1H
+    Properties:
+      AutoScalingGroupName: CxAutoScaleManager
+      AvailabilityZones: !Ref pManagerAvailabilityZones
+      DesiredCapacity: "1"
+      LaunchTemplate:
+        LaunchTemplateId: !Ref CxManagerLaunchTemplate
+        Version: !GetAtt CxManagerLaunchTemplate.LatestVersionNumber
+      MaxSize: "1"
+      MinSize: "1"
+      TargetGroupARNs: 
+        - !Ref CxManagerTargetGroup
+      VPCZoneIdentifier: !Ref pManagerSubnets
+      Tags:
+        - Key: Name
+          PropagateAtLaunch: True
+          Value: CxManagerAsg
+        - Key: checkmarx:component
+          PropagateAtLaunch: True
+          Value: manager
+
+  CxManagerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties: 
+      Name: CxManagerTargetGroup
+      Port: 80
+      Protocol: TCP
+      TargetType: instance
+      VpcId: !Ref pVpcId
+
+  CxManagerNLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties: 
+      IpAddressType: ipv4 #required for NLB
+      Name: CxManagerNLB
+      Scheme: internet-facing
+      Subnets: !Ref pManagerSubnets
+      Type: network
+
+  CxManagerNLB80Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties: 
+      DefaultActions: 
+        - Type: forward
+          TargetGroupArn: !Ref CxManagerTargetGroup
+      LoadBalancerArn: !Ref CxManagerNLB
+      Port: 80
+      Protocol: TCP
+
+###############################################################################
+# Checkmarx Engine Server - Small
+#  - Launch template
+#  - Auto scaling group
+#  - Target group
+###############################################################################
+  CxEngineSmallLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: CxEngingeSTemplate
+      LaunchTemplateData:
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs:
+              VolumeSize: 100
+              Encrypted: true
+              KmsKeyId: !Ref pEbsKey
+              VolumeType: gp2
+        EbsOptimized: true
+        IamInstanceProfile:
+          Arn: !Ref pEngineIamProfile
+        ImageId: !Ref pEngineAmi
+        InstanceType: !Ref pEngineSmallInstanceType
+        KeyName: !Ref pEc2Key
+        SecurityGroupIds: !Ref pEngineSecurityGroups
+        UserData: 
+          Fn::Base64: 
+            Fn::Sub: |
+              <powershell>
+              # Cloudwatch Logs Configuration
+              Read-S3Object -BucketName ${pS3Bucket} -KeyPrefix installation/field/cloudwatchlogs -Folder c:\programdata\checkmarx\cloudwatchlogs
+              c:\programdata\checkmarx\cloudwatchlogs\configure-cloudwatch-logs.ps1 -ConfigFile c:\programdata\checkmarx\cloudwatchlogs\cloudwatch-logs-config.json
+              # Set Concurrent Scans to 2
+              Read-S3Object -BucketName ${pS3Bucket} -KeyPrefix installation/field/configuration -Folder c:\programdata\checkmarx\configuration
+              c:\programdata\checkmarx\configuration\configure-concurrent-scans.ps1 -concurrency 2
+              </powershell>
+
+  CxEngineSAsg:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: PT1H30M
+    Properties:
+      AutoScalingGroupName: CxAutoScaleEngineS
+      AvailabilityZones: !Ref pEngineAvailabilityZones
+      DesiredCapacity: 1
+      LaunchTemplate:
+        LaunchTemplateId: !Ref CxEngineSmallLaunchTemplate
+        Version: !GetAtt CxEngineSmallLaunchTemplate.LatestVersionNumber
+      MaxSize: 1
+      MinSize: 1
+      TargetGroupARNs: 
+        - !Ref CxEngineSmallTargetGroup
+      VPCZoneIdentifier: !Ref pEngineSubnets
+      Tags:
+        - Key: Name
+          PropagateAtLaunch: True
+          Value: CxEngineSmallAsg
+        - Key: checkmarx:component
+          PropagateAtLaunch: True
+          Value: engine
+ 
+  CxEngineSmallTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties: 
+      Name: CxEngineSmallTargetGroup
+      Port: 80
+      Protocol: TCP
+      TargetType: instance
+      VpcId: !Ref pVpcId
+
+

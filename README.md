@@ -82,10 +82,65 @@ Checkmarx will create AMIs using the EC2 Image Builder service. Create this stac
 
 In case somehow you don't already have one, you will need a keypair at this point before you continue (this template takes a keypair as a parameter). See https://docs.aws.amazon.com/cli/latest/userguide/cli-services-ec2-keypairs.html#creating-a-key-pair. 
 
+
 ```powershell
 # Image Builder
 $vpc =(aws cloudformation describe-stacks --stack-name stokes-vpc | ConvertFrom-Json).Stacks[0].Outputs
 $vpcid = $vpc | where-object {$_.OutputKey -eq "VPC"} | select -ExpandProperty OutputValue 
-$subnet1 =  $vpc | where-object {$_.OutputKey -eq "SubnetAPrivate"} | select -ExpandProperty OutputValue 
-aws cloudformation create-stack --stack-name stokes-checkmarx-factory --template-body file://400-image-builder.yml --parameters ParameterKey=pS3Bucket,ParameterValue="checkmarx-stokes" ParameterKey=pEngineBaseAmi,ParameterValue="arn:aws:imagebuilder:us-east-2:aws:image/windows-server-2016-english-core-base-x86/x.x.x" ParameterKey=pManagerBaseAmi,ParameterValue="arn:aws:imagebuilder:us-east-2:aws:image/windows-server-2016-english-full-base-x86/x.x.x" ParameterKey=pRemoteDesktopCIDR,ParameterValue="0.0.0.0/0" ParameterKey=pVpcId,ParameterValue="${vpcid}" ParameterKey=pBuilderSubnet,ParameterValue="${subnet1}" ParameterKey=pBuilderKeypair,ParameterValue=cxbs ParameterKey=pAmiDistributionRegion,ParameterValue=us-east-2 --tags Key=Owner,Value=Ben Key=Environment,Value=Development
+$subnet1 =  $vpc | where-object {$_.OutputKey -eq "SubnetAPublic"} | select -ExpandProperty OutputValue 
+aws cloudformation create-stack --stack-name stokes-checkmarx-factory --template-body file://400-image-builder.yml --parameters ParameterKey=pS3Bucket,ParameterValue="checkmarx-stokes" ParameterKey=pEngineBaseAmi,ParameterValue="arn:aws:imagebuilder:us-east-2:aws:image/windows-server-2016-english-core-base-x86/x.x.x" ParameterKey=pManagerBaseAmi,ParameterValue="arn:aws:imagebuilder:us-east-2:aws:image/windows-server-2016-english-full-base-x86/x.x.x" ParameterKey=pRemoteDesktopCIDR,ParameterValue="0.0.0.0/0" ParameterKey=pVpcId,ParameterValue="${vpcid}" ParameterKey=pBuilderSubnet,ParameterValue="${subnet1}" ParameterKey=pBuilderKeypair,ParameterValue="stokes" ParameterKey=pAmiDistributionRegion,ParameterValue="us-east-2" --tags Key=Owner,Value="Ben" Key=Environment,Value="Development"
 ```
+
+## Deploy the Checkmarx Environment
+
+```powershell
+$vpc =(aws cloudformation describe-stacks --stack-name stokes-vpc | ConvertFrom-Json).Stacks[0].Outputs
+$vpcid = $vpc | where-object {$_.OutputKey -eq "VPC"} | select -ExpandProperty OutputValue 
+$publicSubnets = $($vpc | where-object {$_.OutputKey -eq "SubnetsPublic"} | select -ExpandProperty OutputValue).Replace(",", "\,")
+$privateSubnets = $($vpc | where-object {$_.OutputKey -eq "SubnetsPrivate"} | select -ExpandProperty OutputValue).Replace(",", "\,")
+$ebsKey = (aws kms describe-key --key-id alias/aws/ebs | ConvertFrom-Json).KeyMetaData |Select -ExpandProperty Arn
+$security = (aws cloudformation describe-stacks --stack-name stokes-cx-security | ConvertFrom-Json).Stacks[0].Outputs
+$managerIam = "arn:aws:iam::275043232443:instance-profile/checkmarx-cxsast-manager"
+$engineIam = "arn:aws:iam::275043232443:instance-profile/checkmarx-cxsast-engine"
+$managerSg = $security | where-object {$_.OutputKey -eq "ManagerSecurityGroupId"} | select -ExpandProperty OutputValue 
+$engineSg = $security | where-object {$_.OutputKey -eq "EngineSecurityGroupId"} | select -ExpandProperty OutputValue 
+
+aws cloudformation create-stack --stack-name stokes-checkmarx-sast89 --template-body file://500-cxsast.yml --parameters ParameterKey=pVpcId,ParameterValue="${vpcid}" ParameterKey=pManagerSubnets,ParameterValue="${publicSubnets}" ParameterKey=pEngineSubnets,ParameterValue="${privateSubnets}" ParameterKey=pEngineAvailabilityZones,ParameterValue="us-east-2a\,us-east-2b"  ParameterKey=pManagerAvailabilityZones,ParameterValue="us-east-2a\,us-east-2b" ParameterKey=pS3Bucket,ParameterValue="stokes-checkmarx" ParameterKey=pEbsKey,ParameterValue="${ebsKey}" ParameterKey=pEc2Key,ParameterValue="stokes" ParameterKey=pManagerIamProfile,ParameterValue="${managerIam}" ParameterKey=pEngineIamProfile,ParameterValue="${engineIam}" ParameterKey=pManagerSecurityGroups,ParameterValue="${managerSg}" ParameterKey=pEngineSecurityGroups,ParameterValue="${engineSg}" ParameterKey=pManagerAmi,ParameterValue="ami-011eb19eeda1a763a" ParameterKey=pEngineAmi,ParameterValue="ami-01525ec5f040540fa" --tags Key=Owner,Value="Ben" Key=Environment,Value="Development"
+
+```
+
+# Troubleshooting
+
+These links are helpful:
+* https://docs.aws.amazon.com/imagebuilder/latest/userguide/what-is-image-builder.html
+* https://docs.aws.amazon.com/imagebuilder/latest/userguide/image-builder-troubleshooting.html
+* https://docs.aws.amazon.com/systems-manager/latest/userguide/automation-troubleshooting.html
+
+---
+
+If EC2 Image Builder fails due to a timeout verifying SSM Agent availability like the following:
+
+```
+SSM execution '5ba529cb-bbb4-4e34-a2d5-19dbb42932ff' failed with status = 'TimedOut' and failure message = 'Step timed out while step is verifying the SSM Agent availability on the target instance(s). SSM Agent on Instances: [i-0a0c28557cf6936da] are not functioning. Please refer to Automation Service Troubleshooting Guide for more diagnosis details.'
+```
+Then, ensure you are building your images in a public subnet (not private), and ensure that the SSM agent is installed and up to date on your base image. Its possible the SSM agent is not present on custom base images not provided by Amazon. 
+
+See https://docs.aws.amazon.com/imagebuilder/latest/userguide/image-builder-image-deployment-console.html where a public subnet is specified. 
+
+---
+If you get an error message like the following when deploying a cloud formation template:
+```
+Parameter validation failed:
+Invalid type for parameter Parameters[3].ParameterValue, value: ['us-east-2a', 'us-east-2b'], type: <class 'list'>, valid types: <class 'str'>
+```
+Then, ensure you are escaping the commas in list parameters for cloud formation.
+
+Wrong: ```"us-east-2a, us-east-2b"```
+
+Correct: ```"us-east-2a\, us-east-2b"```
+
+# FAQ
+
+**Q:** Why are there so many cloud formation templates? Can they be combined?
+
+**A:** Many organizations have policies around creating resources that must be adhered to. For example, not everyone can just create an S3 Bucket via self service and may need to request it be created for them. These templates are split up into infrastructure layers in order to be flexible. They can also be combined into one master template if that works better for you (watch out for limits though). 

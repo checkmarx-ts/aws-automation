@@ -126,11 +126,11 @@ Resources:
     Type: AWS::ImageBuilder::Component
     Properties: 
       Description: Installs Git from your s3 bucket cache
-      Name: Git 2-26-2-64bit
+      Name: Git 2-27-0-64bit
       Platform: Windows
       Version: 1.0.0
       Data: !Sub |
-        name: git_2_26_2
+        name: git_2_27_0
         description: Installs git
         schemaVersion: 1.0
         phases: 
@@ -140,15 +140,15 @@ Resources:
                 action: S3Download
                 timeoutSeconds: 180
                 inputs:
-                  - source: 's3://${pS3Bucket}/installation/common/Git-2.26.2-64-bit.exe'
-                    destination: 'c:\programdata\checkmarx\automation\dependencies\Git-2.26.2-64-bit.exe'                
+                  - source: 's3://${pS3Bucket}/installation/common/Git-2.27.0-64-bit.exe'
+                    destination: 'c:\programdata\checkmarx\automation\dependencies\Git-2.27.0-64-bit.exe'                
               - name: INSTALL_GIT
                 action: ExecutePowerShell
                 timeoutSeconds: 900
                 inputs:
                   commands:
                     - |
-                      Start-Process "C:\programdata\checkmarx\automation\dependencies\Git-2.26.2-64-bit.exe"  -ArgumentList "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS" -Wait -NoNewWindow     
+                      Start-Process "C:\programdata\checkmarx\automation\dependencies\Git-2.27.0-64-bit.exe"  -ArgumentList "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS" -Wait -NoNewWindow     
 
 
   ibcCpp2010sp1v100:
@@ -1092,18 +1092,16 @@ Resources:
       ImageRecipeArn: !Ref ibrEngineV89hf14
       InfrastructureConfigurationArn: !Ref ibInfraEngineServerCore
       Name: Checkmarx CxSAST v89 HF14 Engine
-      
-      
+
   ibpCxSast89hf14Manager:
     Type: AWS::ImageBuilder::ImagePipeline
     Properties: 
       Description: Checmarx CxSAST 8.9 HF14 Manager
       DistributionConfigurationArn: !Ref ibManagerV89hf14Distro
-      ImageRecipeArn: !Ref ibrManagerV90hf00
+      ImageRecipeArn: !Ref ibrManagerV89hf14
       InfrastructureConfigurationArn: !Ref ibInfraManagerServer
       Name: Checkmarx CxSAST v89 HF14 Manager
-      
-      
+            
       
   ibpCxSast90hfnaengine:
     Type: AWS::ImageBuilder::ImagePipeline

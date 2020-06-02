@@ -285,4 +285,28 @@ Resources:
         }
       Roles:
         - !Ref rCxManagerIAMRole
-        
+
+Outputs:
+  ManagerIamRole:
+    Description: CxManager server IAM Role
+    Value: !Ref rCxManagerIAMRole
+  ManagerIamInstanceProfile:
+    Description: CxManager server IAM Instance Profile
+    Value: !Ref rCxManagerInstanceProfile    
+  ManagerSecurityGroupId:
+    Description: CxManager security group
+    Value: !Ref rCxSASTManagerSG
+
+  EngineIamRole:
+    Description: CxEngine server IAM Role
+    Value: !Ref rCxEngineIAMRole
+  EngineIamInstanceProfile:
+    Description: CxEngine server IAM Instance Profile
+    Value: !Ref rCxEngineInstanceProfile        
+  EngineSecurityGroupId:
+    Description: CxEngine security group
+    Value: !Ref rCxSASTEngineSG        
+
+
+
+
