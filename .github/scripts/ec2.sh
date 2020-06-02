@@ -66,5 +66,5 @@ if [[ -v EC2_TAGS ]]; then
     	fi
     fi
 else
-    echo "The \"ec2_tags\" environment variable is not set. Skipping this scheduled task..."
+    echo "The \"EC2_TAGS\" environment variable is not set. Skipping this scheduled task..."
 fi
