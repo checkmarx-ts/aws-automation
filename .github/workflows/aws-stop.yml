@@ -1,21 +1,23 @@
 # This is a basic workflow to help you get started with Actions
 
-name: CI
+name: AWS Resource Shutdown
+env:
+  EC2_TAGS: Environment:Development
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  DB_NAMES: ""
 
-# Controls when the action will run. Triggers the workflow on push or pull request
-# events but only for the master branch
+# events run 6am UTC
 on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ feature/aws-scheduler ]
-
+  schedule:
+  - cron: "0 6 * * *"
+    
 jobs:
   deploy:
     name: Shutdown AWS Resources
     runs-on: ubuntu-latest
 
     steps:
+      
     - name: Checkout
       uses: actions/checkout@v2
 
@@ -24,8 +26,14 @@ jobs:
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-east-1
+        aws-region: ${{ secrets.AWS_REGION }}
 
-    - name: List S3 with the AWS CLI
+    - name: EC2 Shutdown
       run: |
-        aws s3 ls s3://checkmarx-ts
+        chmod +x ./script/ec2.sh
+        ./script/ec2.sh stop ${EC2_TAGS}
+
+    - name: RDS Shutdown
+      run: |
+        chmod +x ./script/rds.sh
+        ./script/rds.sh stop ${DB_NAMES}
