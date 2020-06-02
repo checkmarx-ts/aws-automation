@@ -42,9 +42,9 @@ if [[ -v EC2_TAGS ]]; then
     		IDs=`aws ec2 describe-instances --filters$keyValFilters "Name=instance-state-name,Values=stopped" --query "Reservations[].Instances[].InstanceId" --output text --region $AWS_REGION`
     
     		if [ -z "$IDs" ]; then # if the above command returned no instance IDs
-    			echo "ERROR:"
+    			echo "WARN:"
     			echo "No instances matching the above query were found"
-    			exit 1
+    			exit 0
     
     		else
     			echo "Attempting to start the following instances: $IDs"
@@ -56,9 +56,9 @@ if [[ -v EC2_TAGS ]]; then
     		IDs=`aws ec2 describe-instances --filters$keyValFilters "Name=instance-state-name,Values=running" --query "Reservations[].Instances[].InstanceId" --output text --region $AWS_REGION`
     
     		if [ -z "$IDs" ]; then
-    			echo "ERROR:"
+    			echo "WARN:"
     			echo "No instances matching the above query were found"
-    			exit 1
+    			exit 0
     		else
     			echo "Attempting to stop the following instances: $IDs"
     			aws ec2 stop-instances --instance-ids $IDs --output json --region $AWS_REGION
