@@ -1,5 +1,5 @@
-# check if the $ec2_tags environment variable is set to a value
-if [[ -v ec2_tags ]]; then
+# check if the $EC2_TAGS environment variable is set to a value
+if [[ -v EC2_TAGS ]]; then
     # check if there are fewer than 2 arguments, and if the first argument is not "start" or "stop", if fail then exit
     if [ $# -lt 2 ] || [ "$1" != "start" ] && [ "$1" != "stop" ]; then
     
