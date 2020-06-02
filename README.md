@@ -80,6 +80,8 @@ aws cloudformation create-stack --stack-name stokes-cx-security --template-body 
 ## Deploy Checkmarx Image Builder
 Checkmarx will create AMIs using the EC2 Image Builder service. Create this stack manually or by deploying the ```400-image-builder.yml``` using the CLI. Many parameter inputs to this template will be sourced from previous templates. 
 
+In case somehow you don't already have one, you will need a keypair at this point before you continue (this template takes a keypair as a parameter). See https://docs.aws.amazon.com/cli/latest/userguide/cli-services-ec2-keypairs.html#creating-a-key-pair. 
+
 ```powershell
 # Image Builder
 $vpc =(aws cloudformation describe-stacks --stack-name stokes-vpc | ConvertFrom-Json).Stacks[0].Outputs
