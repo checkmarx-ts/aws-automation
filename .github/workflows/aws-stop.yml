@@ -30,10 +30,10 @@ jobs:
 
     - name: EC2 Shutdown
       run: |
-        chmod +x ./scripts/ec2.sh
-        ./script/ec2.sh stop ${EC2_TAGS}
+        chmod +x .github/scripts/ec2.sh
+        .github/scripts/ec2.sh stop ${EC2_TAGS}
 
     - name: RDS Shutdown
       run: |
-        chmod +x ./scripts/rds.sh
-        ./script/rds.sh stop ${DB_NAMES}
+        chmod +x .github/scripts/rds.sh
+        .github/scripts/rds.sh stop ${DB_NAMES}
