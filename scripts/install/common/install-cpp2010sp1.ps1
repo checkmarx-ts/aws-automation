@@ -65,6 +65,7 @@ function GetInstaller ([string] $pattern, [string] $expectedPath, [string] $s3pr
 }
 
 function Download() {
+  log "Downloading from https://download.microsoft.com/download/3/2/2/3224B87F-CFA0-4E70-BDA3-3DE650EFEBA5/vcredist_x64.exe"
   Invoke-WebRequest -UseBasicParsing -Uri "https://download.microsoft.com/download/3/2/2/3224B87F-CFA0-4E70-BDA3-3DE650EFEBA5/vcredist_x64.exe" -OutFile (Join-Path $expectedPath "vcredist_x64.exe")
   return (Join-Path $expectedPath "vcredist_x64.exe")
 }

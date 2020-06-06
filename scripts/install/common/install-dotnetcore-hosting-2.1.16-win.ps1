@@ -65,6 +65,7 @@ function GetInstaller ([string] $pattern, [string] $expectedPath, [string] $s3pr
 }
 
 function Download() {
+  log "Downloading from https://download.visualstudio.microsoft.com/download/pr/5a059308-c27a-4223-b04d-0e815dce2cd0/10f528c237fed56192ea22283d81c409/dotnet-hosting-2.1.16-win.exe"
   Invoke-WebRequest -UseBasicParsing -Uri "https://download.visualstudio.microsoft.com/download/pr/5a059308-c27a-4223-b04d-0e815dce2cd0/10f528c237fed56192ea22283d81c409/dotnet-hosting-2.1.16-win.exe" -OutFile "${expectedpath}\dotnet-hosting-2.1.16-win.exe"
   return "${expectedpath}\dotnet-hosting-2.1.16-win.exe"
 }

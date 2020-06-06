@@ -67,6 +67,7 @@ function GetInstaller ([string] $pattern, [string] $expectedPath, [string] $s3pr
 function DownloadJDK8() {
   $jdk = (Invoke-RestMethod -Method GET -Uri "https://api.adoptopenjdk.net/v3/assets/latest/8/hotspot" -UseBasicParsing).binary | Where-Object { $_.architecture -eq "x64" -and $_.heap_size -eq "normal" -and $_.image_type -eq "jdk" -and $_.jvm_impl -eq "hotspot" -and $_.os -eq "windows" }
   $jdk_file = $jdk.installer.link.Substring($jdk.installer.link.LastIndexOf("/") + 1)
+  log "Downloading from $($jdk.installer.link)"
   Invoke-WebRequest -UseBasicParsing -Uri "$($jdk.installer.link)" -OutFile "${expectedpath}\${jdk_file}"
   log "Downloaded $jdk.installer.link"
   return "${expectedpath}\${jdk_file}"

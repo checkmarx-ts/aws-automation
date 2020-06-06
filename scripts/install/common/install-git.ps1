@@ -64,8 +64,9 @@ function GetInstaller ([string] $pattern, [string] $expectedPath, [string] $s3pr
     }
 }
 
-function DownloadGit() {
+function Download() {
   $git = (Invoke-RestMethod -Method GET -Uri "https://api.github.com/repos/git-for-windows/git/releases/latest" -UseBasicParsing).assets | Where-Object { $_.name -match "Git-\d\.\d\d\.\d-64-bit\.exe" }
+  log "Downloading from $($git.browser_download_url)"
   Invoke-WebRequest -UseBasicParsing -Uri "$($git.browser_download_url)" -OutFile (Join-Path $expectedPath $git.name)
   return (Join-Path $expectedPath $git.name)
 }
@@ -90,7 +91,7 @@ try {
 # Last resort, try to get the installer over the internet
 if ([String]::IsNullOrEmpty($installer)) {
   log "No installer found, attempting download from source"
-  $installer = DownloadGit
+  $installer = Download
 }
 
 if (!(Test-Path "$installer")) {

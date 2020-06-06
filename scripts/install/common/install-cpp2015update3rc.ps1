@@ -65,6 +65,7 @@ function GetInstaller ([string] $pattern, [string] $expectedPath, [string] $s3pr
 }
 
 function Download() {
+  log "https://download.microsoft.com/download/0/6/4/064F84EA-D1DB-4EAA-9A5C-CC2F0FF6A638/vc_redist.x64.exe"
   Invoke-WebRequest -UseBasicParsing -Uri "https://download.microsoft.com/download/0/6/4/064F84EA-D1DB-4EAA-9A5C-CC2F0FF6A638/vc_redist.x64.exe" -OutFile (Join-Path $expectedPath "vc_redist2015.x64.exe")
   return (Join-Path $expectedPath "vc_redist2015.x64.exe")
 }

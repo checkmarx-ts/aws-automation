@@ -65,6 +65,7 @@ function GetInstaller ([string] $pattern, [string] $expectedPath, [string] $s3pr
 }
 
 function Download() {
+  log "Downloading from https://download.microsoft.com/download/C/9/E/C9E8180D-4E51-40A6-A9BF-776990D8BCA9/rewrite_amd64.msi"
   Invoke-WebRequest -UseBasicParsing -Uri "https://download.microsoft.com/download/C/9/E/C9E8180D-4E51-40A6-A9BF-776990D8BCA9/rewrite_amd64.msi" -OutFile "${expectedpath}\rewrite_amd64.msi"
   return "${expectedpath}\rewrite_amd64.msi"
 }
