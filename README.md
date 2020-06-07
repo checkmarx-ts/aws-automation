@@ -156,3 +156,11 @@ Correct: ```"us-east-2a\, us-east-2b"```
 **Q:** Why are there so many cloud formation templates? Can they be combined?
 
 **A:** Many organizations have policies around creating resources that must be adhered to. For example, not everyone can just create an S3 Bucket via self service and may need to request it be created for them. These templates are split up into infrastructure layers in order to be flexible. They can also be combined into one master template if that works better for you (watch out for limits though). 
+
+# Options
+
+A work in progress
+
+* Storage
+* SSL
+* Patching

@@ -190,6 +190,8 @@ Resources:
 
   # This custom policy is used to allow Checkmarx servers to use the Posh-ACME Route53 Plugin for letsencrypt.org
   # see https://github.com/rmbolger/Posh-ACME/blob/master/Posh-ACME/DnsPlugins/Route53-Readme.md
+  # It is also used by configure-route53-recordset.ps1 to allow EC2 instances to dynamically upsert thier 
+  # dns records in Route 53 based on a tag: dns
   rR53ACMEChallenge:
     Type: AWS::IAM::Policy 
     Properties:
