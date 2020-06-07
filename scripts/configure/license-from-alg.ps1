@@ -10,36 +10,45 @@ if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]:
     Start-Process PowerShell -Verb RunAs "-NoProfile -ExecutionPolicy Bypass -Command `"cd '$pwd'; & '$PSCommandPath';`"";
     exit
 }
+function log([string] $msg) { Write-Host "$(Get-Date -Format G) [$PSCommandPath] $msg" }
 
 # Force TLS 1.2+ and hide progress bars to prevent slow downloads
 Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; 
 $ProgressPreference = "SilentlyContinue"
 
-if (!(Test-Path "C:\programdata\checkmarx\alg")) {
-  Expand-Archive "C:\programdata\checkmarx\alg\HID_CLI_9.0.zip" -DestinationPath "C:\programdata\checkmarx\alg\HID_CLI_9.0" -Force
-}
+log "Copying alg config from s3"
+Read-S3Object -BucketName $env:CheckmarxBucket -KeyPrefix "installation/field/alg" -Folder c:\programdata\checkmarx\alg
 
-# Get the machine's hardware id
+log "Expanding HID_CLI_9.0.zip"
+Expand-Archive "C:\programdata\checkmarx\alg\HID_CLI_9.0.zip" -DestinationPath "C:\programdata\checkmarx\alg\HID_CLI_9.0" -Force
+
+
 $hid = $(& "C:\ProgramData\checkmarx\alg\HID_CLI_9.0\HID.exe") | Out-String
+log "HID from HID.exe is $hid"
 $hid = $hid.Substring(0, $hid.IndexOf("_") )
+log "Using $hid as HID input to ALG"
 
-# Generate the license
-Write-Host "Generating license for HID $hid"
-#Start-Process "java.exe" -ArgumentList "-jar c:\programdata\checkmarx\alg\ALG-CLI-1.0.0-jar-with-dependencies.jar -file `"C:\programdata\checkmarx\alg\settings.xml`" -hid $hid" -WorkingDirectory "C:\ProgramData\checkmarx\alg\" -Wait -NoNewWindow
-cat "c:\programdata\checkmarx\alg\licenseGeneratorInfo.log"
+log "Generating license for HID `"${hid}`"..."
+Start-Process "java.exe" -ArgumentList "-jar c:\programdata\checkmarx\alg\ALG-CLI-1.0.0-jar-with-dependencies.jar -file `"C:\programdata\checkmarx\alg\settings.xml`" -hid $hid" -WorkingDirectory "C:\ProgramData\checkmarx\alg\" -Wait -NoNewWindow
+log "...ALG finished. Log is:"
+Get-Content "c:\programdata\checkmarx\alg\licenseGeneratorInfo.log"
 
-# Backup any existing license file and import the new one
-$license = (gci C:\programdata\checkmarx\alg\license*cxl  | sort LastWriteTime | select -last 1).FullName
+log "Seaching for license..."
+$license = (Get-ChildItem C:\programdata\checkmarx\alg\license*cxl  | Sort-Object LastWriteTime | Select-Object -last 1).FullName
+log "...found: $license"
 
 # Import the new license if Checkmarx is installed
 if (Test-Path "C:\Program Files\Checkmarx\Licenses") {
   Move-Item "C:\Program Files\Checkmarx\Licenses\license.cxl" "C:\Program Files\Checkmarx\Licenses\license.$(Get-Date -format "yyyy-MM-dd-HHmm").bak" -Force -ErrorAction SilentlyContinue
-  cp "$((${license}).FullName)" 'C:\Program Files\Checkmarx\Licenses\license.cxl' -Verbose -Force
+  Copy-Item "$((${license}).FullName)" 'C:\Program Files\Checkmarx\Licenses\license.cxl' -Verbose -Force
   # Restart services to begin using the new license
   restart-service cx* 
   iisreset
 }
 
 # Place a copy in the installer folder for automation purposes. By convention the automation scripts will look for a license file here
-md -Force c:\programdata\checkmarx\automation\installers
-cp "$license" "c:\programdata\checkmarx\automation\installers\" -Verbose -Force
+log "Creating a copy for the automation scripts to find during install time"
+mkdir -Force "c:\programdata\checkmarx\automation\installers"
+Copy-Item "$license" "c:\programdata\checkmarx\automation\installers\" -Verbose -Force
+
+log "finished"
