@@ -11,13 +11,10 @@ The installer file is determined in this order:
   OTHERWISE the installation file will be searched for in this order
     1. The local expected path i.e. c:\programdata\checkmarx\ will be searched for a file that matches the typical installer filename. This allows you to place an installer here via any means
     2. IF the CheckmarxBucket environment variable is set, the bucket will be searched for a file that matches the typical installer filename with an appropriate key prefix (ie installation/common)
-  AS A LAST RESORT
-    The latest version will be download from the offical source over the internet 
+
 
   * When searching based on file prefix, if more than 1 file is found the files are sorted by file name and the first file is selected. This typically will mean the most recent version available is selected. 
-
 #>
-
 param (
  # Automation args
  [Parameter(Mandatory = $False)] [String] $installer = "CxSAST.890.Release.Setup_8.9.0.210.zip",
@@ -28,7 +25,8 @@ param (
  
  # Install Options
  [Parameter(Mandatory = $False)] [String] $PORT = "80",
- [Parameter(Mandatory = $False)] [String] $INSTALLFOLDER = "installation/cxsast",
+ [Parameter(Mandatory = $False)] [String] $INSTALLFOLDER = "C:\Program Files\Checkmarx",
+ [Parameter(Mandatory = $False)] [String] $LIC = "",
  
  # Cx Components
  [Parameter(Mandatory = $False)] [switch] $MANAGER = $False,
@@ -63,12 +61,15 @@ param (
 Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; 
 $ProgressPreference = "SilentlyContinue"
 
+<##################################
+    Functions & Classes - main execution will begin below
+###################################>
 function log([string] $msg) { Write-Host "$(Get-Date -Format G) [$PSCommandPath] $msg" }
 
 function testNetworkConnection($hostname, $port) { 
   $results = Test-NetConnection -ComputerName $hostname -Port $port
-  $sqltest
-  if ($sqltest.TcpTestSucceeded -eq $False) {
+  $results
+  if ($results.TcpTestSucceeded -eq $False) {
     log "Could not connect to ${hostname}:${port}. Is the firewall open? Is SQL Server running?"
     exit 1
   } 
@@ -98,214 +99,52 @@ function testDatabaseConnection($connectionstring) {
     testNetworkConnection $DBHOST $PORT
 }
 
-function GetInstaller ([string] $candidate, [string] $expectedPath, [string] $s3prefix) {
-    $pattern = $candidate
-    if (![String]::IsNullOrEmpty($candidate) -and (Test-Path $candidate)) {
-      log "The specified file $installer will be used for install"
-      return $candidate
+function VerifyFileExists($path) {
+    if ([String]::IsNullOrEmpty($path) -or !(Test-Path "$path")) {
+        log "ERROR: file does not exist or is empty: path `"$path`""
+        exit 1
     } 
+}
 
-    $candidate = $(Get-ChildItem "$expectedpath" -Recurse -Filter "${pattern}" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
-    if (![String]::IsNullOrEmpty($candidate) -and (Test-Path $candidate)) {
-      log "Found $candidate in expected path"
-      return $candidate
-    } else {
-      log "Found no candidate in $expectedPath"
+function GetInstaller ([string] $candidate, [string] $expectedPath, [string] $s3prefix) {
+    try {  
+        $pattern = $candidate
+        if (![String]::IsNullOrEmpty($candidate) -and (Test-Path $candidate)) {
+          log "The specified file $installer will be used for install"
+          return $candidate
+        } 
+
+        $candidate = $(Get-ChildItem "$expectedpath" -Recurse -Filter "${pattern}" | Sort-Object -Descending | Select-Object -First 1 -ExpandProperty FullName)
+        if (![String]::IsNullOrEmpty($candidate) -and (Test-Path $candidate)) {
+          log "Found $candidate in expected path"
+          return $candidate
+        } else {
+          log "Found no candidate in $expectedPath"
+        }
+
+        if ($env:CheckmarxBucket) {
+          log "Searching s3://$env:CheckmarxBucket/$s3prefix/"	    
+          $s3object = (Get-S3Object -BucketName $env:CheckmarxBucket -Prefix "$s3prefix/" | Select-Object -ExpandProperty Key | Where-Object { $_ -match $pattern } | Sort-Object -Descending | Select-Object -First 1)
+          if (![String]::IsNullOrEmpty($s3object)) {
+            log "Found s3://$env:CheckmarxBucket/$s3object"
+            $filename = $s3object.Substring($s3object.LastIndexOf("/") + 1)
+            Read-S3Object -BucketName $env:CheckmarxBucket -Key $s3object -File "$expectedpath\$filename"
+            $candidate = (Get-ChildItem "$expectedpath" -Recurse -Filter "${pattern}*" | Sort-Object -Descending | Select-Object -First 1 -ExpandProperty FullName)
+            return [String]$candidate[0].FullName
+          } else {
+            log "Found no candidate in s3://$env:CheckmarxBucket/$s3prefix"
+          }
+        } else {
+          log "No CheckmarxBucket environment variable defined - not searching s3"
+        }
+    } catch {
+      Write-Error $_.Exception.ToString()
+      log $_.Exception.ToString()
+      $_
+      log "ERROR: An error occured. Check IAM policies? Is AWS Powershell installed?"
+      exit 1
     }
-
-    if ($env:CheckmarxBucket) {
-      log "Searching s3://$env:CheckmarxBucket/$s3prefix/"	    
-      $s3object = (Get-S3Object -BucketName $env:CheckmarxBucket -Prefix "$s3prefix/" | Select -ExpandProperty Key | Where { $_ -match $pattern } | Sort -Descending | Select -First 1)
-      if (![String]::IsNullOrEmpty($s3object)) {
-        log "Found s3://$env:CheckmarxBucket/$s3object"
-        $filename = $s3object.Substring($s3object.LastIndexOf("/") + 1)
-        Read-S3Object -BucketName $env:CheckmarxBucket -Key $s3object -File "$expectedpath\$filename"
-        sleep 5
-        $candidate = (Get-ChildItem "$expectedpath" -Recurse -Filter "${pattern}*" | Sort -Descending | Select -First 1 -ExpandProperty FullName).ToString()
-        return [String]$candidate[0].FullName
-      } else {
-        log "Found no candidate in s3://$env:CheckmarxBucket/$s3prefix"
-      }
-    } else {
-      log "No CheckmarxBucket environment variable defined - not searching s3"
-    }
 }
-
-<##################################
-    Initial start up
-###################################>
-
-# Users must accept the EULA
-if (!$ACCEPT_EULA.IsPresent) {
-  log "You must accept the EULA."
-  exit 1
-}
-
-# Defend against trailing paths and missing directories that will cause errors
-$expectedpath = $expectedpath.TrimEnd("\")
-$s3prefix = $s3prefix.TrimEnd("/")
-md -force "$expectedpath" | Out-Null
-
-<##################################
-    Argument Validation
-###################################>
-
-if (($MANAGER.IsPresent -or $WEB.IsPresent) -and ($SQLAUTH.IsPresent -and ([String]::IsNullOrEmpty($SQLUSER) -or [String]::IsNullOrEmpty($SQLPWD)))) {
-  log "MANGER or WEB component is selected with SQLAUTH but SQLUSER, SQLPWD, or both are empty. SQLUSER and SQLPWD must be specified for SQLAUTH."
-  exit 1
-}
-
-if (($MANAGER.IsPresent -or $WEB.IsPresent) -and ([String]::IsNullOrEmpty($SQLSERVER))) {
-  log "MANGER or WEB component is selected but SQLSERVER is empty. SQLSERVER must be specified."
-  exit 1
-}
-
-if ($BI.IsPresent -and ($CXARM_SQLAUTH.IsPresent -and ([String]::IsNullOrEmpty($CXARM_DB_USER) -or [String]::IsNullOrEmpty($CXARM_DB_PASSWORD)))) {
-  log "BI component is selected with CXARM_SQLAUTH but CXARM_DB_USER, CXARM_DB_PASSWORD, or both are empty. CXARM_DB_USER and CXARM_DB_PASSWORD must be specified for CXARM_SQLAUTH."
-  exit 1
-}
-
-if (($BI.IsPresent) -and ([String]::IsNullOrEmpty($CXARM_DB_HOST))) {
-  log "BI component is selected but CXARM_DB_HOST is empty. CXARM_DB_HOST must be specified."
-  exit 1
-}
-
-<##################################
-    Inexpensive connectivity tests to fail fast
-###################################>
-
-#if ($MANAGER.IsPresent -or $Web.IsPresent) { testDatabaseConnection $SQLSERVER }
-#if ($BI.IsPresent) { testDatabaseConnection $CXARM_DB_HOST }
-
-
-<##################################
-    Search & obtain the installers
-###################################>
-try {
-  log "Searching for the CxSAST Installer"
-  $installer = GetInstaller $installer $expectedpath $s3prefix
-} catch {
-  Write-Error $_.Exception.ToString()
-  log $_.Exception.ToString()
-  $_
-  log "ERROR: An error occured. Check IAM policies? Is AWS Powershell installed?"
-  exit 1
-}
-
-try {
-  log "Searching for the CxSAST Hotfix Installer"
-  $hotfix_installer = GetInstaller $hotfix_installer $expectedpath $s3prefix
-} catch {
-  Write-Error $_.Exception.ToString()
-  log $_.Exception.ToString()
-  $_
-  log "ERROR: An error occured. Check IAM policies? Is AWS Powershell installed?"
-  exit 1
-}
-
-
-if (!(Test-Path "$installer")) {
-  log "ERROR: No file exists at $installer"
-  exit 1
-} 
-if (!(Test-Path "$hotfix_installer")) {
-  log "ERROR: No file exists at $hotfix_installer"
-  exit 1
-} 
-
-log "Unzipping installers"
-Expand-Archive $installer -DestinationPath $expectedpath -Force
-Expand-Archive $hotfix_installer -DestinationPath $expectedpath -Force
-log "Finished unzipping installers"
-
-# At this point the installer vars are actually pointing to zip files.. Lets find the actual executables now that they're unzipped.
-$expectedpath = "C:\programdata\checkmarx\automation\installers"
-$installer = $(Get-ChildItem "$expectedpath" -Recurse -Filter "CxSetup.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
-$hotfix_installer = $(Get-ChildItem "$expectedpath" -Recurse -Filter "*HF*.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
-
-if ([String]::IsNullOrEmpty($installer) -or !(Test-Path "$installer")) {
-  log "ERROR: installer does not exist or is empty: $installer `"$installer`""
-  exit 1
-} 
-if ([String]::IsNullOrEmpty($hotfix_installer) -or !(Test-Path "$hotfix_installer")) {
-  log "ERROR: hotfix installer does not exist or is empty: $hotfix_installer `"$hotfix_installer`""
-  exit 1
-} 
-
-
-<##################################
-    Install Checkmarx
-###################################>
-
-
-# Build up the installer command line options
-$MANAGER_BIT = "0"
-$WEB_BIT = "0"
-$ENGINE_BIT = "0"
-$BI_BIT = "0"
-$AUDIT_BIT = "0"
-$SQLAUTH_BIT = "0"
-$CXARM_SQLAUTH_BIT = "0"
-if ($SQLAUTH.IsPresent) { $SQLAUTH_BIT = "1" }
-if ($CXARM_SQLAUTH.IsPresent) { $CXARM_SQLAUTH_BIT="1" }
-
-$cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} "
-$cx_options = "/install /quiet ACCEPT_EULA=Y PORT=${PORT} INSTALLFOLDER=${INSTALLFOLDER} "
-$cx_db_options = " SQLAUTH=${SQLAUTH_BIT} SQLSERVER=${SQLSERVER} SQLUSER=${SQLUSER} SQLPWD=${SQLPWD} "
-$cx_armdb_options = " CXARM_SQLAUTH=${CXARM_SQLAUTH_BIT} CXARM_DB_HOST=${CXARM_DB_HOST} CXARM_DB_USER=${CXARM_DB_USER} CXARM_DB_PASSWORD=${CXARM_DB_PASSWORD} "
-$cx_tomcat_mq_options = " MQHTTPPORT=${MQHTTPPORT} TOMCATUSERNAME=${TOMCATUSERNAME} TOMCATPASSWORD=${TOMCATPASSWORD} TOMCATHTTPPORT=${TOMCATHTTPPORT} TOMCATHTTPSPORT=${TOMCATHTTPSPORT} TOMCATSHUTDOWNPORT=${TOMCATSHUTDOWNPORT} TOMCATAJPPORT=${TOMCATAJPPORT} "
-
-# Now do run the installer, keep tracking of component bit state along the way. Multiple runs of the installer are required or else the database hangs (which is why we keep track of the state). 
-if ($MANAGER.IsPresent -or $BI.IsPresent) {
-  $MANAGER_BIT = $BI_BIT = "1"
-  $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} "
-  log "Installing MANAGER/BI"
-  log "install options: $("${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
-  Start-Process "$installer" -ArgumentList "${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}" -Wait -NoNewWindow
-}
-
-if ($WEB.IsPresent) {
-  $WEB_BIT = "1"
-  $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} "
-  log "Installing WEB"
-  log "install options: $("${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
-  #Start-Process "$installer" -ArgumentList "${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}" -Wait -NoNewWindow
-}
-
-if ($ENGINE.IsPresent) {
-  $ENGINE_BIT = "1"
-  $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} "
-  log "Installing ENGINE"
-  log "install options: $("${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
-  #Start-Process "$installer" -ArgumentList "${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}" -Wait -NoNewWindow
-}
-
-if ($AUDIT.IsPresent) {
-  $AUDIT_BIT = "1"
-  $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} "
-  log "Installing AUDIT"
-  log "install options: $("${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
-  #Start-Process "$installer" -ArgumentList "${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}" -Wait -NoNewWindow
-}
-
-if ($ENGINE.IsPresent -And (!$MANAGER.IsPresent -and !$WEB.IsPresent)) {
-  # When the engine is installed by itself it can't piggy back on the opening of 80,443 by IIS install, so we need to explicitly open the port
-  log "Adding host firewall rule for $PORT for the Engine Server"
-  New-NetFirewallRule -DisplayName "CxScanEngine HTTPs Port $PORT" -Direction Inbound -LocalPort $PORT -Protocol TCP -Action Allow
-}
-
-if ($BI.IsPresent) {
-  log "Adding host firewall rule for $TOMCATHTTPPORT for CxARM"
-  New-NetFirewallRule -DisplayName "CxArm HTTP Port $TOMCATHTTPPORT" -Direction Inbound -LocalPort $TOMCATHTTPPORT -Protocol TCP -Action Allow
-  log "Adding host firewall rule for $TOMCATHTTPSPORT for CxARM"
-  New-NetFirewallRule -DisplayName "CxArm HTTPs Port $TOMCATHTTPSPORT" -Direction Inbound -LocalPort $TOMCATHTTPSPORT -Protocol TCP -Action Allow
-}
-
-
-
-<##################################
-    Post Install Configuration
-###################################>
 
 # We need to access the database for these settings so we build a client for the access.
 Class DbClient {
@@ -338,16 +177,16 @@ Class DbClient {
       $adapter.Fill($dataset) | out-null
 
       #return the first collection of results or an empty array
-      if ($dataset.Tables[0] -ne $null) {$table = $dataset.Tables[0]}
+      if ($null -ne $dataset.Tables[0]) {$table = $dataset.Tables[0]}
       elseif ($table.Rows.Count -eq 0) { $table = [System.Collections.ArrayList]::new() }
 
       $sqlConnection.Close()
       return $table
 
     } catch {
-      $this.log.Error("An error occured executing sql: $sql")
-      $this.log.Error("Error message: $($_.Exception.Message))")
-      $this.log.Error("Error exception: $($_.Exception))")
+      log "An error occured executing sql: $sql"
+      log "Error message: $($_.Exception.Message))"
+      log "Error exception: $($_.Exception))"
       throw $_
     } finally {
       $sqlConnection.Close()
@@ -355,39 +194,226 @@ Class DbClient {
   } 
 }
 
-[DbClient] $CxDb = [DbClient]::New($SQLSERVER, "CxDb", $SQLAUTH, $SQLUSER, $SQLPWD)
+<##################################
+    Initial start up
+###################################>
+# Users must accept the EULA
+if (!$ACCEPT_EULA.IsPresent) {
+  log "You must accept the EULA."
+  exit 1
+}
+
+# Defend against trailing paths and missing directories that will cause errors
+$expectedpath = $expectedpath.TrimEnd("\")
+$s3prefix = $s3prefix.TrimEnd("/")
+mkdir -force "$expectedpath" | Out-Null
+
+<##################################
+    Argument Validation
+###################################>
+if (($MANAGER.IsPresent -or $WEB.IsPresent) -and ($SQLAUTH.IsPresent -and ([String]::IsNullOrEmpty($SQLUSER) -or [String]::IsNullOrEmpty($SQLPWD)))) {
+  log "MANGER or WEB component is selected with SQLAUTH but SQLUSER, SQLPWD, or both are empty. SQLUSER and SQLPWD must be specified for SQLAUTH."
+  exit 1
+}
+
+if (($MANAGER.IsPresent -or $WEB.IsPresent) -and ([String]::IsNullOrEmpty($SQLSERVER))) {
+  log "MANGER or WEB component is selected but SQLSERVER is empty. SQLSERVER must be specified."
+  exit 1
+}
+
+if ($BI.IsPresent -and ($CXARM_SQLAUTH.IsPresent -and ([String]::IsNullOrEmpty($CXARM_DB_USER) -or [String]::IsNullOrEmpty($CXARM_DB_PASSWORD)))) {
+  log "BI component is selected with CXARM_SQLAUTH but CXARM_DB_USER, CXARM_DB_PASSWORD, or both are empty. CXARM_DB_USER and CXARM_DB_PASSWORD must be specified for CXARM_SQLAUTH."
+  exit 1
+}
+
+if (($BI.IsPresent) -and ([String]::IsNullOrEmpty($CXARM_DB_HOST))) {
+  log "BI component is selected but CXARM_DB_HOST is empty. CXARM_DB_HOST must be specified."
+  exit 1
+}
+
+<##################################
+    Inexpensive connectivity tests to fail fast
+###################################>
+# Todo: evaluate this check - can it work?
+#if ($MANAGER.IsPresent -or $Web.IsPresent) { testDatabaseConnection $SQLSERVER }
+#if ($BI.IsPresent) { testDatabaseConnection $CXARM_DB_HOST }
+
+
+<##################################
+    Search & obtain the installers
+###################################>
+log "Searching for the CxSAST Installer"
+$installer = GetInstaller $installer $expectedpath $s3prefix
+log "Found installer $installer"
+VerifyFileExists $installer
+
+log "Searching for the CxSAST Hotfix Installer"
+$hotfix_installer = GetInstaller $hotfix_installer $expectedpath $s3prefix
+VerifyFileExists $hotfix_installer
+
+
+$files = $(Get-ChildItem "$expectedpath" -Recurse -Filter "*zip" | Select-Object -ExpandProperty FullName)
+$files | ForEach-Object {
+    Expand-Archive -Path $_ -DestinationPath $expectedpath -Force
+}
+
+# At this point the installer vars are actually pointing to zip files.. Lets find the actual executables now that they're unzipped.
+$installer = $(Get-ChildItem "$expectedpath" -Recurse -Filter "CxSetup.exe" | Sort-Object -Descending | Select-Object -First 1 -ExpandProperty FullName)
+$hotfix_installer = $(Get-ChildItem "$expectedpath" -Recurse -Filter "*HF*.exe" | Sort-Object -Descending | Select-Object -First 1 -ExpandProperty FullName)
+VerifyFileExists $installer
+VerifyFileExists $hotfix_installer
+
+<#################################
+    Check for a license
+##################################>
+# By convention, the license-from-alg.ps1 script will leave a license at this location for the install script to find and use.
+# A license helps to speed up the install because there is less time waiting for services to start and timeout due to no license
+if ([String]::IsNullOrEmpty($LIC)) {
+  log "No license specified, searching for one..."
+  $LIC = (Get-ChildItem "c:\programdata\checkmarx\automation\installers\license*cxl"  | Sort-Object LastWriteTime | Select-Object -last 1).FullName
+  if (![String]::IsNullOrEmpty($LIC) -and (Test-Path $LIC)) { log "Found license: $LIC" }
+}
+
+<##################################
+    Install Checkmarx
+###################################>
+# Build up the installer command line options
+$MANAGER_BIT = $WEB_BIT = $ENGINE_BIT = $BI_BIT = $AUDIT_BIT = $SQLAUTH_BIT = $CXARM_SQLAUTH_BIT = "0"
+if ($SQLAUTH.IsPresent) { $SQLAUTH_BIT = "1" }
+if ($CXARM_SQLAUTH.IsPresent) { $CXARM_SQLAUTH_BIT="1" }
+
+$cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} "
+$cx_options = "/install /quiet ACCEPT_EULA=Y PORT=${PORT} INSTALLFOLDER=`"${INSTALLFOLDER}`" LIC=`"${LIC}`" " # Note you must quote INSTALLFOLDER and other paths to handle spaces
+$cx_db_options = " SQLAUTH=${SQLAUTH_BIT} SQLSERVER=${SQLSERVER} SQLUSER=${SQLUSER} SQLPWD=${SQLPWD} "
+$cx_armdb_options = " CXARM_SQLAUTH=${CXARM_SQLAUTH_BIT} CXARM_DB_HOST=${CXARM_DB_HOST} CXARM_DB_USER=${CXARM_DB_USER} CXARM_DB_PASSWORD=${CXARM_DB_PASSWORD} "
+$cx_tomcat_mq_options = " MQHTTPPORT=${MQHTTPPORT} TOMCATUSERNAME=${TOMCATUSERNAME} TOMCATPASSWORD=${TOMCATPASSWORD} TOMCATHTTPPORT=${TOMCATHTTPPORT} TOMCATHTTPSPORT=${TOMCATHTTPSPORT} TOMCATSHUTDOWNPORT=${TOMCATSHUTDOWNPORT} TOMCATAJPPORT=${TOMCATAJPPORT} "
+
+# Now do run the installer, keep tracking of component bit state along the way. Multiple runs of the installer are required or else the database hangs (which is why we keep track of the state). 
+if ($MANAGER.IsPresent) {
+  $MANAGER_BIT = "1" ;
+  if ($BI.IsPresent) { $BI_BIT = "1" } # BI Should install w/ manager
+  $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} "
+  log "Installing MANAGER/BI"
+  log "install options: $("${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
+  Start-Process "$installer" -ArgumentList "${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}" -Wait -NoNewWindow
+}
+
+if ($WEB.IsPresent) {
+  $WEB_BIT = "1"
+  $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} "
+  log "Installing WEB"
+  log "install options: $("${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
+  Start-Process "$installer" -ArgumentList "${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}" -Wait -NoNewWindow
+}
+
+if ($ENGINE.IsPresent) {
+  $ENGINE_BIT = "1"
+  $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} "
+  log "Installing ENGINE"
+  log "install options: $("${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
+  Start-Process "$installer" -ArgumentList "${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}" -Wait -NoNewWindow
+}
+
+if ($AUDIT.IsPresent) {
+  $AUDIT_BIT = "1"
+  $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} "
+  log "Installing AUDIT"
+  log "install options: $("${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
+  Start-Process "$installer" -ArgumentList "${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}" -Wait -NoNewWindow
+}
+
+
+<##################################
+    Post Install Configuration
+###################################>
+if ($ENGINE.IsPresent -And (!$MANAGER.IsPresent -and !$WEB.IsPresent)) {
+  # When the engine is installed by itself it can't piggy back on the opening of 80,443 by IIS install, so we need to explicitly open the port
+  log "Adding host firewall rule for $PORT for the Engine Server"
+  New-NetFirewallRule -DisplayName "CxScanEngine HTTPs Port $PORT" -Direction Inbound -LocalPort $PORT -Protocol TCP -Action Allow
+}
+
+if ($BI.IsPresent) {
+  log "Adding host firewall rule for $TOMCATHTTPPORT for CxARM"
+  New-NetFirewallRule -DisplayName "CxArm HTTP Port $TOMCATHTTPPORT" -Direction Inbound -LocalPort $TOMCATHTTPPORT -Protocol TCP -Action Allow
+  log "Adding host firewall rule for $TOMCATHTTPSPORT for CxARM"
+  New-NetFirewallRule -DisplayName "CxArm HTTPs Port $TOMCATHTTPSPORT" -Direction Inbound -LocalPort $TOMCATHTTPSPORT -Protocol TCP -Action Allow
+  # Todo: replace w/ IIS Reverse Proxy to CxARM
+}
+
+<#
+[DbClient] $CxDb = [DbClient]::New($SQLSERVER, "CxDb", ($SQLAUTH -eq $False), $SQLUSER, $SQLPWD)
 $CxDb.ExecuteSql("DELETE from [dbo].[InstallationMap] WHERE [DNSName] <> '$Hostname'")
 $CxDb.ExecuteSql("UPDATE [dbo].[CxComponentConfiguration] SET [Value] = 'http://localhost' WHERE [Key] = 'IdentityAuthority'")
 $CxDb.ExecuteSql("UPDATE [dbo].[CxComponentConfiguration] SET [Value] = 'tcp://localhost:$MQHTTPPORT' WHERE [Key] = 'ActiveMessageQueueURL'")
 $CxDb.ExecuteSql("UPDATE [dbo].[CxComponentConfiguration] SET [Value] = 'http://localhost:8080' WHERE [Key] = 'CxARMPolicyURL'")
 $CxDb.ExecuteSql("UPDATE [dbo].[CxComponentConfiguration] SET [Value] = 'http://localhost:8080' WHERE [Key] = 'CxARMURL'")
 $CxDb.ExecuteSql("UPDATE [dbo].[CxComponentConfiguration] SET [Value] = 'http://localhost:8080' WHERE [Key] = 'CxARMWebClientUrl'")
+$CxDb.ExecuteSql("update [dbo].[CxComponentConfiguration] set [value] = 'C:\Program Files\Git\bin\git.exe' where [key] = 'GIT_EXE_PATH'")
 
-# todo: git path
+# Extra goodies
+$CxDb.ExecuteSql("update [CxDB].[dbo].[CxComponentConfiguration] set [Value] = 'True' where [key] = 'DetailedAuditing'")
+# Default as of 8.9, but ensure it is enabled anyway
+$CxDb.ExecuteSql("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = '1' where [key] = 'EnableUnzipLocalDrive'")
 
+# Incremental scan settings
+#$CxDb.ExecuteSql("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = '7' where [key] = 'INCREMENTAL_SCAN_THRESHOLD'")
+#$CxDb.ExecuteSql("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = 'FULL' where [key] = 'INCREMENTAL_SCAN_THRESHOLD_ACTION'")
+
+# Storage settings
+#$CxDb.ExecuteSql("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = 'C:\ExtSrc' where [key] = 'EX_SOURCE_PATH'")
+#$CxDb.ExecuteSql("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = 'C:\CxSRC' where [key] = 'SOURCE_PATH'")
+#$CxDb.ExecuteSql("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = 'C:\CxReports' where [key] = 'REPORTS_PATH'")
+
+# Dynamic Engines requires NumberOfPromotableScans to be set to 0. Default: 3
+#$CxDb.ExecuteSql("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = '3' where [key] = 'NumberOfPromotableScans'")
+
+# Long path support
+#$CxDb.ExecuteSql("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = 'False' where [key] = 'IsLongPathEnabled'")
+
+# Defines if results attributes will be per team or per project (true = per team, false = per project)
+#$CxDb.ExecuteSql("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = 'true' where [key] = 'RESULT_ATTRIBUTES_PER_SIMILARITY'")
+
+# Defines the service provider (checkmarx) id - the issuer of SAML request
+#$CxDb.ExecuteSql("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = '' where [key] = 'SamlServiceProviderIssuer'")
+
+# URL the identity authority aka rest api. Must be resolvable/reachable/trusted by manager and end users
+#$CxDb.ExecuteSql("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = 'http://localhost' where [key] = 'IdentityAuthority'")
+
+# Defines the web server url used in reports for deep links
+#$CxDb.ExecuteSql("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = '' where [key] = 'WebServer'")
+#>
 
 <##################################
     Install Checkmarx Hotfix
 ###################################>
 log "Stopping services to install hotfix"
-#stop-service cx*; 
-#if ($WEB.IsPresent) { iisreset /stop } 
-#Start-Process "$hotfix_installer" -ArgumentList "-cmd" -Wait -NoNewWindow
+stop-service cx*; 
+if ($WEB.IsPresent) { iisreset /stop } 
+log "Installing $hotfix_installer"
+Start-Process "$hotfix_installer" -ArgumentList "-cmd" -Wait -NoNewWindow
+log "Finished hotfix installation"
+
+log "Restarting services"
+Restart-Service cx*
+iisreset
 
 
+# Todo: run fixes ( remove doulbe enc in active mq properties if arm installed
+# Todo: run initial ETL if BI.IsPresent AND not run before?
 
-###
-###
-### Todo
-# 0 install sql server
-# 1. add command line args from cli isntaller to this cript
-# run installer 3 times, passing args each time
-# run hotfix
-# run fixes ( remove doulbe enc in active mq properties if arm installed
+if ($BI.IsPresent) {
+  # The db.properties file can have a bug where extra spaces are not trimmed off of the DB_HOST line
+  # which can cause connection string concatenation to fail due to a space between the host and :port
+  # For example:
+  #     TARGET_CONNECTION_STRING=jdbc:sqlserver://sqlserverdev.ckbq3owrgyjd.us-east-1.rds.amazonaws.com :1433;DatabaseName=CxARM[class java.lang.String]
+  #
+  # As a work around we trim the end off of each line in db.properties
+  log "Fixing db.properties"
+  (Get-Content "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties") | ForEach-Object {$_.TrimEnd()} | Set-Content "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties"
 
+  log "Running the initial ETL sync for CxArm"
+  Start-Process "C:\Program Files\Checkmarx\Checkmarx Risk Management\ETL\etl_executor.exe" -ArgumentList "-q -console -VSOURCE_PASS_SILENT=${db_password} -VTARGET_PASS_SILENT=${db_password} -VSILENT_FLOW=true -Dinstall4j.logToStderr=true -Dinstall4j.debug=true -Dinstall4j.detailStdout=true" -WorkingDirectory "C:\Program Files\Checkmarx\Checkmarx Risk Management\ETL" -NoNewWindow -Wait 
+  log "Finished initial ETL sync"
+}
 
-
-log "Installing from $installer"
-#
-if (Test-Path "${installer}.log") { log "Last 50 lines of installer:"; Get-content -tail 50 "${installer}.log" }
-log "Finished installing. Log file is at ${installer}.log."
+log "Finished installing"

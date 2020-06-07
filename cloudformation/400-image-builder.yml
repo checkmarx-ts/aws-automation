@@ -257,16 +257,6 @@ Resources:
                     - Start-Process -FilePath "c:\programdata\checkmarx\automation\dependencies\ndp48-x86-x64-allos-enu.exe" -ArgumentList "/passive /norestart" -Wait -NoNewWindow
               - name: REBOOT
                 action: Reboot   
-          - name: validate
-            steps:
-              - name: VALIDATE_DOTNET_VERSION
-                action: ExecutePowerShell
-                timeoutSeconds: 120
-                inputs:
-                  commands:                  
-                    - $dotnet_version = (Get-ItemProperty "HKLM:SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full").Release
-                    - Write-Host "Found dotnet version $dotnet_version"
-                    - return ($dotnet_version -ge "461310")
                     
   ibcDotnetcore:
     Type: AWS::ImageBuilder::Component
@@ -321,20 +311,6 @@ Resources:
                       Write-Host "MAX_SCANS_PER_MACHINE initial value is $($obj.value)"
                       $obj.value = "1" # 1 concurrent scan per engine
                       $xml.Save("$(Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Engine Server' -Name 'Path')\CxSourceAnalyzerEngine.WinService.exe.config")                       
-          - name: validate
-            steps:
-              - name: CONCURRENT_SCANS
-                action: ExecutePowerShell
-                timeoutSeconds: 60
-                inputs:
-                  commands:
-                    - |
-                      # Check the value was written
-                      [Xml]$xml = Get-Content "$(Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Engine Server' -Name 'Path')\CxSourceAnalyzerEngine.WinService.exe.config"
-                      $obj = $xml.configuration.appSettings.add | where {$_.Key -eq "MAX_SCANS_PER_MACHINE" }
-                      Write-Host "MAX_SCANS_PER_MACHINE value is now $($obj.value)"
-                      return  ($obj.value -eq "1")                      
-
 
   ibcSqlServerExpress2012:    
     Type: AWS::ImageBuilder::Component
@@ -411,15 +387,15 @@ Resources:
                 action: S3Download
                 timeoutSeconds: 120
                 inputs:
-                 - source: 's3://${pS3Bucket}/installation/common/rewrite_amd64_en-US.msi'
-                   destination: 'C:\programdata\checkmarx\automation\dependencies\rewrite_amd64_en-US.msi'
+                 - source: 's3://${pS3Bucket}/installation/common/rewrite_amd64.msi'
+                   destination: 'C:\programdata\checkmarx\automation\dependencies\rewrite_amd64.msi'
               - name: INSTALL_IIS_REWRITE
                 action: ExecutePowerShell
                 timeoutSeconds: 900
                 inputs:
                   commands:
                     - |
-                      Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"C:\programdata\checkmarx\automation\dependencies\rewrite_amd64_en-us.msi`" /L*V `"C:\programdata\checkmarx\automation\dependencies\rewrite_install.log`" /QN" -Wait -NoNewWindow
+                      Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"C:\programdata\checkmarx\automation\dependencies\rewrite_amd64.msi`" /L*V `"C:\programdata\checkmarx\automation\dependencies\rewrite_install.log`" /QN" -Wait -NoNewWindow
                       Write-Host "rewrite_install.log content:"
                       cat "C:\programdata\checkmarx\automation\dependencies\rewrite_install.log"
               - name: CREATE_REDIRECT_RULE
@@ -526,7 +502,6 @@ Resources:
                 inputs:
                   commands:
                     - return (Test-Path -Path "C:\ProgramData\checkmarx\automation\installers\CxSAST.890.Release.Setup_8.9.0.210\CxSetup.exe")                    
-
  
   ibcCxEngine89:    
     Type: AWS::ImageBuilder::Component
@@ -552,27 +527,6 @@ Resources:
                       Start-Process "C:\programdata\checkmarx\automation\installers\CxSAST.890.Release.Setup_8.9.0.210\CxSetup.exe" -ArgumentList "/install /quiet ACCEPT_EULA=Y PORT=80 MANAGER=0 WEB=0 ENGINE=1 AUDIT=0 BI=0" -Wait -NoNewWindow
                       New-NetFirewallRule -DisplayName "CxScanEngine" -Direction Inbound -LocalPort 80,443 -Protocol TCP -Action Allow
                       Set-MpPreference -DisableRealtimeMonitoring $False  
-          - name: validate
-            steps:
-              - name: VERIFY_VERSION
-                action: ExecutePowerShell
-                timeoutSeconds: 60
-                inputs:
-                  commands:
-                    - |
-                      $cx_version = "8.9.0.210"
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Engine Manager" | ForEach-Object {
-                        try {                     
-                          Write-Host "Checking version for $_"
-                          if ((Get-ItemPropertyValue -Path "$_" -Name "Version") -ne "$cx_version") {
-                            return $False
-                          }
-                        } catch {
-                          return $False
-                        }
-                      }  
-                      return $True
-    
     
   ibcCxManager89:    
     Type: AWS::ImageBuilder::Component
@@ -624,31 +578,6 @@ Resources:
                 inputs:
                   commands:
                     - Set-MpPreference -DisableRealtimeMonitoring $False
-          - name: validate
-            steps:
-              - name: VERIFY_VERSION
-                action: ExecutePowerShell
-                timeoutSeconds: 60
-                inputs:
-                  commands:
-                    - |
-                      $cx_version = "8.9.0.210"
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx System Manager",
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Jobs Manager",
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Scans Manager",
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Web Services",
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\CheckmarxWebPortal",
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx BI Analytics" | ForEach-Object {
-                        try {                     
-                          Write-Host "Checking version for $_"
-                          if ((Get-ItemPropertyValue -Path "$_" -Name "Version") -ne "$cx_version") {
-                            return $False
-                          }
-                        } catch {
-                          return $False
-                        }
-                      }  
-                      return $True
       
    
   ibcCx89HF14:    
@@ -691,31 +620,6 @@ Resources:
                     - Stop-Service Cx*
                     - Stop-Service W3*
                     - Start-Process "C:\programdata\checkmarx\automation\installers\8.9.0.HF14\8.9.0.HF14.exe" -ArgumentList "-cmd" -Wait -NoNewWindow
-          - name: validate
-            steps:
-              - name: VERIFY_REGISTRY_HOTFIX
-                action: ExecutePowerShell
-                timeoutSeconds: 180
-                inputs:
-                  commands:
-                    - |
-                      $hotfix_vesion = "14"
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Engine Server",
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx System Manager",
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Jobs Manager",
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Scans Manager",
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Web Services",
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\CheckmarxWebPortal",
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx BI Analytics" | ForEach-Object {
-                        if (Get-ItemProperty -Path "$_" -ErrorAction SilentlyContinue) {
-                          Write-Host "Checking hotfix for $_"
-                          if ((Get-ItemPropertyValue -Path "$_" -Name "Hotfix") -ne "$hotfix_vesion") {
-                            return $False
-                          }
-                        }
-                      }
-                      return $True
-                      
                       
                       
 ###################################
@@ -839,33 +743,7 @@ Resources:
                 timeoutSeconds: 120
                 inputs:
                   commands:
-                    - Set-MpPreference -DisableRealtimeMonitoring $False
-          - name: validate
-            steps:
-              - name: VERIFY_VERSION
-                action: ExecutePowerShell
-                timeoutSeconds: 60
-                inputs:
-                  commands:
-                    - |
-                      $cx_version = "9.0.0.40085"
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx System Manager",
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Jobs Manager",
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Scans Manager",
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Web Services",
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\CheckmarxWebPortal",
-                      "HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx BI Analytics" | ForEach-Object {
-                        try {                     
-                          Write-Host "Checking version for $_"
-                          if ((Get-ItemPropertyValue -Path "$_" -Name "Version") -ne "$cx_version") {
-                            return $False
-                          }
-                        } catch {
-                          return $False
-                        }
-                      }  
-                      return $True
-     
+                    - Set-MpPreference -DisableRealtimeMonitoring $False     
    
                 
 ####################################

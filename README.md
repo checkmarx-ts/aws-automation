@@ -1,8 +1,14 @@
 # aws-automation
 Resources and documentation on how to run Checkmarx in AWS.
 
+# Requirements
+
+* Powershell 5.1 or higher
+* Windows Server 2016 or higher
+* AWS Powershell Cmdlets
+
 # Getting started
-To begin, you should have access to an AWS account. This getting started guide will walk you through creating infrastructure to run Checkmarx. Your account must be able to provision the infrastructure needed. Using the resources in this repo will cause you to use AWS Services which will incur cost - be careful. 
+To begin, you should have access to an AWS account. This getting started guide will walk you through creating infrastructure to run Checkmarx. Your account must be able to provision the infrastructure needed. Using the resources in this repo will cause you to use AWS Services which will incur cost - be careful. This guide uses an organization name 'checkmarx-ts' to label resources - you should replace these references with your own organization label.
 
 ## Deploy the network
 First, create a VPC with 2 public and 2 private subnets using the Cloud Formation Template ```100-network.yml```. If you already have a network set up that you want to deploy Checkmarx into then skip this step.
@@ -11,7 +17,7 @@ Use the AWS Console to create this Cloud Formation Template or use the AWS CLI a
 
 ```powershell
 # Create the network stack
-aws cloudformation create-stack --stack-name stokes-vpc --template-body file://100-network.yml --parameters ParameterKey=ClassB,ParameterValue=77 --tags Key=Owner,Value=Ben Key=Environment,Value=Development
+aws cloudformation create-stack --stack-name checkmarx-ts-vpc --template-body file://100-network.yml --parameters ParameterKey=ClassB,ParameterValue=77 --tags Key=Environment,Value="Development"
 ```
 
 ## Deploy Directory Services
@@ -21,13 +27,13 @@ Deploy the Cloud Formation template ```200-DirectoryServicesMicrosoftAD.yml``` u
 
 ```powershell
 # Pull parameters from previous stacks, but you can also manually set values
-$vpc = (aws cloudformation describe-stacks --stack-name stokes-vpc | ConvertFrom-Json).Stacks[0].Outputs
+$vpc = (aws cloudformation describe-stacks --stack-name checkmarx-ts-vpc | ConvertFrom-Json).Stacks[0].Outputs
 $vpcid = $vpc | where-object {$_.OutputKey -eq "VPC"} | select -ExpandProperty OutputValue 
 $subnet1 =  $vpc | where-object {$_.OutputKey -eq "SubnetAPrivate"} | select -ExpandProperty OutputValue 
 $subnet2 = $vpc | where-object {$_.OutputKey -eq "SubnetBPrivate"} | select -ExpandProperty OutputValue 
 $AdPassword = "use a strong password!"
 $domainname = "corp.dev.checkmarx-ts.com" 
-aws cloudformation create-stack --stack-name stokes-active-directory --template-body file://200-DirectoryServicesMicrosoftAD.yml --parameters ParameterKey=pDomainName,ParameterValue=${domainname} ParameterKey=pMicrosoftADShortName,ParameterValue=corp ParameterKey=pMicrosoftADPW,ParameterValue=${AdPassword} ParameterKey=pEdition,ParameterValue=Standard ParameterKey=pCreateAlias,ParameterValue=false ParameterKey=pEnableSingleSignOn,ParameterValue=false ParameterKey=pPrivateSubnet1,ParameterValue="${subnet1}" ParameterKey=pPrivateSubnet2,ParameterValue="${subnet2}" ParameterKey=pVPCID,ParameterValue="${vpcid}" --tags Key=Owner,Value=Ben Key=Environment,Value=Development
+aws cloudformation create-stack --stack-name checkmarx-ts-active-directory --template-body file://200-DirectoryServicesMicrosoftAD.yml --parameters ParameterKey=pDomainName,ParameterValue=${domainname} ParameterKey=pMicrosoftADShortName,ParameterValue=corp ParameterKey=pMicrosoftADPW,ParameterValue=${AdPassword} ParameterKey=pEdition,ParameterValue=Standard ParameterKey=pCreateAlias,ParameterValue=false ParameterKey=pEnableSingleSignOn,ParameterValue=false ParameterKey=pPrivateSubnet1,ParameterValue="${subnet1}" ParameterKey=pPrivateSubnet2,ParameterValue="${subnet2}" ParameterKey=pVPCID,ParameterValue="${vpcid}" --tags Key=Environment,Value="Development"
 ```
 
 ## Deploy FSX shares
@@ -36,17 +42,17 @@ FSX provides a file share (NAS) that Checkmarx will use to satisfy part of its s
 Deploy the Cloud Formation template ```210-fsx-windows.yml``` using the AWS Console or CLI. Using the CLI we will obtain many parameters values from our previously created stack.
 
 ```powershell
-$vpc =(aws cloudformation describe-stacks --stack-name stokes-vpc | ConvertFrom-Json).Stacks[0].Outputs
+$vpc =(aws cloudformation describe-stacks --stack-name checkmarx-ts-vpc | ConvertFrom-Json).Stacks[0].Outputs
 $vpcid = $vpc | where-object {$_.OutputKey -eq "VPC"} | select -ExpandProperty OutputValue 
 $subnet1 =  $vpc | where-object {$_.OutputKey -eq "SubnetAPrivate"} | select -ExpandProperty OutputValue 
 $subnet2 = $vpc| where-object {$_.OutputKey -eq "SubnetBPrivate"} | select -ExpandProperty OutputValue 
 $fsx_connections_cidr = $vpc | where-object {$_.OutputKey -eq "CidrBlock"} | select -ExpandProperty OutputValue 
 
-$ad = (aws cloudformation describe-stacks --stack-name stokes-active-directory | ConvertFrom-Json).Stacks[0].Outputs
+$ad = (aws cloudformation describe-stacks --stack-name checkmarx-ts-active-directory | ConvertFrom-Json).Stacks[0].Outputs
 $ActiveDirectoryId =  $ad | where-object {$_.OutputKey -eq "DirectoryID"} | select -ExpandProperty OutputValue 
 $domainsg = (aws ec2 describe-security-groups --filters Name=description,Values=*${ActiveDirectoryId}* | ConvertFrom-Json).SecurityGroups[0] | Select -ExpandProperty GroupId
 
-aws cloudformation create-stack --stack-name stokes-fsx --template-body file://210-fsx-windows.yml --parameters ParameterKey=PrivateSubnet1ID,ParameterValue="${subnet1}" ParameterKey=PrivateSubnet2ID,ParameterValue="${subnet2}" ParameterKey=VPCID,ParameterValue="${vpcid}" ParameterKey=ActiveDirectoryId,ParameterValue="${ActiveDirectoryId}" ParameterKey=FSxAllowedCIDR,ParameterValue="${fsx_connections_cidr}" ParameterKey=DomainMembersSG,ParameterValue="${domainsg}" --tags Key=Owner,Value=Ben Key=Environment,Value=Development
+aws cloudformation create-stack --stack-name checkmarx-ts-fsx --template-body file://210-fsx-windows.yml --parameters ParameterKey=PrivateSubnet1ID,ParameterValue="${subnet1}" ParameterKey=PrivateSubnet2ID,ParameterValue="${subnet2}" ParameterKey=VPCID,ParameterValue="${vpcid}" ParameterKey=ActiveDirectoryId,ParameterValue="${ActiveDirectoryId}" ParameterKey=FSxAllowedCIDR,ParameterValue="${fsx_connections_cidr}" ParameterKey=DomainMembersSG,ParameterValue="${domainsg}" --tags Key=Environment,Value="Development"
 ```
 
 ## Create your s3 bucket
@@ -57,7 +63,7 @@ If you need to use an existing s3 bucket then continue to the inflation step but
 Deploy the Cloud Formation template ```250-s3-bucket.yml``` using the AWS Console or CLI. 
 
 ```powershell
-aws cloudformation create-stack --stack-name stokes-s3 --template-body file://250-s3-bucket.yml --parameters ParameterKey=pBucketName,ParameterValue="checkmarx-stokes" --tags Key=Owner,Value=Ben Key=Environment,Value=Development
+aws cloudformation create-stack --stack-name checkmarx-ts-s3 --template-body file://250-s3-bucket.yml --parameters ParameterKey=pBucketName,ParameterValue="checkmarx-ts" --tags Key=Owner,Value=Ben Key=Environment,Value=Development
 ```
 ## Inflate your s3 bucket
 Now that your s3 bucket is up, you need to load it with dependencies - things that this Checkmarx automation will use. 
@@ -71,10 +77,10 @@ Deploy the Cloud Formation template ```300-checkmarx-security.yml``` using the A
 
 ```powershell
 # security/iam
-$vpc =(aws cloudformation describe-stacks --stack-name stokes-vpc | ConvertFrom-Json).Stacks[0].Outputs
+$vpc =(aws cloudformation describe-stacks --stack-name checkmarx-ts-vpc | ConvertFrom-Json).Stacks[0].Outputs
 $vpcid = $vpc | where-object {$_.OutputKey -eq "VPC"} | select -ExpandProperty OutputValue 
 $key_arn = (aws kms describe-key --key-id alias/aws/ssm | ConvertFrom-Json).KeyMetaData | Select -ExpandProperty Arn
-aws cloudformation create-stack --stack-name stokes-cx-security --template-body file://300-checkmarx-security.yml --parameters ParameterKey=pCheckmarxBucket,ParameterValue="arn:aws:s3:::checkmarx-stokes" ParameterKey=pCxSASTUsersCIDR,ParameterValue="0.0.0.0/0" ParameterKey=pVPCID,ParameterValue="${vpcid}" ParameterKey=pParameterStoreKey,ParameterValue="${key_arn}" --capabilities CAPABILITY_NAMED_IAM
+aws cloudformation create-stack --stack-name checkmarx-ts-security --template-body file://300-checkmarx-security.yml --parameters ParameterKey=pCheckmarxBucket,ParameterValue="arn:aws:s3:::checkmarx-ts" ParameterKey=pCxSASTUsersCIDR,ParameterValue="0.0.0.0/0" ParameterKey=pVPCID,ParameterValue="${vpcid}" ParameterKey=pParameterStoreKey,ParameterValue="${key_arn}" --capabilities CAPABILITY_NAMED_IAM --tags Key=Environment,Value="Development"
 ```
 
 ## Deploy Checkmarx Image Builder
@@ -85,29 +91,35 @@ In case somehow you don't already have one, you will need a keypair at this poin
 
 ```powershell
 # Image Builder
-$vpc =(aws cloudformation describe-stacks --stack-name stokes-vpc | ConvertFrom-Json).Stacks[0].Outputs
+$vpc =(aws cloudformation describe-stacks --stack-name checkmarx-ts-vpc | ConvertFrom-Json).Stacks[0].Outputs
 $vpcid = $vpc | where-object {$_.OutputKey -eq "VPC"} | select -ExpandProperty OutputValue 
 $subnet1 =  $vpc | where-object {$_.OutputKey -eq "SubnetAPublic"} | select -ExpandProperty OutputValue 
-aws cloudformation create-stack --stack-name stokes-checkmarx-factory --template-body file://400-image-builder.yml --parameters ParameterKey=pS3Bucket,ParameterValue="checkmarx-stokes" ParameterKey=pEngineBaseAmi,ParameterValue="arn:aws:imagebuilder:us-east-2:aws:image/windows-server-2016-english-core-base-x86/x.x.x" ParameterKey=pManagerBaseAmi,ParameterValue="arn:aws:imagebuilder:us-east-2:aws:image/windows-server-2016-english-full-base-x86/x.x.x" ParameterKey=pRemoteDesktopCIDR,ParameterValue="0.0.0.0/0" ParameterKey=pVpcId,ParameterValue="${vpcid}" ParameterKey=pBuilderSubnet,ParameterValue="${subnet1}" ParameterKey=pBuilderKeypair,ParameterValue="stokes" ParameterKey=pAmiDistributionRegion,ParameterValue="us-east-2" --tags Key=Owner,Value="Ben" Key=Environment,Value="Development"
+aws cloudformation create-stack --stack-name checkmarx-ts-image-factory --template-body file://400-image-builder.yml --parameters ParameterKey=pS3Bucket,ParameterValue="checkmarx-ts" ParameterKey=pEngineBaseAmi,ParameterValue="arn:aws:imagebuilder:us-east-2:aws:image/windows-server-2016-english-core-base-x86/x.x.x" ParameterKey=pManagerBaseAmi,ParameterValue="arn:aws:imagebuilder:us-east-2:aws:image/windows-server-2016-english-full-base-x86/x.x.x" ParameterKey=pRemoteDesktopCIDR,ParameterValue="0.0.0.0/0" ParameterKey=pVpcId,ParameterValue="${vpcid}" ParameterKey=pBuilderSubnet,ParameterValue="${subnet1}" ParameterKey=pBuilderKeypair,ParameterValue="stokes" ParameterKey=pAmiDistributionRegion,ParameterValue="us-east-2" --tags Key=Environment,Value="Development"
 ```
 
 ## Deploy the Checkmarx Environment
 
 ```powershell
-$vpc =(aws cloudformation describe-stacks --stack-name stokes-vpc | ConvertFrom-Json).Stacks[0].Outputs
+$vpc =(aws cloudformation describe-stacks --stack-name checkmarx-ts-vpc | ConvertFrom-Json).Stacks[0].Outputs
 $vpcid = $vpc | where-object {$_.OutputKey -eq "VPC"} | select -ExpandProperty OutputValue 
 $publicSubnets = $($vpc | where-object {$_.OutputKey -eq "SubnetsPublic"} | select -ExpandProperty OutputValue).Replace(",", "\,")
 $privateSubnets = $($vpc | where-object {$_.OutputKey -eq "SubnetsPrivate"} | select -ExpandProperty OutputValue).Replace(",", "\,")
 $ebsKey = (aws kms describe-key --key-id alias/aws/ebs | ConvertFrom-Json).KeyMetaData |Select -ExpandProperty Arn
-$security = (aws cloudformation describe-stacks --stack-name stokes-cx-security | ConvertFrom-Json).Stacks[0].Outputs
+$security = (aws cloudformation describe-stacks --stack-name checkmarx-ts-security | ConvertFrom-Json).Stacks[0].Outputs
 $managerIam = "arn:aws:iam::275043232443:instance-profile/checkmarx-cxsast-manager"
 $engineIam = "arn:aws:iam::275043232443:instance-profile/checkmarx-cxsast-engine"
 $managerSg = $security | where-object {$_.OutputKey -eq "ManagerSecurityGroupId"} | select -ExpandProperty OutputValue 
 $engineSg = $security | where-object {$_.OutputKey -eq "EngineSecurityGroupId"} | select -ExpandProperty OutputValue 
 
-aws cloudformation create-stack --stack-name stokes-checkmarx-sast89 --template-body file://500-cxsast.yml --parameters ParameterKey=pVpcId,ParameterValue="${vpcid}" ParameterKey=pManagerSubnets,ParameterValue="${publicSubnets}" ParameterKey=pEngineSubnets,ParameterValue="${privateSubnets}" ParameterKey=pEngineAvailabilityZones,ParameterValue="us-east-2a\,us-east-2b"  ParameterKey=pManagerAvailabilityZones,ParameterValue="us-east-2a\,us-east-2b" ParameterKey=pS3Bucket,ParameterValue="stokes-checkmarx" ParameterKey=pEbsKey,ParameterValue="${ebsKey}" ParameterKey=pEc2Key,ParameterValue="stokes" ParameterKey=pManagerIamProfile,ParameterValue="${managerIam}" ParameterKey=pEngineIamProfile,ParameterValue="${engineIam}" ParameterKey=pManagerSecurityGroups,ParameterValue="${managerSg}" ParameterKey=pEngineSecurityGroups,ParameterValue="${engineSg}" ParameterKey=pManagerAmi,ParameterValue="ami-011eb19eeda1a763a" ParameterKey=pEngineAmi,ParameterValue="ami-01525ec5f040540fa" --tags Key=Owner,Value="Ben" Key=Environment,Value="Development"
+aws cloudformation create-stack --stack-name checkmarx-ts-sast89 --template-body file://500-cxsast.yml --parameters ParameterKey=pVpcId,ParameterValue="${vpcid}" ParameterKey=pManagerSubnets,ParameterValue="${publicSubnets}" ParameterKey=pEngineSubnets,ParameterValue="${privateSubnets}" ParameterKey=pEngineAvailabilityZones,ParameterValue="us-east-2a\,us-east-2b"  ParameterKey=pManagerAvailabilityZones,ParameterValue="us-east-2a\,us-east-2b" ParameterKey=pS3Bucket,ParameterValue="checkmarx-ts" ParameterKey=pEbsKey,ParameterValue="${ebsKey}" ParameterKey=pEc2Key,ParameterValue="stokes" ParameterKey=pManagerIamProfile,ParameterValue="${managerIam}" ParameterKey=pEngineIamProfile,ParameterValue="${engineIam}" ParameterKey=pManagerSecurityGroups,ParameterValue="${managerSg}" ParameterKey=pEngineSecurityGroups,ParameterValue="${engineSg}" ParameterKey=pManagerAmi,ParameterValue="ami-011eb19eeda1a763a" ParameterKey=pEngineAmi,ParameterValue="ami-01525ec5f040540fa" --tags Key=Environment,Value="Development"
 
 ```
+
+# Guidance & Caveats
+
+* Use the default installation location ```C:\Program Files\Checkmarx```, especially if will install BI
+* Do not install BI
+
 
 # Troubleshooting
 
