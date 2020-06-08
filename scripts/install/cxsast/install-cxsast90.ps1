@@ -325,7 +325,7 @@ if ($WEB.IsPresent) {
   log "Installing WEB"
   $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} ACCESSCONTROL=${ACCESSCONTROL_BIT} ACTIVEMQ=${ACTIVEMQ_BIT}  RI=${RI_BIT}  "
   log "install options: $("${cx_component_options} ${cx_static_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
-  #Start-Process "$installer" -ArgumentList "${cx_component_options} ${cx_static_options} " -Wait -NoNewWindow
+  Start-Process "$installer" -ArgumentList "${cx_component_options} ${cx_static_options} " -Wait -NoNewWindow
 }
 
 if ($ENGINE.IsPresent) {
