@@ -66,6 +66,84 @@ Resources:
 # EC2 Image Builder Common Components    
 #
 ####################################
+  ibBootStrap:
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Bootstrap some tools and build scripts
+      Name: checkmarx-bootstrap
+      Platform: Windows
+      Version: 1.0.0
+      Data: !Sub |
+        name: bootstrap
+        description: bootstraps tools and build scripts
+        schemaVersion: 1.0
+        phases: 
+          - name: build
+            steps:
+              - name: bootstrap
+                action: ExecutePowerShell
+                timeoutSeconds: 600
+                inputs:
+                  commands:
+                    - | 
+                      Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; 
+                      $ProgressPreference = "SilentlyContinue"
+                      [System.Environment]::SetEnvironmentVariable('CheckmarxBucket', '${pS3Bucket}', [System.EnvironmentVariableTarget]::Machine)
+                      md -force "c:\programdata\checkmarx\automation\dependencies"  
+                      md -force "c:\programdata\checkmarx\automation\installers"  
+                      $expectedPath = "c:\programdata\checkmarx\automation\dependencies"
+                      $git = (Invoke-RestMethod -Method GET -Uri "https://api.github.com/repos/git-for-windows/git/releases/latest" -UseBasicParsing).assets | Where-Object { $_.name -match "Git-\d\.\d\d\.\d-64-bit\.exe" }
+                      Invoke-WebRequest -UseBasicParsing -Uri "$($git.browser_download_url)" -OutFile (Join-Path $expectedPath $git.name)
+                      $installer = (Join-Path $expectedPath $git.name)
+                      Start-Process "$installer" -ArgumentList "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS" -Wait -NoNewWindow 
+                      cd c:\programdata\checkmarx\automation
+                      Start-Process "C:\Program Files\Git\bin\git.exe" -ArgumentList "clone https://github.com/checkmarx-ts/aws-automation.git c:\programdata\checkmarx\automation\aws-automation" -Wait -NoNewWindow
+                      Start-Process "C:\Program Files\Git\bin\git.exe" -ArgumentList "checkout development" -Wait -NoNewWindow -WorkingDirectory "C:\programdata\checkmarx\automation\aws-automation"
+
+  ibcSast89HF24:
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Builds Checkmarx CxSAST 8.9 HF24 Manager
+      Name: sast89hf24manager
+      Platform: Windows
+      Version: 1.0.0
+      Data: !Sub |
+        name: sast89hf24manager
+        description: Builds Checkmarx CxSAST 8.9 HF24 Manager
+        schemaVersion: 1.0
+        phases:
+          - name: build
+            steps:
+              - name: DOTNET
+                action: ExecutePowerShell
+                timeoutSeconds: 600
+                inputs:
+                  commands:
+                    - C:\programdata\checkmarx\automation\aws-automation\scripts\install\common\install-dotnetframework.ps1
+              - name: REBOOT
+                action: Reboot 
+              - name: DEPENDENCIES
+                action: ExecutePowerShell
+                timeoutSeconds: 900
+                inputs:
+                  commands:
+                    - C:\programdata\checkmarx\automation\aws-automation\scripts\install\common\install-cpp2010sp1.ps1
+                    - C:\programdata\checkmarx\automation\aws-automation\scripts\install\common\install-java.ps1
+                    - C:\programdata\checkmarx\automation\aws-automation\scripts\install\common\install-git.ps1
+                    - C:\programdata\checkmarx\automation\aws-automation\scripts\install\common\install-iis.ps1
+                    - C:\programdata\checkmarx\automation\aws-automation\scripts\install\common\install-sqlserver-2012-express-sp2.ps1
+              - name: REBOOT
+                action: Reboot 
+              - name: SAST
+                action: ExecutePowerShell
+                timeoutSeconds: 600
+                inputs:
+                  commands:
+                    - C:\programdata\checkmarx\automation\aws-automation\scripts\configure\license-from-alg.ps1
+                    - C:\programdata\checkmarx\automation\aws-automation\scripts\configure\configure-windows-defender.ps1
+                    - C:\programdata\checkmarx\automation\aws-automation\scripts\install\cxsast\install-cxsast.ps1 -ACCEPT_EULA -MANAGER -WEB -ENGINE
+                    - C:\programdata\checkmarx\automation\aws-automation\scripts\configure\configure-iis-hardening.ps1
+
 
   ibCreateFoldersv100:
     Type: AWS::ImageBuilder::Component

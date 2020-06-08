@@ -8,9 +8,9 @@
 
 # Initializes ssl using letsencrypt.org with the route 53 dns plugin
 param (
- [Parameter(Mandatory = $True)] [String] $domain = "ben.dev.checkmarx-ts.com",
+ [Parameter(Mandatory = $False)] [String] $domain = "",
  [Parameter(Mandatory = $false)] [String] $password = "",
- [Parameter(Mandatory = $false)] [String] $email ="ben.stokes@checkmarx.com",
+ [Parameter(Mandatory = $false)] [String] $email = "",
  [Parameter(Mandatory = $False)] [switch] $Renewal,
  [Parameter(Mandatory = $False)] [switch] $LE_STAGE
 )
@@ -20,6 +20,21 @@ Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManage
 $ProgressPreference = "SilentlyContinue"
 
 function log([string] $msg) { Write-Host "$(Get-Date -Format G) [$PSCommandPath] $msg" }
+
+$env:POSHACME_HOME = "c:\programdata\Posh-ACME"
+md -force "$env:POSHACME_HOME"
+
+# Override the command line with EC2 resource tags if the exist.
+$tags = Get-EC2Tag -filter @{Name="resource-id";Value="$(Get-EC2InstanceMetaData -Category InstanceId)"}
+if ([String]::IsNullOrEmpty($domain)) {
+    [string]$domain = $tags | Where-Object { $_.Key -eq "checkmarx:dns" } | Select-Object -ExpandProperty Value
+}
+if ([String]::IsNullOrEmpty($email)) {
+    [string]$email =  $tags | Where-Object { $_.Key -eq "checkmarx:lets-encrypt-contact" } | Select-Object -ExpandProperty Value
+}
+if ([String]::IsNullOrEmpty($domain)) { log "No dns value found"; exit 1 }
+if ([String]::IsNullOrEmpty($email)) { log "No email value found"; exit 1 }
+log "Found dns tag: $domain"
 
 log "Installing Posh-ACME Plugin"
 # Get the Posh-ACME Plugin

@@ -16,23 +16,31 @@ $ProgressPreference = "SilentlyContinue"
 
 function log([string] $msg) { Write-Host "$(Get-Date -Format G) [$PSCommandPath] $msg" }
 
-$tags = Get-EC2Tag -filter @{Name="resource-id";Value="${instance_id}"}
-[string]$dns = $tags | Where-Object { $_.Key -eq "dns" } | Select-Object -ExpandProperty Value
+<####################################################
+  Search for the dns name specified by the dns tag
+#####################################################>
+$tags = Get-EC2Tag -filter @{Name="resource-id";Value="$(Get-EC2InstanceMetaData -Category InstanceId)"}
+[string]$dns = $tags | Where-Object { $_.Key -eq "checkmarx:dns" } | Select-Object -ExpandProperty Value
 if ([String]::IsNullOrEmpty($dns)) { log "No dns tag found"; exit 1 }
 log "Found dns tag: $dns"
 
+<####################################################
+  Search for matching hosted zone of the domain
+#####################################################>
 log "Searching for hosted zone..."
 $hosted_zones = Get-R53HostedZoneList
 $matched_zone = $hosted_zones | Where-Object { $dns.Contains($_.Name.TrimEnd(".")) } | Select-Object -First 1
 
-if ($matched_zone -eq $null) { log "No hosted zone found."; exit 1 }
+if ($null -eq $matched_zone) { log "No hosted zone found."; exit 1 }
 log "Found $($matched_zone.Id) $($matched_zone.Name)"
 $subdomain = $dns.Replace($($matched_zone).Name.TrimEnd("."), "")
 log "Subdomain is $subdomain"
-
 $public_ipv4 = Get-EC2InstanceMetadata -Category PublicIpv4
 $HOSTED_ZONE_ID = $matched_zone.Id
 
+<####################################################
+ Prepare and submit the Route53 Record
+#####################################################>
 log "Building change request to route $dns to $public_ipv4 w/ TTL $TTL"
 $changeRequest01 = New-Object -TypeName Amazon.Route53.Model.Change
 $changeRequest01.Action = "UPSERT"

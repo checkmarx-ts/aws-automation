@@ -164,3 +164,15 @@ A work in progress
 * Storage
 * SSL
 * Patching
+
+# Tags
+
+Tags are used in this way.
+
+checkmarx:dns
+checkmarx:lets-encrypt-contact
+
+# Todo
+
+* Enhance cloudwatch logs config w/ time format specifications
+* Add ActivMQ logs

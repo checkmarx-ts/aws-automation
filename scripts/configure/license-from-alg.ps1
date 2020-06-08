@@ -1,9 +1,15 @@
-# Uses the ALG. Assumes that all ALG artifacts have been fetched to c:\programdata\checkmarx\alg by convention.
-# These artifacts must include:
-#  1. settings.xml - the ALG settings file configured for your environment
-#  2. ALG-CLI-1.0.0-jar-with-dependencies.jar - the ALG program
-#  3. CxEncryptUtils.exe - encryption utility used by ALG
-#  4. HID_CLI_9.0.zip obtained from https://www.checkmarx.com/cxutilities/
+<#
+.SYNOPSIS
+Runs the ALG to provision a license
+
+.NOTES
+Uses the ALG. Assumes that all ALG artifacts have been fetched to c:\programdata\checkmarx\alg by convention.
+ These artifacts must include:
+  1. settings.xml - the ALG settings file configured for your environment
+  2. ALG-CLI-1.0.0-jar-with-dependencies.jar - the ALG program
+  3. CxEncryptUtils.exe - encryption utility used by ALG
+  4. HID_CLI_9.0.zip obtained from https://www.checkmarx.com/cxutilities/
+#>
 
 # Self Elevate
 if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -40,7 +46,7 @@ log "...found: $license"
 # Import the new license if Checkmarx is installed
 if (Test-Path "C:\Program Files\Checkmarx\Licenses") {
   Move-Item "C:\Program Files\Checkmarx\Licenses\license.cxl" "C:\Program Files\Checkmarx\Licenses\license.$(Get-Date -format "yyyy-MM-dd-HHmm").bak" -Force -ErrorAction SilentlyContinue
-  Copy-Item "$((${license}).FullName)" 'C:\Program Files\Checkmarx\Licenses\license.cxl' -Verbose -Force
+  Copy-Item "${license}" 'C:\Program Files\Checkmarx\Licenses\license.cxl' -Verbose -Force
   # Restart services to begin using the new license
   restart-service cx* 
   iisreset

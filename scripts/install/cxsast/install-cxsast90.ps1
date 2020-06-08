@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Installs / Checkmarx CxSAST 8.9 w/ Hotfix
+Installs / Checkmarx CxSAST 9.0 w/ Hotfix
 
 .NOTES
 The installer file is determined in this order:
@@ -12,18 +12,21 @@ The installer file is determined in this order:
     1. The local expected path i.e. c:\programdata\checkmarx\ will be searched for a file that matches the typical installer filename. This allows you to place an installer here via any means
     2. IF the CheckmarxBucket environment variable is set, the bucket will be searched for a file that matches the typical installer filename with an appropriate key prefix (ie installation/common)
 
-
   * When searching based on file prefix, if more than 1 file is found the files are sorted by file name and the first file is selected. This typically will mean the most recent version available is selected. 
 #>
 param (
  # Automation args
+ # installers should be the filename of the zip file as distributed by Checkmarx but stripped of any password protection
  [Parameter(Mandatory = $False)] [String] $installer = "CxSAST.890.Release.Setup_8.9.0.210.zip",
  [Parameter(Mandatory = $False)] [String] $hotfix_installer = "8.9.0.HF24.zip",
+
+ # The default paths are a convention and not normally changed. Take caution if passing in args. 
  [Parameter(Mandatory = $False)] [String] $expectedpath ="C:\programdata\checkmarx\automation\installers",
  [Parameter(Mandatory = $False)] [String] $s3prefix = "installation/cxsast",
- [Parameter(Mandatory = $False)] [switch] $ACCEPT_EULA = $False,
+
  
  # Install Options
+ [Parameter(Mandatory = $False)] [switch] $ACCEPT_EULA = $False,
  [Parameter(Mandatory = $False)] [String] $PORT = "80",
  [Parameter(Mandatory = $False)] [String] $INSTALLFOLDER = "C:\Program Files\Checkmarx",
  [Parameter(Mandatory = $False)] [String] $LIC = "",
