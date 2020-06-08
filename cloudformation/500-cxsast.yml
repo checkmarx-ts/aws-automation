@@ -89,7 +89,7 @@ Parameters:
     Default: arn:aws:iam::213611284282:instance-profile/checkmarx-cxsast-engine
   pEc2Key:
     Type: String
-    Default: cxbs
+    Default: stokes
     Description: The key for ec2 instances
   pManagerSecurityGroups:
     Type: List<AWS::EC2::SecurityGroup::Id>
@@ -106,7 +106,14 @@ Parameters:
   pEngineAvailabilityZones:
     Type: List<AWS::EC2::AvailabilityZone::Name>
     Description: AZs for the engine servers
-    Default: us-east-2a, us-east-2b    
+    Default: us-east-2a, us-east-2b
+  pDnsName:
+    Type: String
+    Description: The value for the checkmarx:dns tag. Route53 routes for the hosted zone will be created.
+    Default: example.dev.checkmarx-ts.com
+  pLetsEncryptContact:
+    Type: String
+    Description: The email for the letsencrypt.org account owner - used for provisioning certs. 
   
 Resources:
 ###############################################################################
@@ -147,16 +154,22 @@ Resources:
               <powershell>
               # Automatic License Generator
               Read-S3Object -BucketName ${pS3Bucket} -KeyPrefix installation/field/alg -Folder c:\programdata\checkmarx\alg
-              C:\programdata\checkmarx\alg\license-from-alg.ps1
+              C:\programdata\checkmarx\aws-automation\scripts\install\configure\license-from-alg.ps1
+
               # Cloudwatch Logs Configuration
-              Read-S3Object -BucketName ${pS3Bucket} -KeyPrefix installation/field/cloudwatchlogs -Folder c:\programdata\checkmarx\cloudwatchlogs
-              c:\programdata\checkmarx\cloudwatchlogs\configure-cloudwatch-logs.ps1 -ConfigFile c:\programdata\checkmarx\cloudwatchlogs\cloudwatch-logs-config.json
-              # Database Connection String Configuration
-              Read-S3Object -BucketName ${pS3Bucket} -KeyPrefix installation/field/configuration -Folder c:\programdata\checkmarx\configuration
-              c:\programdata\checkmarx\configuration\configure-connection-strings.ps1 -username /checkmarx/dev/sql/username -password /checkmarx/dev/sql/password -dbhost "sqlserverdev.ckbq3owrgyjd.us-east-1.rds.amazonaws.com"
+              c:\programdata\checkmarx\aws-automation\scripts\configure\configure-cloudwatch-logs.ps1
+              
               # Install Lab Toolset
-              Read-S3Object -BucketName ${pS3Bucket} -KeyPrefix installation/lab -Folder c:\programdata\checkmarx\lab
-              c:\programdata\checkmarx\lab\install-lab-tools.ps1 `
+              #c:\programdata\checkmarx\aws-automation\scripts\lab\install-tools.ps1
+
+              # Set up route 53 (server must be tagged w/ checkmarx:dns with a name in a R53 hosted zone)
+              c:\programdata\checkmarx\aws-automation\scripts\configure\configure-route53-recordset.ps1
+
+              # Get certificates for the machine using lets encrypt. You can provision  your certs some  
+              # other way and then pass them to configure-manager-ssl.ps1 for customization. 
+              c:\programdata\checkmarx\aws-automation\scripts\ssl\request-lets-encrypt.ps1
+              c:\programdata\checkmarx\aws-automation\scripts\ssl\configure-manager-ssl.ps1
+
               </powershell>
       LaunchTemplateName: CxManagerTemplate
 
