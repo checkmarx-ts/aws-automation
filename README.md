@@ -181,11 +181,11 @@ A work in progress
 
 | Tag | Description |
 | --- | --- |
-| checkmarx:dns | A tag to label the DNS name of the Checkmarx server.  [configure-route53-recordset.ps1](scripts/configure/configure-route53-recordset.ps1) reads this value to create an A record for the public ipv4 of the instance (name must match a Route53 hosted zone). [request-lets-encrypt.ps1](scripts/ssl/request-lets-encrypt.ps1) reads this value to determine which domain to request a certificate. |
-| checkmarx:lets-encrypt-contact | The email address of the letsencrypt.org account owner under which certificates will be provisioned. [request-lets-encrypt.ps1](scripts/ssl/request-lets-encrypt.ps1) uses this tag value for managing certificates.  |
+| `checkmarx:dns` | A tag to label the DNS name of the Checkmarx server.  [configure-route53-recordset.ps1](scripts/configure/configure-route53-recordset.ps1) reads this value to create an A record for the public ipv4 of the instance (name must match a Route53 hosted zone). [request-lets-encrypt.ps1](scripts/ssl/request-lets-encrypt.ps1) reads this value to determine which domain to request a certificate. |
+| `checkmarx:lets-encrypt-contact` | The email address of the letsencrypt.org account owner under which certificates will be provisioned. [request-lets-encrypt.ps1](scripts/ssl/request-lets-encrypt.ps1) uses this tag value for managing certificates.  |
 
 
 # Todo
 
 * Enhance cloudwatch logs config w/ time format specifications
-* Add ActivMQ logs
+* Add ActiveMQ logs
