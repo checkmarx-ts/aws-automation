@@ -71,7 +71,7 @@ Now that your s3 bucket is up, you need to load it with dependencies - things th
 Follow the steps in [cloudformation/251-inflate-s3-bucket.md](cloudformation/251-inflate-s3-bucket.md) to populate your bucket.
 
 ## Deploy Checkmarx security
-The security template includes things like security groups and IAM roles. These resources are required however you may customize them so long as you do not break component-to-component communication (e.g. you can - and should - lock down your users CIDR block). 
+The security template includes things like security groups and IAM roles. These resources are required however you may customize them so long as you do not break component-to-component communication (e.g. you can - and should - lock down your users CIDR block) or remove IAM policies required. 
 
 Deploy the Cloud Formation template ```300-checkmarx-security.yml``` using the AWS Console or CLI. Using the CLI we will obtain many parameters values from our previously created stack.
 
@@ -87,6 +87,8 @@ aws cloudformation create-stack --stack-name checkmarx-ts-security --template-bo
 Checkmarx will create AMIs using the EC2 Image Builder service. Create this stack manually or by deploying the ```400-image-builder.yml``` using the CLI. Many parameter inputs to this template will be sourced from previous templates. 
 
 In case somehow you don't already have one, you will need a keypair at this point before you continue (this template takes a keypair as a parameter). See https://docs.aws.amazon.com/cli/latest/userguide/cli-services-ec2-keypairs.html#creating-a-key-pair. 
+
+Once you are finished with this step you need to go the EC2 Image Builder service and run the pipelines to generate AMIs. Those AMIs are used in the next step. 
 
 
 ```powershell
@@ -117,8 +119,8 @@ aws cloudformation create-stack --stack-name checkmarx-ts-sast89 --template-body
 
 # Guidance & Caveats
 
-* Use the default installation location ```C:\Program Files\Checkmarx```, especially if will install BI
-* Do not install BI
+* Use the default installation location ```C:\Program Files\Checkmarx```, especially if you may install *Management & Orchestration*
+* Do not install *Management & Orchestration*
 
 
 # Troubleshooting
@@ -162,15 +164,26 @@ Correct: ```"us-east-2a\, us-east-2b"```
 A work in progress
 
 * Storage
+    * EBS
+    * FSx
+    * EFS
+    * NAS
+    * Widows File Server
+
 * SSL
+    * Termination & Dataflows
+    * Self Signed
+    * Letsencrypt.org frontend + Self Signed backend
 * Patching
+
 
 # Tags
 
-Tags are used in this way.
+| Tag | Description |
+| --- | --- |
+| checkmarx:dns | A tag to label the DNS name of the Checkmarx server.  [configure-route53-recordset.ps1](scripts/configure/configure-route53-recordset.ps1) reads this value to create an A record for the public ipv4 of the instance (name must match a Route53 hosted zone). [request-lets-encrypt.ps1](scripts/ssl/request-lets-encrypt.ps1) reads this value to determine which domain to request a certificate. |
+| checkmarx:lets-encrypt-contact | The email address of the letsencrypt.org account owner under which certificates will be provisioned. [request-lets-encrypt.ps1](scripts/ssl/request-lets-encrypt.ps1) uses this tag value for managing certificates.  |
 
-checkmarx:dns
-checkmarx:lets-encrypt-contact
 
 # Todo
 
