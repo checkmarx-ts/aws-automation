@@ -125,7 +125,7 @@ if ( $version -eq "8.9.0") {
 ```
 
 ### HID Generator
-Download the Cx Cmd HID Generator and place the zip file in ```s3://{$env:CheckmarxBucket}/installation/field/alg/```
+Download the Cx Cmd HID Generator, published at https://www.checkmarx.com/cxutilities/,  and place the zip file in ```s3://{$env:CheckmarxBucket}/installation/field/alg/```
 
 ```powershell
 # Enter your s3 bucket name here:
