@@ -100,7 +100,7 @@ if (!(Test-Path "$installer")) {
 } 
 
 log "Installing from $installer"
-Start-Process "$installer" -ArgumentList '/Q /IACCEPTSQLSERVERLICENSETERMS /ACTION=Install /ERRORREPORTING=0 /ROLE=AllFeatures_WithDefaults /INSTANCENAME=SQLEXPRESS /BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCACCOUNT="Network Service" /SQLSVCSTARTUPTYPE=Automatic /SQLSYSADMINACCOUNTS="Administrators" "NETWORK SERVICE" ' -Wait -NoNewWindow   
+Start-Process "$installer" -ArgumentList '/Q /IACCEPTSQLSERVERLICENSETERMS /ACTION=Install /ERRORREPORTING=0 /ROLE=AllFeatures_WithDefaults /INSTANCENAME=SQLEXPRESS /BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCACCOUNT="Network Service" /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1 /SQLSYSADMINACCOUNTS="Administrators" "NETWORK SERVICE" ' -Wait -NoNewWindow   
 
 $logfile = $(Get-ChildItem "C:\Program Files\Microsoft SQL Server\" -Recurse -Filter "Summary.txt" | Sort LastWriteTime | Select -First 1 -ExpandProperty FullName)
 log "Finished installing. Log file is available at ${logfile}. Log file content is: "
