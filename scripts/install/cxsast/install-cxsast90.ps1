@@ -17,26 +17,32 @@ The installer file is determined in this order:
 param (
  # Automation args
  # installers should be the filename of the zip file as distributed by Checkmarx but stripped of any password protection
- [Parameter(Mandatory = $False)] [String] $installer = "CxSAST.890.Release.Setup_8.9.0.210.zip",
- [Parameter(Mandatory = $False)] [String] $hotfix_installer = "8.9.0.HF24.zip",
+ [Parameter(Mandatory = $False)] [String] $installer = "CxSAST.900.Release.Setup_9.0.0.40085.zip",
+ [Parameter(Mandatory = $False)] [String] $hotfix_installer = "0",
 
  # The default paths are a convention and not normally changed. Take caution if passing in args. 
  [Parameter(Mandatory = $False)] [String] $expectedpath ="C:\programdata\checkmarx\automation\installers",
  [Parameter(Mandatory = $False)] [String] $s3prefix = "installation/cxsast",
-
  
  # Install Options
  [Parameter(Mandatory = $False)] [switch] $ACCEPT_EULA = $False,
  [Parameter(Mandatory = $False)] [String] $PORT = "80",
  [Parameter(Mandatory = $False)] [String] $INSTALLFOLDER = "C:\Program Files\Checkmarx",
  [Parameter(Mandatory = $False)] [String] $LIC = "",
- 
+ [Parameter(Mandatory = $False)] [String] $CX_JAVA_HOME = "C:\Program Files\AdoptOpenJDK\jre",
+ [Parameter(Mandatory = $False)] [String] $CxSAST_ADDRESS = "http://localhost:80",
+
  # Cx Components
  [Parameter(Mandatory = $False)] [switch] $MANAGER = $False,
  [Parameter(Mandatory = $False)] [switch] $WEB = $False,
  [Parameter(Mandatory = $False)] [switch] $ENGINE = $False, 
  [Parameter(Mandatory = $False)] [switch] $BI = $False,  
  [Parameter(Mandatory = $False)] [switch] $AUDIT = $False,
+ [Parameter(Mandatory = $False)] [switch] $ACCESSCONTROL = $False,
+ [Parameter(Mandatory = $False)] [switch] $ACTIVEMQ = $False,
+
+ # Access Control Options
+ [Parameter(Mandatory = $False)] [switch] $VALIDATED_ACCESSCONTROL_MIGRATION = $False, 
 
  # CxDB SQL
  [Parameter(Mandatory = $False)] [switch] $SQLAUTH = $False,
@@ -44,8 +50,14 @@ param (
  [Parameter(Mandatory = $False)] [String] $SQLUSER = "",
  [Parameter(Mandatory = $False)] [String] $SQLPWD = "",
 
- # CxARM
+ # Remediation Intelligence Options
+ [Parameter(Mandatory = $False)] [String] $RIHTTPPORT = "8082",
+
+ #ActiveMQ
  [Parameter(Mandatory = $False)] [String] $MQHTTPPORT = "61616",
+ [Parameter(Mandatory = $False)] [String] $MQMANAGERHTTPPORT = "8161",
+
+ # CxARM
  [Parameter(Mandatory = $False)] [String] $TOMCATUSERNAME = "checkmarx",
  [Parameter(Mandatory = $False)] [String] $TOMCATPASSWORD = "changeme",
  [Parameter(Mandatory = $False)] [String] $TOMCATHTTPPORT = "8080",
@@ -59,6 +71,7 @@ param (
  [Parameter(Mandatory = $False)] [String] $CXARM_DB_USER = "",
  [Parameter(Mandatory = $False)] [String] $CXARM_DB_PASSWORD = "" 
 )
+
 
 # Force TLS 1.2+ and hide progress bars to prevent slow downloads
 Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; 
@@ -234,6 +247,7 @@ if (($BI.IsPresent) -and ([String]::IsNullOrEmpty($CXARM_DB_HOST))) {
   exit 1
 }
 
+
 <##################################
     Inexpensive connectivity tests to fail fast
 ###################################>
@@ -250,9 +264,9 @@ $installer = GetInstaller $installer $expectedpath $s3prefix
 log "Found installer $installer"
 VerifyFileExists $installer
 
-log "Searching for the CxSAST Hotfix Installer"
-$hotfix_installer = GetInstaller $hotfix_installer $expectedpath $s3prefix
-VerifyFileExists $hotfix_installer
+#log "Searching for the CxSAST Hotfix Installer"
+#$hotfix_installer = GetInstaller $hotfix_installer $expectedpath $s3prefix
+#VerifyFileExists $hotfix_installer
 
 
 $files = $(Get-ChildItem "$expectedpath" -Recurse -Filter "*zip" | Select-Object -ExpandProperty FullName)
@@ -262,9 +276,9 @@ $files | ForEach-Object {
 
 # At this point the installer vars are actually pointing to zip files.. Lets find the actual executables now that they're unzipped.
 $installer = $(Get-ChildItem "$expectedpath" -Recurse -Filter "CxSetup.exe" | Sort-Object -Descending | Select-Object -First 1 -ExpandProperty FullName)
-$hotfix_installer = $(Get-ChildItem "$expectedpath" -Recurse -Filter "*HF*.exe" | Sort-Object -Descending | Select-Object -First 1 -ExpandProperty FullName)
+#$hotfix_installer = $(Get-ChildItem "$expectedpath" -Recurse -Filter "*HF*.exe" | Sort-Object -Descending | Select-Object -First 1 -ExpandProperty FullName)
 VerifyFileExists $installer
-VerifyFileExists $hotfix_installer
+#VerifyFileExists $hotfix_installer
 
 <#################################
     Check for a license
@@ -281,48 +295,53 @@ if ([String]::IsNullOrEmpty($LIC)) {
     Install Checkmarx
 ###################################>
 # Build up the installer command line options
-$MANAGER_BIT = $WEB_BIT = $ENGINE_BIT = $BI_BIT = $AUDIT_BIT = $SQLAUTH_BIT = $CXARM_SQLAUTH_BIT = "0"
+$MANAGER_BIT = $WEB_BIT = $ENGINE_BIT = $BI_BIT = $AUDIT_BIT = $SQLAUTH_BIT = $CXARM_SQLAUTH_BIT = $ACCESSCONTROL_BIT = $ACTIVEMQ_BIT = $RI_BIT = "0"
 if ($SQLAUTH.IsPresent) { $SQLAUTH_BIT = "1" }
 if ($CXARM_SQLAUTH.IsPresent) { $CXARM_SQLAUTH_BIT="1" }
 
-$cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} "
-$cx_options = "/install /quiet ACCEPT_EULA=Y PORT=${PORT} INSTALLFOLDER=`"${INSTALLFOLDER}`" LIC=`"${LIC}`" " # Note you must quote INSTALLFOLDER and other paths to handle spaces
+$VALIDATED_ACCESSCONTROL_MIGRATION_BIT = "N"
+if ($VALIDATED_ACCESSCONTROL_MIGRATION.IsPresent) { $VALIDATED_ACCESSCONTROL_MIGRATION_BIT = "Y" }
+
+$cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} ACCESSCONTROL=${ACCESSCONTROL_BIT} RI=${$RI_BIT} "
+$cx_options = "/install /quiet ACCEPT_EULA=Y PORT=${PORT} INSTALLFOLDER=`"${INSTALLFOLDER}`" LIC=`"${LIC}`" CX_JAVA_HOME=`"$CX_JAVA_HOME`"" # Note you must quote INSTALLFOLDER and other paths to handle spaces
 $cx_db_options = " SQLAUTH=${SQLAUTH_BIT} SQLSERVER=${SQLSERVER} SQLUSER=${SQLUSER} SQLPWD=${SQLPWD} "
 $cx_armdb_options = " CXARM_SQLAUTH=${CXARM_SQLAUTH_BIT} CXARM_DB_HOST=${CXARM_DB_HOST} CXARM_DB_USER=${CXARM_DB_USER} CXARM_DB_PASSWORD=${CXARM_DB_PASSWORD} "
 $cx_tomcat_mq_options = " MQHTTPPORT=${MQHTTPPORT} TOMCATUSERNAME=${TOMCATUSERNAME} TOMCATPASSWORD=${TOMCATPASSWORD} TOMCATHTTPPORT=${TOMCATHTTPPORT} TOMCATHTTPSPORT=${TOMCATHTTPSPORT} TOMCATSHUTDOWNPORT=${TOMCATSHUTDOWNPORT} TOMCATAJPPORT=${TOMCATAJPPORT} "
-
+$cx_ac_options = " VALIDATED_ACCESSCONTROL_MIGRATION=${VALIDATED_ACCESSCONTROL_MIGRATION_BIT} "
+$cx_static_options = "${cx_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options} ${cx_ac_options}"
 # Now do run the installer, keep tracking of component bit state along the way. Multiple runs of the installer are required or else the database hangs (which is why we keep track of the state). 
 if ($MANAGER.IsPresent) {
   $MANAGER_BIT = "1" ;
   if ($BI.IsPresent) { $BI_BIT = "1" } # BI Should install w/ manager
-  $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} "
-  log "Installing MANAGER/BI"
-  log "install options: $("${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
-  Start-Process "$installer" -ArgumentList "${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}" -Wait -NoNewWindow
+  $ACTIVEMQ_BIT = $ACCESSCONTROL_BIT = $RI_BIT = "1"  # Active MQ and access control need to install w/ manager even if they were not selected
+  log "Installing MANAGER/BI/AC"
+  $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} ACCESSCONTROL=${ACCESSCONTROL_BIT} ACTIVEMQ=${ACTIVEMQ_BIT}  RI=${RI_BIT}  "
+  log "install options: $("${cx_component_options} ${cx_static_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
+  Start-Process "$installer" -ArgumentList "${cx_component_options} ${cx_static_options} " -Wait -NoNewWindow
 }
 
 if ($WEB.IsPresent) {
   $WEB_BIT = "1"
-  $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} "
   log "Installing WEB"
-  log "install options: $("${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
-  Start-Process "$installer" -ArgumentList "${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}" -Wait -NoNewWindow
+  $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} ACCESSCONTROL=${ACCESSCONTROL_BIT} ACTIVEMQ=${ACTIVEMQ_BIT}  RI=${RI_BIT}  "
+  log "install options: $("${cx_component_options} ${cx_static_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
+  #Start-Process "$installer" -ArgumentList "${cx_component_options} ${cx_static_options} " -Wait -NoNewWindow
 }
 
 if ($ENGINE.IsPresent) {
   $ENGINE_BIT = "1"
-  $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} "
   log "Installing ENGINE"
-  log "install options: $("${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
-  Start-Process "$installer" -ArgumentList "${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}" -Wait -NoNewWindow
+  $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} ACCESSCONTROL=${ACCESSCONTROL_BIT} ACTIVEMQ=${ACTIVEMQ_BIT}  RI=${RI_BIT}  "
+  log "install options: $("${cx_component_options} ${cx_static_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
+  Start-Process "$installer" -ArgumentList "${cx_component_options} ${cx_static_options} " -Wait -NoNewWindow
 }
 
 if ($AUDIT.IsPresent) {
   $AUDIT_BIT = "1"
-  $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} "
   log "Installing AUDIT"
-  log "install options: $("${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
-  Start-Process "$installer" -ArgumentList "${cx_options} ${cx_component_options} ${cx_db_options} ${cx_armdb_options} ${cx_tomcat_mq_options}" -Wait -NoNewWindow
+  $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} ACCESSCONTROL=${ACCESSCONTROL_BIT} ACTIVEMQ=${ACTIVEMQ_BIT}  RI=${RI_BIT}  "
+  log "install options: $("${cx_component_options} ${cx_static_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
+  Start-Process "$installer" -ArgumentList "${cx_component_options} ${cx_static_options} " -Wait -NoNewWindow
 }
 
 
@@ -393,7 +412,7 @@ log "Stopping services to install hotfix"
 stop-service cx*; 
 if ($WEB.IsPresent) { iisreset /stop } 
 log "Installing $hotfix_installer"
-Start-Process "$hotfix_installer" -ArgumentList "-cmd" -Wait -NoNewWindow
+#Start-Process "$hotfix_installer" -ArgumentList "-cmd" -Wait -NoNewWindow
 log "Finished hotfix installation"
 
 log "Restarting services"
