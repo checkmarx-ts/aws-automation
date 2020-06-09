@@ -152,12 +152,14 @@ Resources:
           Fn::Base64: 
             Fn::Sub: |
               <powershell>
+              ${env:CheckmarxBucket} = "${pS3Bucket}"
+
               # Automatic License Generator
-              Read-S3Object -BucketName ${pS3Bucket} -KeyPrefix installation/field/alg -Folder c:\programdata\checkmarx\alg
-              C:\programdata\checkmarx\aws-automation\scripts\install\configure\license-from-alg.ps1
+              Read-S3Object -BucketName ${env:CheckmarxBucket} -KeyPrefix installation/field/alg -Folder c:\programdata\checkmarx\alg
+              C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
 
               # Cloudwatch Logs Configuration
-              c:\programdata\checkmarx\aws-automation\scripts\configure\configure-cloudwatch-logs.ps1
+              #c:\programdata\checkmarx\aws-automation\scripts\configure\configure-cloudwatch-logs.ps1
               
               # Install Lab Toolset
               #c:\programdata\checkmarx\aws-automation\scripts\lab\install-tools.ps1

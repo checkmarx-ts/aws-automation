@@ -19,8 +19,8 @@ The installer file is determined in this order:
 #>
 
 param (
- [Parameter(Mandatory = $False)] [String] $installer,
  [Parameter(Mandatory = $False)] [String] $pattern = "rewrite_amd64*msi", # should have 1 wild card and end with file extension
+ [Parameter(Mandatory = $False)] [String] $arrpattern = "requestRouter_amd64*msi",
  [Parameter(Mandatory = $False)] [String] $expectedpath ="C:\programdata\checkmarx\automation\dependencies",
  [Parameter(Mandatory = $False)] [String] $s3prefix = "installation/common"   
 )
@@ -64,17 +64,23 @@ function GetInstaller ([string] $pattern, [string] $expectedPath, [string] $s3pr
     }
 }
 
-function Download() {
+function DownloadRewrite() {
   log "Downloading from https://download.microsoft.com/download/C/9/E/C9E8180D-4E51-40A6-A9BF-776990D8BCA9/rewrite_amd64.msi"
   Invoke-WebRequest -UseBasicParsing -Uri "https://download.microsoft.com/download/C/9/E/C9E8180D-4E51-40A6-A9BF-776990D8BCA9/rewrite_amd64.msi" -OutFile "${expectedpath}\rewrite_amd64.msi"
   return "${expectedpath}\rewrite_amd64.msi"
+}
+
+function DownloadRequestRouter() {
+  log "Downloading from http://download.microsoft.com/download/E/9/8/E9849D6A-020E-47E4-9FD0-A023E99B54EB/requestRouter_amd64.msi"
+  Invoke-WebRequest -UseBasicParsing -Uri "http://download.microsoft.com/download/E/9/8/E9849D6A-020E-47E4-9FD0-A023E99B54EB/requestRouter_amd64.msi" -OutFile "${expectedpath}\requestRouter_amd64.msi"
+  return "${expectedpath}\requestRouter_amd64.msi"
 }
 
 # Defend against trailing paths that will cause errors
 $expectedpath = $expectedpath.TrimEnd("\")
 $s3prefix = $s3prefix.TrimEnd("/")
 md -force "$expectedpath" | Out-Null
-
+$installer = ""
 try {
   # Find the installer
   $installer = GetInstaller $pattern $expectedpath $s3prefix
@@ -89,7 +95,7 @@ try {
 # Last resort, try to get the installer over the internet
 if ([String]::IsNullOrEmpty($installer)) {
   log "No installer found, attempting download from source"
-  $installer = Download
+  $installer = DownloadRewrite
 }
 
 if (!(Test-Path "$installer")) {
@@ -97,14 +103,45 @@ if (!(Test-Path "$installer")) {
   exit 1
 } 
 
+$arr_installer = ""
+try {
+  # Find the installer
+  $arr_installer = GetInstaller $arrpattern $expectedpath $s3prefix
+} catch {
+  Write-Error $_.Exception.ToString()
+  log $_.Exception.ToString()
+  $_
+  log "ERROR: An error occured. Check IAM policies? Is AWS Powershell installed?"
+  exit 1
+}
+
+# Last resort, try to get the installer over the internet
+if ([String]::IsNullOrEmpty($arr_installer)) {
+  log "No installer found, attempting download from source"
+  $installer = DownloadRequestRouter
+}
+
+if (!(Test-Path "$arr_installer")) {
+  log "ERROR: No file exists at $arr_installer"
+  exit 1
+} 
+
 # Install IIS
 log "Installing IIS..."
 Install-WindowsFeature -name Web-Server -IncludeManagementTools
 Add-WindowsFeature Web-Http-Redirect  
+Install-WindowsFeature -Name  Web-Health -IncludeAllSubFeature
+Install-WindowsFeature -Name  Web-Performance -IncludeAllSubFeature
+Install-WindowsFeature -Name Web-Security -IncludeAllSubFeature
+Install-WindowsFeature -Name  Web-Scripting-Tools -IncludeAllSubFeature
+   
 log "Finished installing IIS"
 log "Installing the IIS Rewrite module"
 # Install the rewrite module
-Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$installer`" /L*V `"$expectedPath\rewrite_install.log`" /QN" -Wait -NoNewWindow
+Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$installer`" /L*V `"$expectedPath\$(Get-Date -Format "yyyy-MM-dd-HHmmss")-rewrite_install.log`" /QN" -Wait -NoNewWindow
+log "Installing the IIS Request Router module"
+Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$arr_installer`" /L*V `"$expectedPath\$(Get-Date -Format "yyyy-MM-dd-HHmmss")-router_install.log`" /QN" -Wait -NoNewWindow
 
 if (Test-Path "$expectedPath\rewrite_install.log") { log "Last 50 lines of installer:"; Get-content -tail 50 "$expectedPath\rewrite_install.log" }
 log "Finished installing. Log file is at $expectedPath\rewrite_install.log."
+

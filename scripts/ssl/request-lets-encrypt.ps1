@@ -21,9 +21,6 @@ $ProgressPreference = "SilentlyContinue"
 
 function log([string] $msg) { Write-Host "$(Get-Date -Format G) [$PSCommandPath] $msg" }
 
-$env:POSHACME_HOME = "c:\programdata\Posh-ACME"
-md -force "$env:POSHACME_HOME"
-
 # Override the command line with EC2 resource tags if the exist.
 $tags = Get-EC2Tag -filter @{Name="resource-id";Value="$(Get-EC2InstanceMetaData -Category InstanceId)"}
 if ([String]::IsNullOrEmpty($domain)) {

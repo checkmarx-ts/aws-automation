@@ -149,6 +149,7 @@ The Checkmarx manager needs Java and Git, and both Manager and Engine servers ne
  1. Download the latest Git for Windows from https://git-scm.com/download/win and copy to ```installation/common```
  1. Download the .NET Framework 4.8 installer from https://dotnet.microsoft.com/download/dotnet-framework/thank-you/net48-offline-installer and copy to ```installation/common```
  1. Download the IIS Rewrite Module from https://www.microsoft.com/en-us/download/confirmation.aspx?id=47337 and copy to ```installation/common```
+ 1. Download the IIS Application Request Routing Module from http://download.microsoft.com/download/E/9/8/E9849D6A-020E-47E4-9FD0-A023E99B54EB/requestRouter_amd64.msi and copy to ```installation/common```
 
 #### Helper script (Powershell)
 
@@ -180,4 +181,12 @@ aws s3 cp "$(Join-Path $scratch "ndp48-x86-x64-allos-enu.exe")" s3://$env:Checkm
 # Download IIS Rewrite Module
 Invoke-WebRequest -UseBasicParsing -Uri "https://download.microsoft.com/download/C/9/E/C9E8180D-4E51-40A6-A9BF-776990D8BCA9/rewrite_amd64.msi" -OutFile (Join-Path $scratch "rewrite_amd64.msi")
 aws s3 cp "$(Join-Path $scratch "rewrite_amd64.msi")" s3://$env:CheckmarxBucket/installation/common/ --no-progress
+
+# Download IIS Application Request Routing Module
+Invoke-WebRequest -UseBasicParsing -Uri "http://download.microsoft.com/download/E/9/8/E9849D6A-020E-47E4-9FD0-A023E99B54EB/requestRouter_amd64.msi" -OutFile (Join-Path $scratch "requestRouter_amd64.msi")
+aws s3 cp "$(Join-Path $scratch "requestRouter_amd64.msi")" s3://$env:CheckmarxBucket/installation/common/ --no-progress
+
+
+
+
 ```

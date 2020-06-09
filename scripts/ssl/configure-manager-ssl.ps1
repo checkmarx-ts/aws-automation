@@ -65,12 +65,12 @@ function UpdateHostsFile([string] $domainname) {
 function ConfigureManagerServicesTransportSecurity() {
     # Find all the manager/web service's config files that have been installed and loop over them to configure transport security.
     @(
-        ("{0}\bin\{1}" -f (Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx System Manager' -Name "Path" -ErrorAction SilentlyContinue), 'CxSystemManagerService.exe.config'),
-        ("{0}\bin\{1}" -f (Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Jobs Manager' -Name "Path" -ErrorAction SilentlyContinue), 'CxJobsManagerWinService.exe.config'),
-        ("{0}\bin\{1}" -f (Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Scans Manager' -Name "Path" -ErrorAction SilentlyContinue), 'CxScansManagerWinService.exe.config'),
-        ("{0}\web\{1}" -f (Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\CheckmarxWebPortal' -Name "Path" -ErrorAction SilentlyContinue), 'web.config'),
-        ("{0}\CxWebInterface\{1}" -f (Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Web Services' -Name "Path" -ErrorAction SilentlyContinue), 'web.config'),
-        ("{0}\CxRestAPI\{1}" -f (Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Web Services' -Name "PathRestAPI" -ErrorAction SilentlyContinue), 'web.config')
+      ("{0}\bin\{1}" -f (Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx System Manager' -Name "Path" -ErrorAction SilentlyContinue), 'CxSystemManagerService.exe.config'),
+      ("{0}\bin\{1}" -f (Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Jobs Manager' -Name "Path" -ErrorAction SilentlyContinue), 'CxJobsManagerWinService.exe.config'),
+      ("{0}\bin\{1}" -f (Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Scans Manager' -Name "Path" -ErrorAction SilentlyContinue), 'CxScansManagerWinService.exe.config'),
+      ("{0}\web\{1}" -f (Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\CheckmarxWebPortal' -Name "Path" -ErrorAction SilentlyContinue), 'web.config'),
+      ("{0}\CxWebInterface\{1}" -f (Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Web Services' -Name "Path" -ErrorAction SilentlyContinue), 'web.config'),
+      ("{0}\CxRestAPI\{1}" -f (Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Web Services' -Name "PathRestAPI" -ErrorAction SilentlyContinue), 'web.config')
     ) | ForEach-Object {
         # Guard clause on existance
         log "Checking if $_ exists"
@@ -83,12 +83,14 @@ function ConfigureManagerServicesTransportSecurity() {
 
         # Set transport security mode
         [Xml]$xml = Get-Content "$_"
-        $securityNode = Select-Xml -xml $xml -XPath "/configuration/*/bindings/basicHttpBinding/binding/security"
+        log "Adding security mode = Transport"
+        $bindingNode = Select-Xml -xml $xml -XPath "/configuration/*/bindings/basicHttpBinding/binding" 
+        $securityNode = $bindingNode.Node.SelectSingleNode('security')
         if (!$securityNode){
-            log "ERROR: <transport> not found, cannot configure transport security"
-            continue
+          $securityNode = $xml.CreateElement('security')
+          $bindingNode.Node.AppendChild($securityNode)  | Out-Null
         }
-        $securityNode.Node.SetAttribute("mode", "Transport")
+        $securityNode.SetAttribute("mode", "Transport")
         $xml.Save("$_")
     
         log "Finished configuring transport security on $_"
