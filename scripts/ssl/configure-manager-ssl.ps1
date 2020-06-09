@@ -157,6 +157,19 @@ function ConfigureEngineTls([string] $domainname, [string] $thumbprint) {
     }
 }
 
+function ConfigureAccessControl() {
+  log "Configuring Checkmarx Access Control appsettings.json for SSL"
+  $appsettings = "C:\Program Files\Checkmarx\Checkmarx Access Control\appsettings.json"
+  if ((Test-Path $appsettings)) {
+    $s = Get-Content "$appsettings" | ConvertFrom-Json
+    $s.Host.ListenUrls = "https://*:443"
+    $s.Host.ExternalListenUrls = "https://*:443"
+    $s.Host.SslCertificate.Filename = $cert.PfxFile
+    $s.Host.SslCertificate.Password = $cert.PfxPass
+    $s | ConvertTo-Json | Set-Content $appsettings
+  }
+}
+
 
 
 $Secure_String_Pwd = $null
@@ -186,6 +199,7 @@ ConfigureWSResolver $domainname
 UpdateHostsFile $domainname
 ConfigureManagerServicesTransportSecurity
 ConfigureEngineTls $domainname $thumbprint
+ConfigureAccessControl 
 
 try {
     restart-service cx*
