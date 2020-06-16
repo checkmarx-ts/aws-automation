@@ -138,7 +138,7 @@ $ProgressPreference = "SilentlyContinue"
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072;
 
 Invoke-WebRequest -UseBasicParsing -Uri "https://download.checkmarx.com/CXPS/CxServices/HID_CLI_9.0.zip" -OutFile (Join-Path $scratch "HID_CLI_9.0.zip")
-aws s3 cp "$(Join-Path $scratch "HID_CLI_9.0.zip")" s3://$env:CheckmarxBucket/installation/field/alg/" --no-progress
+aws s3 cp "$(Join-Path $scratch "HID_CLI_9.0.zip")" s3://$env:CheckmarxBucket/installation/field/alg/ --no-progress
 
 ```
 
