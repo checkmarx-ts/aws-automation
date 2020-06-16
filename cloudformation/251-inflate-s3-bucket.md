@@ -27,9 +27,9 @@ aws s3api put-object --bucket $env:CheckmarxBucket --key imagebuilder/
 
 
 # For storing Checkmarx field solutions
-aws s3api put-object --bucket $env:CheckmarxBucket --key installation/field/alg
-aws s3api put-object --bucket $env:CheckmarxBucket --key installation/field/cloudwatchlogs
-aws s3api put-object --bucket $env:CheckmarxBucket --key installation/field/dynamic-engines
+aws s3api put-object --bucket $env:CheckmarxBucket --key installation/field/alg/
+aws s3api put-object --bucket $env:CheckmarxBucket --key installation/field/cloudwatchlogs/
+aws s3api put-object --bucket $env:CheckmarxBucket --key installation/field/dynamic-engines/
 ```
 
 ## Uploading Dependencies
