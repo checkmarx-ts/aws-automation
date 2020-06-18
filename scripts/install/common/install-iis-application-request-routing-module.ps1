@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Installs / Configures Microsoft SQL Server 2012 Express SP2 
+Installs Application Request Routing Module for IIS (x64)
 
 .NOTES
 The installer file is determined in this order:
@@ -20,10 +20,10 @@ The installer file is determined in this order:
 
 param (
  [Parameter(Mandatory = $False)] [String] $installer,
- [Parameter(Mandatory = $False)] [String] $pattern = "SQLEXPR_x64_ENU*exe", # should have 1 wild card and end with file extension
+ [Parameter(Mandatory = $False)] [String] $pattern = "requestRouter_amd64*msi", # should have 1 wild card and end with file extension
  [Parameter(Mandatory = $False)] [String] $expectedpath ="C:\programdata\checkmarx\automation\dependencies",
  [Parameter(Mandatory = $False)] [String] $s3prefix = "installation/common", 
- [Parameter(Mandatory = $False)] [String] $sourceUrl = "https://download.microsoft.com/download/0/1/E/01E0D693-2B4F-4442-9713-27A796B327BD/SQLEXPR_x64_ENU.exe"
+ [Parameter(Mandatory = $False)] [String] $sourceUrl = "http://download.microsoft.com/download/E/9/8/E9849D6A-020E-47E4-9FD0-A023E99B54EB/requestRouter_amd64.msi"
  )
  
  # Force TLS 1.2+ and hide progress bars to prevent slow downloads
@@ -143,9 +143,6 @@ param (
      $installer = $locator.installer
  }
  
-log "Installing from $installer"
-Start-Process "$installer" -ArgumentList '/Q /IACCEPTSQLSERVERLICENSETERMS /ACTION=Install /ERRORREPORTING=0 /ROLE=AllFeatures_WithDefaults /INSTANCENAME=SQLEXPRESS /BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCACCOUNT="Network Service" /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1 /SQLSYSADMINACCOUNTS="Administrators" "NETWORK SERVICE" ' -Wait -NoNewWindow   
-
-$logfile = $(Get-ChildItem "C:\Program Files\Microsoft SQL Server\" -Recurse -Filter "Summary.txt" | Sort LastWriteTime | Select -First 1 -ExpandProperty FullName)
-log "Finished installing. Log file is available at ${logfile}. Log file content is: "
-cat ${logfile}
+log "Installing the IIS Request Router module"
+Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$installer`" /L*V `"$expectedPath\$(Get-Date -Format "yyyy-MM-dd-HHmmss")-router_install.log`" /QN" -Wait -NoNewWindow
+log "Finished installing."

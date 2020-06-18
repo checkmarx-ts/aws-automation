@@ -22,85 +22,130 @@ param (
  [Parameter(Mandatory = $False)] [String] $installer,
  [Parameter(Mandatory = $False)] [String] $pattern = "Git*exe", # should have 1 wild card and end with file extension
  [Parameter(Mandatory = $False)] [String] $expectedpath ="C:\programdata\checkmarx\automation\dependencies",
- [Parameter(Mandatory = $False)] [String] $s3prefix = "installation/common"   
-)
-
-# Force TLS 1.2+ and hide progress bars to prevent slow downloads
-Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; 
-$ProgressPreference = "SilentlyContinue"
-
-function log([string] $msg) { Write-Host "$(Get-Date -Format G) [$PSCommandPath] $msg" }
-
-function GetInstaller ([string] $pattern, [string] $expectedPath, [string] $s3prefix) {
-    if (![String]::IsNullOrEmpty($installer)) {
-      log "The specified file $installer will be used for install"
-      return $installer
-    } 
-
-    $candidate = $(Get-ChildItem "$expectedpath" -Recurse -Filter "${pattern}" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
-    if (![String]::IsNullOrEmpty($candidate) -and (Test-Path $candidate)) {
-      log "Found $candidate in expected path"
-      return $candidate
-    } else {
-      log "Found no candidate in $expectedPath"
-    }
-
-    if ($env:CheckmarxBucket) {
-      log "Searching s3://$env:CheckmarxBucket/$s3prefix/$pattern"
-	    $s3pattern = $pattern.Substring(0, $pattern.IndexOf("*")) # remove anything after the first wild card
-      $s3object = (Get-S3Object -BucketName $env:CheckmarxBucket -Prefix "$s3prefix/$s3pattern" | Select -ExpandProperty Key | Sort -Descending | Select -First 1)
-      if (![String]::IsNullOrEmpty($s3object)) {
-        log "Found s3://$env:CheckmarxBucket/$s3object"
-        $filename = $s3object.Substring($s3object.LastIndexOf("/") + 1)
-        Read-S3Object -BucketName $env:CheckmarxBucket -Key $s3object -File "$expectedpath\$filename"
-        sleep 5
-        $candidate = (Get-ChildItem "$expectedpath" -Recurse -Filter "${pattern}*" | Sort -Descending | Select -First 1 -ExpandProperty FullName).ToString()
-        return [String]$candidate[0].FullName
-      } else {
-        log "Found no candidate in s3://$env:CheckmarxBucket/$s3prefix"
+ [Parameter(Mandatory = $False)] [String] $s3prefix = "installation/common", 
+ [Parameter(Mandatory = $False)] [String] $sourceUrl = "https://api.github.com/repos/git-for-windows/git/releases/latest"
+ )
+ 
+ # Force TLS 1.2+ and hide progress bars to prevent slow downloads
+ Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; 
+ $ProgressPreference = "SilentlyContinue"
+ 
+ function log([string] $msg) { Write-Host "$(Get-Date -Format G) [$PSCommandPath] $msg" }
+ 
+ Class InstallerLocator {
+   [String] $pattern
+   [String] $s3pattern
+   [String] $expectedpath
+   [String] $s3prefix
+   [String] $sourceUrl
+   [String] $filename
+   [String] $installer
+   [bool] $isInstallerAvailable
+   
+   InstallerLocator([String] $pattern, [String] $expectedpath, [String] $s3prefix, [String] $sourceUrl) {
+       $this.pattern = $pattern
+       # remove anything after the first wild card for the s3 search pattern
+       $this.s3pattern = $pattern.Substring(0, $pattern.IndexOf("*")) 
+       # Defend against trailing paths that will cause errors
+       $this.expectedpath = $expectedpath.TrimEnd("/\")
+       $this.s3prefix = $s3prefix.TrimEnd("/")
+       $this.sourceUrl = $sourceUrl.TrimEnd("/")
+       $this.filename = $this.sourceUrl.Substring($sourceUrl.LastIndexOf("/") + 1)     
+   }
+ 
+   [bool] IsValidInstaller() {
+     if (![String]::IsNullOrEmpty($this.installer) -and (Test-Path -Path "$($this.installer)" -PathType Leaf)) {
+         return $True
+     }
+     return $False
+   }
+ 
+   Locate() {
+     $this.EnsureLocalPathExists()
+ 
+     # Search for the installer on the filesystem already in case something out of band placed it there
+     $this.installer = $this.TryFindLocal()
+     if ($this.IsValidInstaller()) {
+       $this.isInstallerAvailable = $True
+       return
+     }
+ 
+     # If no installer found yet then try download from s3 and find the downloaded file
+     $this.TryDownloadFromS3()
+     $this.installer = $this.TryFindLocal()
+     if ($this.IsValidInstaller()) {
+       $this.isInstallerAvailable = $True
+       return
+     }
+ 
+     # If no installer found yet then try download from source and find the downloaded file
+     $this.TryDownloadFromSource()
+     $this.installer = $this.TryFindLocal()
+     if ($this.IsValidInstaller()) {
+       $this.isInstallerAvailable = $True
+       return
+     }
+ 
+     # If we've reached this point then nothing can be installed
+     Throw "Could not find an installer"
+   }
+ 
+   EnsureLocalPathExists() {
+     md -force "$($this.expectedpath)" | Out-Null
+   }
+ 
+   [string] TryFindLocal() {
+     return $(Get-ChildItem $this.expectedpath -Recurse -Filter $this.pattern | Sort -Descending | Select -First 1 -ExpandProperty FullName)
+   }
+ 
+   TryDownloadFromS3() {
+      if (!(Test-Path env:CheckmarxBucket)) {
+        Write-Host "Skipping s3 search, CheckmarxBucket environment variable has not been set"
+        return
       }
-    } else {
-      log "No CheckmarxBucket environment variable defined - not searching s3"
-    }
-}
-
-function Download() {
-  $git = (Invoke-RestMethod -Method GET -Uri "https://api.github.com/repos/git-for-windows/git/releases/latest" -UseBasicParsing).assets | Where-Object { $_.name -match "Git-\d\.\d\d\.\d-64-bit\.exe" }
-  log "Downloading from $($git.browser_download_url)"
-  Invoke-WebRequest -UseBasicParsing -Uri "$($git.browser_download_url)" -OutFile (Join-Path $expectedPath $git.name)
-  return (Join-Path $expectedPath $git.name)
-}
-
-
-# Defend against trailing paths that will cause errors
-$expectedpath = $expectedpath.TrimEnd("\")
-$s3prefix = $s3prefix.TrimEnd("/")
-md -force "$expectedpath" | Out-Null
-
-try {
-  # Find the installer
-  $installer = GetInstaller $pattern $expectedpath $s3prefix
-} catch {
-  Write-Error $_.Exception.ToString()
-  log $_.Exception.ToString()
-  $_
-  log "ERROR: An error occured. Check IAM policies? Is AWS Powershell installed?"
-  exit 1
-}
-
-# Last resort, try to get the installer over the internet
-if ([String]::IsNullOrEmpty($installer)) {
-  log "No installer found, attempting download from source"
-  $installer = Download
-}
-
-if (!(Test-Path "$installer")) {
-  log "ERROR: No file exists at $installer"
-  exit 1
-} 
-
+ 
+      Write-Host "Searching s3://$env:CheckmarxBucket/$($this.s3prefix)/$($this.s3pattern)"
+      try {
+         $s3object = (Get-S3Object -BucketName $env:CheckmarxBucket -Prefix "$($this.s3prefix)/$($this.s3pattern)" | Select -ExpandProperty Key | Sort -Descending | Select -First 1)
+      } catch {
+         Write-Host "ERROR: An exception occured calling Get-S3Object cmdlet. Check IAM Policies and if AWS Powershell is installed"
+         exit 1
+      }
+      if ([String]::IsNullOrEmpty($s3object)) {
+         Write-Host "No suitable file found in s3"
+         return
+      }
+ 
+      Write-Host "Found s3://$env:CheckmarxBucket/$s3object"
+      $this.filename = $s3object.Substring($s3object.LastIndexOf("/") + 1)
+      try {
+         Write-Host "Downloading from s3://$env:CheckmarxBucket/$s3object"
+         Read-S3Object -BucketName $env:CheckmarxBucket -Key $s3object -File "$($this.expectedpath)\$($this.filename)"
+         Write-Host "Finished downloading $($this.filename)"
+      } catch {
+         Write-Host "ERROR: An exception occured calling Read-S3Object cmdlet. Check IAM Policies and if AWS Powershell is installed"
+         exit 1
+      }
+   }  
+ 
+   TryDownloadFromSource() {
+     Write-Host "Determining download source from $($this.sourceUrl)"
+     $git = (Invoke-RestMethod -Method GET -Uri "$($this.sourceUrl)" -UseBasicParsing).assets | Where-Object { $_.name -match "Git-\d\.\d\d\.\d-64-bit\.exe" }
+     Write-Host "Downloading from $($git.browser_download_url)"
+     Invoke-WebRequest -UseBasicParsing -Uri "$($git.browser_download_url)" -OutFile (Join-Path $($this.expectedPath) $git.name)
+     Write-Host "Finished downloading $($this.filename)"
+   }
+ }
+ 
+ # Main execution begins here
+ 
+ if ([String]::IsNullOrEmpty($installer)) {
+     [InstallerLocator] $locator = [InstallerLocator]::New($pattern, $expectedpath, $s3prefix, $sourceUrl)
+     $locator.Locate()
+     $installer = $locator.installer
+ }
+  
+ 
 log "Installing from $installer"
 Start-Process "$installer" -ArgumentList "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS" -Wait -NoNewWindow    
-
-if (Test-Path "${installer}.log") { log "Last 50 lines of installer:"; Get-content -tail 50 "${installer}.log" }
-log "Finished installing. Log file is at ${installer}.log."
+log "Finished installing."

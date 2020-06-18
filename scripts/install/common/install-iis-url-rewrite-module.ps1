@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Installs / Configures Microsoft SQL Server 2012 Express SP2 
+Installs / Configures IIS and Microsoft URL Rewrite Module 2.0 for IIS (x64)
 
 .NOTES
 The installer file is determined in this order:
@@ -20,10 +20,10 @@ The installer file is determined in this order:
 
 param (
  [Parameter(Mandatory = $False)] [String] $installer,
- [Parameter(Mandatory = $False)] [String] $pattern = "SQLEXPR_x64_ENU*exe", # should have 1 wild card and end with file extension
+ [Parameter(Mandatory = $False)] [String] $pattern = "rewrite_amd64*msi", # should have 1 wild card and end with file extension
  [Parameter(Mandatory = $False)] [String] $expectedpath ="C:\programdata\checkmarx\automation\dependencies",
  [Parameter(Mandatory = $False)] [String] $s3prefix = "installation/common", 
- [Parameter(Mandatory = $False)] [String] $sourceUrl = "https://download.microsoft.com/download/0/1/E/01E0D693-2B4F-4442-9713-27A796B327BD/SQLEXPR_x64_ENU.exe"
+ [Parameter(Mandatory = $False)] [String] $sourceUrl = "https://download.microsoft.com/download/C/9/E/C9E8180D-4E51-40A6-A9BF-776990D8BCA9/rewrite_amd64.msi"
  )
  
  # Force TLS 1.2+ and hide progress bars to prevent slow downloads
@@ -143,9 +143,9 @@ param (
      $installer = $locator.installer
  }
  
-log "Installing from $installer"
-Start-Process "$installer" -ArgumentList '/Q /IACCEPTSQLSERVERLICENSETERMS /ACTION=Install /ERRORREPORTING=0 /ROLE=AllFeatures_WithDefaults /INSTANCENAME=SQLEXPRESS /BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCACCOUNT="Network Service" /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1 /SQLSYSADMINACCOUNTS="Administrators" "NETWORK SERVICE" ' -Wait -NoNewWindow   
 
-$logfile = $(Get-ChildItem "C:\Program Files\Microsoft SQL Server\" -Recurse -Filter "Summary.txt" | Sort LastWriteTime | Select -First 1 -ExpandProperty FullName)
-log "Finished installing. Log file is available at ${logfile}. Log file content is: "
-cat ${logfile}
+log "Installing the IIS Rewrite module"
+# Install the rewrite module
+Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$installer`" /L*V `"$expectedPath\$(Get-Date -Format "yyyy-MM-dd-HHmmss")-rewrite_install.log`" /QN" -Wait -NoNewWindow
+if (Test-Path "$expectedPath\rewrite_install.log") { log "Last 50 lines of installer:"; Get-content -tail 50 "$expectedPath\rewrite_install.log" }
+log "Finished installing. Log file is at $expectedPath\rewrite_install.log."
