@@ -1,0 +1,15 @@
+---
+- name:  Install SQL Server 2012 Express
+  script:  ../../../../scripts/install/common/install-sqlserver-2012-express-sp2.ps1
+  when: not use_chocolatey
+
+- name:  Install sql-server-express (2019)
+  win_chocolatey:
+    name: sql-server-express
+    state: present
+    install_args: /BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCACCOUNT="Network Service" /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1 /SQLSYSADMINACCOUNTS="Administrators" "NETWORK SERVICE"
+  when: 
+    - use_chocolatey
+  
+- name: Reboot after SQL Server Express Install
+  win_reboot:

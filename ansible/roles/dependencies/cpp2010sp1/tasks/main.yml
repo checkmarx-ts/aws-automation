@@ -1,0 +1,15 @@
+---
+- name:  Install CPP 2010 SP1
+  script:  ../../../../scripts/install/common/install-cpp2010sp1.ps1
+  when: 
+    - cpp_redist == 0 
+    - not use_chocolatey
+
+
+- name: Install vcredist2010
+  win_chocolatey:
+    name: vcredist2010
+    state: present
+  when: 
+    - cpp_redist == 0 
+    - use_chocolatey

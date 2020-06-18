@@ -1,0 +1,3 @@
+---
+cx_automation: C:\\ProgramData\\checkmarx\\automation
+cx_installers: "{{ cx_automation }}\\installers"

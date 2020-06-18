@@ -18,7 +18,6 @@ param (
  # Automation args
  # installers should be the filename of the zip file as distributed by Checkmarx but stripped of any password protection
  [Parameter(Mandatory = $False)] [String] $installer = "CxSAST.890.Release.Setup_8.9.0.210.zip",
- [Parameter(Mandatory = $False)] [String] $hotfix_installer = "8.9.0.HF24.zip",
 
  # The default paths are a convention and not normally changed. Take caution if passing in args. 
  [Parameter(Mandatory = $False)] [String] $expectedpath ="C:\programdata\checkmarx\automation\installers",
@@ -109,46 +108,6 @@ function VerifyFileExists($path) {
     } 
 }
 
-function GetInstaller ([string] $candidate, [string] $expectedPath, [string] $s3prefix) {
-    try {  
-        $pattern = $candidate
-        if (![String]::IsNullOrEmpty($candidate) -and (Test-Path $candidate)) {
-          log "The specified file $installer will be used for install"
-          return $candidate
-        } 
-
-        $candidate = $(Get-ChildItem "$expectedpath" -Recurse -Filter "${pattern}" | Sort-Object -Descending | Select-Object -First 1 -ExpandProperty FullName)
-        if (![String]::IsNullOrEmpty($candidate) -and (Test-Path $candidate)) {
-          log "Found $candidate in expected path"
-          return $candidate
-        } else {
-          log "Found no candidate in $expectedPath"
-        }
-
-        if ($env:CheckmarxBucket) {
-          log "Searching s3://$env:CheckmarxBucket/$s3prefix/"	    
-          $s3object = (Get-S3Object -BucketName $env:CheckmarxBucket -Prefix "$s3prefix/" | Select-Object -ExpandProperty Key | Where-Object { $_ -match $pattern } | Sort-Object -Descending | Select-Object -First 1)
-          if (![String]::IsNullOrEmpty($s3object)) {
-            log "Found s3://$env:CheckmarxBucket/$s3object"
-            $filename = $s3object.Substring($s3object.LastIndexOf("/") + 1)
-            Read-S3Object -BucketName $env:CheckmarxBucket -Key $s3object -File "$expectedpath\$filename"
-            $candidate = (Get-ChildItem "$expectedpath" -Recurse -Filter "${pattern}*" | Sort-Object -Descending | Select-Object -First 1 -ExpandProperty FullName)
-            return [String]$candidate[0].FullName
-          } else {
-            log "Found no candidate in s3://$env:CheckmarxBucket/$s3prefix"
-          }
-        } else {
-          log "No CheckmarxBucket environment variable defined - not searching s3"
-        }
-    } catch {
-      Write-Error $_.Exception.ToString()
-      log $_.Exception.ToString()
-      $_
-      log "ERROR: An error occured. Check IAM policies? Is AWS Powershell installed?"
-      exit 1
-    }
-}
-
 # We need to access the database for these settings so we build a client for the access.
 Class DbClient {
   hidden [String] $connectionString
@@ -197,6 +156,96 @@ Class DbClient {
   } 
 }
 
+
+Class InstallerLocator {
+  [String] $pattern
+  [String] $s3pattern
+  [String] $expectedpath
+  [String] $s3prefix
+  [String] $sourceUrl
+  [String] $filename
+  [String] $installer
+  [bool] $isInstallerAvailable
+  
+  InstallerLocator([String] $pattern, [String] $expectedpath, [String] $s3prefix, [String] $sourceUrl) {
+      $this.pattern = $pattern
+      # remove anything after the first wild card for the s3 search pattern
+      $this.s3pattern = $pattern.Substring(0, $pattern.IndexOf("*")) 
+      # Defend against trailing paths that will cause errors
+      $this.expectedpath = $expectedpath.TrimEnd("/\")
+      $this.s3prefix = $s3prefix.TrimEnd("/")
+      $this.sourceUrl = $sourceUrl.TrimEnd("/")
+      $this.filename = $this.sourceUrl.Substring($sourceUrl.LastIndexOf("/") + 1)     
+  }
+
+  [bool] IsValidInstaller() {
+    if (![String]::IsNullOrEmpty($this.installer) -and (Test-Path -Path "$($this.installer)" -PathType Leaf)) {
+        return $True
+    }
+    return $False
+  }
+
+  Locate() {
+    $this.EnsureLocalPathExists()
+
+    # Search for the installer on the filesystem already in case something out of band placed it there
+    $this.installer = $this.TryFindLocal()
+    if ($this.IsValidInstaller()) {
+      $this.isInstallerAvailable = $True
+      return
+    }
+
+    # If no installer found yet then try download from s3 and find the downloaded file
+    $this.TryDownloadFromS3()
+    $this.installer = $this.TryFindLocal()
+    if ($this.IsValidInstaller()) {
+      $this.isInstallerAvailable = $True
+      return
+    }
+
+    # If we've reached this point then nothing can be installed
+    Throw "Could not find an installer"
+  }
+
+  EnsureLocalPathExists() {
+    md -force "$($this.expectedpath)" | Out-Null
+  }
+
+  [string] TryFindLocal() {
+    return $(Get-ChildItem $this.expectedpath -Recurse -Filter $this.pattern | Sort -Descending | Select -First 1 -ExpandProperty FullName)
+  }
+
+  TryDownloadFromS3() {
+     if (!(Test-Path env:CheckmarxBucket)) {
+       Write-Host "Skipping s3 search, CheckmarxBucket environment variable has not been set"
+       return
+     }
+
+     Write-Host "Searching s3://$env:CheckmarxBucket/$($this.s3prefix)/$($this.s3pattern)"
+     try {
+        $s3object = (Get-S3Object -BucketName $env:CheckmarxBucket -Prefix "$($this.s3prefix)/$($this.s3pattern)" | Select -ExpandProperty Key | Sort -Descending | Select -First 1)
+     } catch {
+        Write-Host "ERROR: An exception occured calling Get-S3Object cmdlet. Check IAM Policies and if AWS Powershell is installed"
+        exit 1
+     }
+     if ([String]::IsNullOrEmpty($s3object)) {
+        Write-Host "No suitable file found in s3"
+        return
+     }
+
+     Write-Host "Found s3://$env:CheckmarxBucket/$s3object"
+     $this.filename = $s3object.Substring($s3object.LastIndexOf("/") + 1)
+     try {
+        Write-Host "Downloading from s3://$env:CheckmarxBucket/$s3object"
+        Read-S3Object -BucketName $env:CheckmarxBucket -Key $s3object -File "$($this.expectedpath)\$($this.filename)"
+        Write-Host "Finished downloading $($this.filename)"
+     } catch {
+        Write-Host "ERROR: An exception occured calling Read-S3Object cmdlet. Check IAM Policies and if AWS Powershell is installed"
+        exit 1
+     }
+  }  
+}
+
 <##################################
     Initial start up
 ###################################>
@@ -205,11 +254,6 @@ if (!$ACCEPT_EULA.IsPresent) {
   log "You must accept the EULA."
   exit 1
 }
-
-# Defend against trailing paths and missing directories that will cause errors
-$expectedpath = $expectedpath.TrimEnd("\")
-$s3prefix = $s3prefix.TrimEnd("/")
-mkdir -force "$expectedpath" | Out-Null
 
 <##################################
     Argument Validation
@@ -245,14 +289,10 @@ if (($BI.IsPresent) -and ([String]::IsNullOrEmpty($CXARM_DB_HOST))) {
 <##################################
     Search & obtain the installers
 ###################################>
-log "Searching for the CxSAST Installer"
-$installer = GetInstaller $installer $expectedpath $s3prefix
-log "Found installer $installer"
-VerifyFileExists $installer
 
-log "Searching for the CxSAST Hotfix Installer"
-$hotfix_installer = GetInstaller $hotfix_installer $expectedpath $s3prefix
-VerifyFileExists $hotfix_installer
+[InstallerLocator] $locator = [InstallerLocator]::New($pattern, $expectedpath, $s3prefix, $sourceUrl)
+$locator.Locate()
+$installer = $locator.installer
 
 
 $files = $(Get-ChildItem "$expectedpath" -Recurse -Filter "*zip" | Select-Object -ExpandProperty FullName)
@@ -262,9 +302,7 @@ $files | ForEach-Object {
 
 # At this point the installer vars are actually pointing to zip files.. Lets find the actual executables now that they're unzipped.
 $installer = $(Get-ChildItem "$expectedpath" -Recurse -Filter "CxSetup.exe" | Sort-Object -Descending | Select-Object -First 1 -ExpandProperty FullName)
-$hotfix_installer = $(Get-ChildItem "$expectedpath" -Recurse -Filter "*HF*.exe" | Sort-Object -Descending | Select-Object -First 1 -ExpandProperty FullName)
 VerifyFileExists $installer
-VerifyFileExists $hotfix_installer
 
 <#################################
     Check for a license
@@ -386,20 +424,6 @@ $CxDb.ExecuteSql("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = '
 #$CxDb.ExecuteSql("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = '' where [key] = 'WebServer'")
 #>
 
-<##################################
-    Install Checkmarx Hotfix
-###################################>
-log "Stopping services to install hotfix"
-stop-service cx*; 
-if ($WEB.IsPresent) { iisreset /stop } 
-log "Installing $hotfix_installer"
-Start-Process "$hotfix_installer" -ArgumentList "-cmd" -Wait -NoNewWindow
-log "Finished hotfix installation"
-
-log "Restarting services"
-Restart-Service cx*
-iisreset
-
 
 # Todo: run fixes ( remove doulbe enc in active mq properties if arm installed
 # Todo: run initial ETL if BI.IsPresent AND not run before?
@@ -411,12 +435,17 @@ if ($BI.IsPresent) {
   #     TARGET_CONNECTION_STRING=jdbc:sqlserver://sqlserverdev.ckbq3owrgyjd.us-east-1.rds.amazonaws.com :1433;DatabaseName=CxARM[class java.lang.String]
   #
   # As a work around we trim the end off of each line in db.properties
-  log "Fixing db.properties"
-  (Get-Content "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties") | ForEach-Object {$_.TrimEnd()} | Set-Content "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties"
+  if ((Test-Path "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties")) {
+    log "Fixing db.properties"
+    (Get-Content "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties") | ForEach-Object {$_.TrimEnd()} | Set-Content "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties"
+  } else { log "WARNING: BI was installed but db.properties file is not found" }
 
-  log "Running the initial ETL sync for CxArm"
-  Start-Process "C:\Program Files\Checkmarx\Checkmarx Risk Management\ETL\etl_executor.exe" -ArgumentList "-q -console -VSOURCE_PASS_SILENT=${db_password} -VTARGET_PASS_SILENT=${db_password} -VSILENT_FLOW=true -Dinstall4j.logToStderr=true -Dinstall4j.debug=true -Dinstall4j.detailStdout=true" -WorkingDirectory "C:\Program Files\Checkmarx\Checkmarx Risk Management\ETL" -NoNewWindow -Wait 
-  log "Finished initial ETL sync"
+  if ((Test-Path "C:\Program Files\Checkmarx\Checkmarx Risk Management\ETL\etl_executor.exe")) {
+    log "Running the initial ETL sync for CxArm"
+    Start-Process "C:\Program Files\Checkmarx\Checkmarx Risk Management\ETL\etl_executor.exe" -ArgumentList "-q -console -VSOURCE_PASS_SILENT=${db_password} -VTARGET_PASS_SILENT=${db_password} -VSILENT_FLOW=true -Dinstall4j.logToStderr=true -Dinstall4j.debug=true -Dinstall4j.detailStdout=true" -WorkingDirectory "C:\Program Files\Checkmarx\Checkmarx Risk Management\ETL" -NoNewWindow -Wait 
+    log "Finished initial ETL sync"
+  } else { log "WARNING: BI was installed but etl_executor.exe file is not found" }
 }
 
 log "Finished installing"
+exit 0

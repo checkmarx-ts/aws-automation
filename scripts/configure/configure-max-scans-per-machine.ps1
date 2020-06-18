@@ -14,7 +14,7 @@ $ProgressPreference = "SilentlyContinue"
 function log([string] $msg) { Write-Host "$(Get-Date -Format G) [$PSCommandPath] $msg" }
 
 Try {
- $config_file = Get-Content "$(Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Engine Server' -Name 'Path')\CxSourceAnalyzerEngine.WinService.exe.config"
+ $config_file = "$(Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Engine Server' -Name 'Path')\CxSourceAnalyzerEngine.WinService.exe.config"
 } catch {
   log "ERROR: couldn't get engine config file"
   log $_.Exception

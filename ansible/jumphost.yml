@@ -1,0 +1,8 @@
+---
+- name: Configure Jump Host
+  hosts: jump
+  become_user: Administrator 
+  become_method: runas
+  roles:
+    #- role: domain_joined
+    - role: domain_configuration

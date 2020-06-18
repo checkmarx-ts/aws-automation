@@ -1,0 +1,7 @@
+---
+- name: Configure CxSAST Engine
+  hosts: cxsastengine
+  become_user: Administrator 
+  become_method: runas
+  roles:
+    - role: cxsast-89-engine

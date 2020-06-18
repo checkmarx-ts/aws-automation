@@ -1,0 +1,12 @@
+---
+- name:  Install Git
+  script:  ../../../../scripts/install/common/install-git.ps1
+  when: 
+  - not use_chocolatey
+
+- name:  Install git
+  win_chocolatey:
+    name: git
+    state: present
+  when: 
+    - use_chocolatey

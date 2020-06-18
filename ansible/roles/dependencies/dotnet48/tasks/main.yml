@@ -1,0 +1,24 @@
+---
+- name:  Install .Net Framework 4.8
+  script:  ../../../../scripts/install/common/install-dotnetframework.ps1
+  when: 
+    - not use_chocolatey
+    - dotnet.properties.Release.raw_value < 461308   # corresponds to 4.7.1
+  #https://docs.microsoft.com/en-us/dotnet/framework/migration-guide/how-to-determine-which-versions-are-installed
+
+- name: Install dotnetfx
+  win_chocolatey:
+    name: dotnetfx
+    state: present
+  when: 
+    - use_chocolatey
+    - dotnet.properties.Release.raw_value < 461308 
+
+# Rebooting after 4.7.1 must be handled explicitly. If the reboot is left up to the 
+# Checkmarx installer then the installer will reboot after step 1 (install dotnet 4.7.1)
+# and then continue on installing components, but ansible will lose the connection at
+# reboot and report a failure. 
+
+- name: Reboot after .NET 4.8 Install
+  win_reboot:
+  when: dotnet.properties.Release.raw_value < 461308   # corresponds to 4.7.1
