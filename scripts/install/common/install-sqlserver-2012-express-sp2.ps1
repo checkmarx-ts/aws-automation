@@ -148,4 +148,5 @@ Start-Process "$installer" -ArgumentList '/Q /IACCEPTSQLSERVERLICENSETERMS /ACTI
 
 $logfile = $(Get-ChildItem "C:\Program Files\Microsoft SQL Server\" -Recurse -Filter "Summary.txt" | Sort LastWriteTime | Select -First 1 -ExpandProperty FullName)
 log "Finished installing. Log file is available at ${logfile}. Log file content is: "
-cat ${logfile}
+#cat ${logfile}
+exit 0

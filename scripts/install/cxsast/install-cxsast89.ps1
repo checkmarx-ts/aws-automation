@@ -21,7 +21,7 @@ param (
 
  # The default paths are a convention and not normally changed. Take caution if passing in args. 
  [Parameter(Mandatory = $False)] [String] $expectedpath ="C:\programdata\checkmarx\automation\installers",
- [Parameter(Mandatory = $False)] [String] $s3prefix = "installation/cxsast",
+ [Parameter(Mandatory = $False)] [String] $s3prefix = "installation/cxsast/8.9",
 
  
  # Install Options
@@ -167,15 +167,13 @@ Class InstallerLocator {
   [String] $installer
   [bool] $isInstallerAvailable
   
-  InstallerLocator([String] $pattern, [String] $expectedpath, [String] $s3prefix, [String] $sourceUrl) {
+  InstallerLocator([String] $pattern, [String] $expectedpath, [String] $s3prefix) {
       $this.pattern = $pattern
       # remove anything after the first wild card for the s3 search pattern
-      $this.s3pattern = $pattern.Substring(0, $pattern.IndexOf("*")) 
+      $this.s3pattern = $pattern
       # Defend against trailing paths that will cause errors
       $this.expectedpath = $expectedpath.TrimEnd("/\")
       $this.s3prefix = $s3prefix.TrimEnd("/")
-      $this.sourceUrl = $sourceUrl.TrimEnd("/")
-      $this.filename = $this.sourceUrl.Substring($sourceUrl.LastIndexOf("/") + 1)     
   }
 
   [bool] IsValidInstaller() {
@@ -290,7 +288,7 @@ if (($BI.IsPresent) -and ([String]::IsNullOrEmpty($CXARM_DB_HOST))) {
     Search & obtain the installers
 ###################################>
 
-[InstallerLocator] $locator = [InstallerLocator]::New($pattern, $expectedpath, $s3prefix, $sourceUrl)
+[InstallerLocator] $locator = [InstallerLocator]::New($installer, $expectedpath, $s3prefix)
 $locator.Locate()
 $installer = $locator.installer
 

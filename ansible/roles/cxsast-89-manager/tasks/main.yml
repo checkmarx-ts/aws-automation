@@ -1,36 +1,36 @@
 ---
-- name: Configure Windows Defender
-  become: yes
-  script: ../../../scripts/configure/configure-windows-defender.ps1
+# - name: Configure Windows Defender
+#   become: yes
+#   script: ../../../scripts/configure/configure-windows-defender.ps1
 
-# Equivalent to scripts/install/common/install-iis.ps1
-- name: Ensure IIS features present
-  win_feature:
-    name: Web-Server, Web-Mgmt-Console, Web-Metabase, Web-Static-Content, Web-Asp-Net45, Web-Scripting-Tools, Web-Http-Tracing, Web-Dyn-Compression
-    state: present
+# # Equivalent to scripts/install/common/install-iis.ps1
+# - name: Ensure IIS features present
+#   win_feature:
+#     name: Web-Server, Web-Mgmt-Console, Web-Metabase, Web-Static-Content, Web-Asp-Net45, Web-Scripting-Tools, Web-Http-Tracing, Web-Dyn-Compression
+#     state: present
 
-- name: Install IIS URL Rewrite Module
-  become: yes
-  script: ../../../scripts/install/common/install-iis-url-rewrite-module.ps1
-  when: not use_chocolatey
+# - name: Install IIS URL Rewrite Module
+#   become: yes
+#   script: ../../../scripts/install/common/install-iis-url-rewrite-module.ps1
+#   when: not use_chocolatey
 
-- name: Install IIS Application Request Routing Module
-  become: yes
-  script: ../../../scripts/install/common/install-iis-application-request-routing-module.ps1  
-  when: not use_chocolatey  
+# - name: Install IIS Application Request Routing Module
+#   become: yes
+#   script: ../../../scripts/install/common/install-iis-application-request-routing-module.ps1  
+#   when: not use_chocolatey  
 
-- name: Install IIS URL Rewrite, Application Request Routing
-  win_chocolatey:
-    name: 
-      - urlrewrite
-      - iis-arr
-    state: present
-  when: use_chocolatey
+# - name: Install IIS URL Rewrite, Application Request Routing
+#   win_chocolatey:
+#     name: 
+#       - urlrewrite
+#       - iis-arr
+#     state: present
+#   when: use_chocolatey
 
-# Its helpful to do this before install to avoid waiting on service starts that will thrash and timeout due to no license
-- name: Generate License
-  become: yes
-  script:  ../../../scripts/configure/license-from-alg.ps1  
+# # Its helpful to do this before install to avoid waiting on service starts that will thrash and timeout due to no license
+# - name: Generate License
+#   become: yes
+#   script:  ../../../scripts/configure/license-from-alg.ps1  
 
 - name:  Install Checkmarx
   become: yes

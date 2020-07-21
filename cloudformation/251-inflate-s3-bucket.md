@@ -143,13 +143,14 @@ aws s3 cp "$(Join-Path $scratch "HID_CLI_9.0.zip")" s3://$env:CheckmarxBucket/in
 ```
 
 ### Unbundled dependencies
-The Checkmarx manager needs Java and Git, and both Manager and Engine servers need .Net Framework 4.7.1 or higher (latest & backwards compatible is 4.8).
+The Checkmarx manager needs Java and Git, and both Manager and Engine servers need .Net Framework 4.7.1 or higher (latest & backwards compatible is 4.8) and 7zip.
 
- 1. Download the latest Java 8 from https://adoptopenjdk.net/ and copy to ```installation/common```
- 1. Download the latest Git for Windows from https://git-scm.com/download/win and copy to ```installation/common```
- 1. Download the .NET Framework 4.8 installer from https://dotnet.microsoft.com/download/dotnet-framework/thank-you/net48-offline-installer and copy to ```installation/common```
- 1. Download the IIS Rewrite Module from https://www.microsoft.com/en-us/download/confirmation.aspx?id=47337 and copy to ```installation/common```
- 1. Download the IIS Application Request Routing Module from http://download.microsoft.com/download/E/9/8/E9849D6A-020E-47E4-9FD0-A023E99B54EB/requestRouter_amd64.msi and copy to ```installation/common```
+1. Download the latest Java 8 from https://adoptopenjdk.net/ and copy to ```installation/common```
+1. Download the latest Git for Windows from https://git-scm.com/download/win and copy to ```installation/common```
+1. Download the .NET Framework 4.8 installer from https://dotnet.microsoft.com/download/dotnet-framework/thank-you/net48-offline-installer and copy to ```installation/common```
+1. Download the IIS Rewrite Module from https://www.microsoft.com/en-us/download/confirmation.aspx?id=47337 and copy to ```installation/common```
+1. Download the IIS Application Request Routing Module from http://download.microsoft.com/download/E/9/8/E9849D6A-020E-47E4-9FD0-A023E99B54EB/requestRouter_amd64.msi and copy to ```installation/common```
+1. Download 7zip from https://www.7-zip.org/a/7z1900-x64.exe and copy to ```installation/common```
 
 #### Helper script (Powershell)
 
@@ -186,7 +187,8 @@ aws s3 cp "$(Join-Path $scratch "rewrite_amd64.msi")" s3://$env:CheckmarxBucket/
 Invoke-WebRequest -UseBasicParsing -Uri "http://download.microsoft.com/download/E/9/8/E9849D6A-020E-47E4-9FD0-A023E99B54EB/requestRouter_amd64.msi" -OutFile (Join-Path $scratch "requestRouter_amd64.msi")
 aws s3 cp "$(Join-Path $scratch "requestRouter_amd64.msi")" s3://$env:CheckmarxBucket/installation/common/ --no-progress
 
-
-
+# Download 7zip
+Invoke-WebRequest -UseBasicParsing -Uri "https://www.7-zip.org/a/7z1900-x64.exe" -OutFile (Join-Path $scratch "7z1900-x64.exe")
+aws s3 cp "$(Join-Path $scratch "7z1900-x64.exe")" s3://$env:CheckmarxBucket/installation/common/ --no-progress
 
 ```

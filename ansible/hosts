@@ -2,7 +2,7 @@
 ec2-54-159-105-43.compute-1.amazonaws.com ansible_password=redacted
 
 [cxsastmanager]
-ec2-34-219-112-169.us-west-2.compute.amazonaws.com ansible_password=redacted
+ec2-54-187-63-84.us-west-2.compute.amazonaws.com ansible_password=CheckMARX!!11
 
 [cxsastengine]
 ec2-54-145-94-167.compute-1.amazonaws.com ansible_password=redacted

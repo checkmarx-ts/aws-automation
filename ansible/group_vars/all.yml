@@ -27,6 +27,7 @@ cx_home: C:\Program Files\Checkmarx
 # The s3 bucket and key prefix from which the dependencies and installers will be obtained.
 s3_bucket_name: cx-na-lab-bucket
 # Controls if dependencies will be installed from public chocolatey or from internal via script
+# This does NOT control the sql-server-express role which will ALWAYS use chocolatey.
 use_chocolatey: false
 
 

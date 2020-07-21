@@ -18,26 +18,6 @@ The installer file is determined in this order:
 
 #>
 
-<#
-.SYNOPSIS
-Installs / Configures IIS and Microsoft URL Rewrite Module 2.0 for IIS (x64)
-
-.NOTES
-The installer file is determined in this order:
-  IF the installer argument is passed then:
-    - the absolute path will be used as the installer
-    - neither the local expected path or s3 bucket will be searched
-    - no download over the internet will take place
-  OTHERWISE the installation file will be searched for in this order
-    1. The local expected path i.e. c:\programdata\checkmarx\ will be searched for a file that matches the typical installer filename. This allows you to place an installer here via any means
-    2. IF the CheckmarxBucket environment variable is set, the bucket will be searched for a file that matches the typical installer filename with an appropriate key prefix (ie installation/common)
-  AS A LAST RESORT
-    The latest version will be download from the offical source over the internet 
-
-  * When searching based on file prefix, if more than 1 file is found the files are sorted by file name and the first file is selected. This typically will mean the most recent version available is selected. 
-
-#>
-
 param (
  [Parameter(Mandatory = $False)] [String] $installer,
  [Parameter(Mandatory = $False)] [String] $pattern = "vcredist_x64*exe", # should have 1 wild card and end with file extension
