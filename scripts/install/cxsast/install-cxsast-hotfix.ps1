@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Installs / Checkmarx CxSAST 8.9 w/ Hotfix
+Installs / Checkmarx CxSAST Hotfix
 
 .NOTES
 The installer file is determined in this order:
@@ -17,11 +17,12 @@ The installer file is determined in this order:
 param (
  # Automation args
  # installers should be the filename of the zip file as distributed by Checkmarx but stripped of any password protection
- [Parameter(Mandatory = $False)] [String] $installer = "8.9.0.HF24.zip",
+ [Parameter(Mandatory = $False)] [String] $installer = "9.0.0.HF3.zip",
+ [Parameter(Mandatory = $True)] [String] $zip_password = "",
 
  # The default paths are a convention and not normally changed. Take caution if passing in args. 
  [Parameter(Mandatory = $False)] [String] $expectedpath ="C:\programdata\checkmarx\automation\installers",
- [Parameter(Mandatory = $False)] [String] $s3prefix = "installation/cxsast/8.9"
+ [Parameter(Mandatory = $False)] [String] $s3prefix = "installation/cxsast/9.0"
 )
 
 # Force TLS 1.2+ and hide progress bars to prevent slow downloads
@@ -133,9 +134,9 @@ $locator.Locate()
 $installer = $locator.installer
 
 
-$files = $(Get-ChildItem "$expectedpath" -Recurse -Filter "*zip" | Select-Object -ExpandProperty FullName)
+$files = $(Get-ChildItem "$expectedpath" -Recurse -Filter "*HF*zip" | Select-Object -ExpandProperty FullName)
 $files | ForEach-Object {
-    Expand-Archive -Path $_ -DestinationPath $expectedpath -Force
+    Start-Process "7z.exe" -ArgumentList "x $_  -p`"${zip_password}`"" -Wait -NoNewWindow -WorkingDirectory "${expectedPath}"
 }
 
 # At this point the installer vars are actually pointing to zip files.. Lets find the actual executables now that they're unzipped.
