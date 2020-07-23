@@ -50,6 +50,48 @@ $ProgressPreference = "SilentlyContinue"
 ###################################>
 function log([string] $msg) { Write-Host "$(Get-Date -Format G) [$PSCommandPath] $msg" }
 
+
+# Helper function to fetch SSM Parameters
+function  TryGetSSMParameter([String] $parameter) {
+    if(!$parameter) { return $null }
+
+    try {
+        $ssmParam = Get-SSMParameter -Name $parameter -WithDecryption $True
+    
+        if($ssmParam) {
+        log "Using the value found for $parameter"
+        return $ssmParam.value
+        } else {
+        log "Using argument as provided"
+        return $parameter
+    }
+    } catch {
+        $_
+        log "An error occured while fetching SSM parameter key"
+        log "Using argument as provided"
+        return $parameter
+    }
+}
+
+###############################################################################
+# Support for SSM Parameters
+#
+# IF a variable starts with a "/" THEN we will try to look it up from SSM 
+# parameter store and use its resolved value
+###############################################################################
+Get-Command $PSCommandPath | ForEach-Object {
+    $_.Parameters.GetEnumerator() | % {
+        $value = (Get-Variable $_.Key -ErrorAction Ignore).Value
+        if ($value) {
+            if ($value.ToString().IndexOf("/") -eq 0) {
+                log "$($_.Key) looks like a SSM parameter: $value"
+                $value = TryGetSSMParameter $value
+                Set-Variable -Name $_.Key -Value $value
+            }
+        }
+    } 
+}
+
 function testNetworkConnection($hostname, $port) { 
   $results = Test-NetConnection -ComputerName $hostname -Port $port
   $results
