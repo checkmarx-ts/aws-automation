@@ -1,3 +1,6 @@
+# Work In Progress
+This is a work in progress. Please do not make use of this unless directed to by Checkmarx Professional Services. 
+
 # aws-automation
 Resources and documentation on how to run Checkmarx in AWS.
 
