@@ -273,7 +273,11 @@ $cx_db_options = " SQLAUTH=${SQLAUTH_BIT} SQLSERVER=${SQLSERVER} SQLUSER=`"${SQL
 $cx_static_options = "${cx_options} ${cx_db_options} "
 # Now do run the installer, keep tracking of component bit state along the way. Multiple runs of the installer are required or else the database hangs (which is why we keep track of the state). 
 
-log "install options: $("${cx_component_options} ${cx_static_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***""))"
-Start-Process "$installer" -ArgumentList "${cx_component_options} ${cx_static_options} " -Wait -NoNewWindow
+log "Installing with command:"
+log "${installer} ${cx_options} ${cx_db_options}" # $("${cx_component_options} ${cx_static_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***""))"
+
+$logtimestamp = $(get-date -format "yyyy.mm.dd-HH.mm.ss")
+$logprefix = "c:\programdata\checkmarx\automation\${logtimestamp}-CxSetup.AC_and_Migration.exe"
+Start-Process "$installer" -ArgumentList "${cx_component_options} ${cx_static_options} " -Wait -NoNewWindow -RedirectStandardError "${logprefix}.err" -RedirectStandardOutput "${logprefix}.out"
 
 log "Finished installing"

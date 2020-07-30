@@ -346,7 +346,10 @@ if ($MANAGER.IsPresent) {
   log "Installing MANAGER/BI/AC"
   $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} ACCESSCONTROL=${ACCESSCONTROL_BIT} ACTIVEMQ=${ACTIVEMQ_BIT}  RI=${RI_BIT}  "
   log "install options: $("${cx_component_options} ${cx_static_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
-  Start-Process "$installer" -ArgumentList "${cx_component_options} ${cx_static_options} " -Wait -NoNewWindow
+  
+  $logtimestamp = $(get-date -format "yyyy.mm.dd-HH.mm.ss")
+  $logprefix = "c:\programdata\checkmarx\automation\${logtimestamp}-manager-CxSetup.exe"
+  Start-Process "$installer" -ArgumentList "${cx_component_options} ${cx_static_options} " -Wait -NoNewWindow -RedirectStandardError "${logprefix}.err" -RedirectStandardOutput "${logprefix}.out"
 }
 
 if ($WEB.IsPresent) {
@@ -354,7 +357,10 @@ if ($WEB.IsPresent) {
   log "Installing WEB"
   $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} ACCESSCONTROL=${ACCESSCONTROL_BIT} ACTIVEMQ=${ACTIVEMQ_BIT}  RI=${RI_BIT}  "
   log "install options: $("${cx_component_options} ${cx_static_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
-  Start-Process "$installer" -ArgumentList "${cx_component_options} ${cx_static_options} " -Wait -NoNewWindow
+  
+  $logtimestamp = $(get-date -format "yyyy.mm.dd-HH.mm.ss")
+  $logprefix = "c:\programdata\checkmarx\automation\${logtimestamp}-web-CxSetup.exe"
+  Start-Process "$installer" -ArgumentList "${cx_component_options} ${cx_static_options} " -Wait -NoNewWindow -RedirectStandardError "${logprefix}.err" -RedirectStandardOutput "${logprefix}.out"
 }
 
 if ($ENGINE.IsPresent) {
@@ -362,7 +368,10 @@ if ($ENGINE.IsPresent) {
   log "Installing ENGINE"
   $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} ACCESSCONTROL=${ACCESSCONTROL_BIT} ACTIVEMQ=${ACTIVEMQ_BIT}  RI=${RI_BIT}  "
   log "install options: $("${cx_component_options} ${cx_static_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
-  Start-Process "$installer" -ArgumentList "${cx_component_options} ${cx_static_options} " -Wait -NoNewWindow
+  
+  $logtimestamp = $(get-date -format "yyyy.mm.dd-HH.mm.ss")
+  $logprefix = "c:\programdata\checkmarx\automation\${logtimestamp}-engine-CxSetup.exe"
+  Start-Process "$installer" -ArgumentList "${cx_component_options} ${cx_static_options} " -Wait -NoNewWindow -RedirectStandardError "${logprefix}.err" -RedirectStandardOutput "${logprefix}.out"
 }
 
 if ($AUDIT.IsPresent) {
@@ -370,7 +379,10 @@ if ($AUDIT.IsPresent) {
   log "Installing AUDIT"
   $cx_component_options = " MANAGER=${MANAGER_BIT} WEB=${WEB_BIT} ENGINE=${ENGINE_BIT} BI=${BI_BIT} AUDIT=${AUDIT_BIT} ACCESSCONTROL=${ACCESSCONTROL_BIT} ACTIVEMQ=${ACTIVEMQ_BIT}  RI=${RI_BIT}  "
   log "install options: $("${cx_component_options} ${cx_static_options}".Replace("SQLPWD=$SQLPWD", "SQLPWD=***"").Replace("CXARM_DB_PASSWORD=$CXARM_DB_PASSWORD", "CXARM_DB_PASSWORD=***").Replace("TOMCATPASSWORD=$TOMCATPASSWORD", "TOMCATPASSWORD=***"))"
-  Start-Process "$installer" -ArgumentList "${cx_component_options} ${cx_static_options} " -Wait -NoNewWindow
+  
+  $logtimestamp = $(get-date -format "yyyy.mm.dd-HH.mm.ss")
+  $logprefix = "c:\programdata\checkmarx\automation\${logtimestamp}-audit-CxSetup.exe"
+  Start-Process "$installer" -ArgumentList "${cx_component_options} ${cx_static_options} " -Wait -NoNewWindow -RedirectStandardError "${logprefix}.err" -RedirectStandardOutput "${logprefix}.out"
 }
 
 
