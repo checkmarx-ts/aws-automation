@@ -139,8 +139,7 @@ param (
  }
  
  # Main execution begins here
- 
- if ([String]::IsNullOrEmpty($installer)) {
+  if ([String]::IsNullOrEmpty($installer)) {
      [InstallerLocator] $locator = [InstallerLocator]::New($pattern, $expectedpath, $s3prefix, $sourceUrl)
      $locator.Locate()
      $installer = $locator.installer
