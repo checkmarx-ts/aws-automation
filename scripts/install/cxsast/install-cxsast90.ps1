@@ -17,11 +17,11 @@ The installer file is determined in this order:
 param (
  # Automation args
  # installers should be the filename of the zip file as distributed by Checkmarx but stripped of any password protection
- [Parameter(Mandatory = $False)] [String] $installer = "CxSAST.900.Release.Setup_9.0.0.40085.zip",
+ [Parameter(Mandatory = $False)] [String] $installer = "CxSAST.900.Release.Setup_9.0.0.40085*.zip",
 
  # The default paths are a convention and not normally changed. Take caution if passing in args. 
  [Parameter(Mandatory = $False)] [String] $expectedpath ="C:\programdata\checkmarx\automation\installers",
- [Parameter(Mandatory = $False)] [String] $s3prefix = "installation/cxsast",
+ [Parameter(Mandatory = $False)] [String] $s3prefix = "installation/cxsast/9.0",
  
  # Install Options
  [Parameter(Mandatory = $False)] [switch] $ACCEPT_EULA = $False,

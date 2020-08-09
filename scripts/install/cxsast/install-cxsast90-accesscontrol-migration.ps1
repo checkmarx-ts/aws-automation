@@ -21,7 +21,7 @@ param (
 
  # The default paths are a convention and not normally changed. Take caution if passing in args. 
  [Parameter(Mandatory = $False)] [String] $expectedpath ="C:\programdata\checkmarx\automation\installers",
- [Parameter(Mandatory = $False)] [String] $s3prefix = "installation/cxsast",
+ [Parameter(Mandatory = $False)] [String] $s3prefix = "installation/cxsast/9.0",
  
  # Install Options
  [Parameter(Mandatory = $False)] [switch] $ACCEPT_EULA = $False,
