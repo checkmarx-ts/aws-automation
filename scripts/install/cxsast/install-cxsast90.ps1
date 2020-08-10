@@ -298,21 +298,6 @@ $CxDb.ExecuteSql("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = '
 #$CxDb.ExecuteSql("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = '' where [key] = 'WebServer'")
 #>
 
-<##################################
-    Install Checkmarx Hotfix
-##################################
-log "Stopping services to install hotfix"
-stop-service cx*; 
-if ($WEB.IsPresent) { iisreset /stop } 
-log "Installing $hotfix_installer"
-#Start-Process "$hotfix_installer" -ArgumentList "-cmd" -Wait -NoNewWindow
-log "Finished hotfix installation"
-
-log "Restarting services"
-Restart-Service cx*
-iisreset
-#>
-
 
 # Todo: run fixes ( remove doulbe enc in active mq properties if arm installed
 # Todo: run initial ETL if BI.IsPresent AND not run before?
