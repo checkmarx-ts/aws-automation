@@ -17,7 +17,7 @@ The installer file is determined in this order:
 param (
  # Automation args
  # installers should be the filename of the zip file as distributed by Checkmarx but stripped of any password protection
- [Parameter(Mandatory = $False)] [String] $installer = "CxSAST.890.Release.Setup_8.9.0.210*.zip",
+ [Parameter(Mandatory = $True)] [String] $installer,
 
  # The default paths are a convention and not normally changed. Take caution if passing in args. 
  [Parameter(Mandatory = $False)] [String] $expectedpath ="C:\programdata\checkmarx\automation\installers",
@@ -123,23 +123,6 @@ if (($BI.IsPresent) -and ([String]::IsNullOrEmpty($CXARM_DB_HOST))) {
   exit 1
 }
 
-
-<##################################
-    Search & obtain the installers
-###################################>
-
-[InstallerLocator] $locator = [InstallerLocator]::New($installer, $expectedpath, $s3prefix)
-$locator.Locate()
-$installer = $locator.installer
-
-# Unzip installers
-$files = $(Get-ChildItem "$expectedpath" -Recurse -Filter "*zip" | Select-Object -ExpandProperty FullName)
-$files | ForEach-Object {
-    Expand-Archive -Path $_ -DestinationPath $expectedpath -Force
-}
-
-# At this point the installer vars are actually pointing to zip files.. Lets find the actual executables now that they're unzipped.
-$installer = $(Get-ChildItem "$expectedpath" -Recurse -Filter "CxSetup.exe" | Sort-Object -Descending | Select-Object -First 1 -ExpandProperty FullName)
 VerifyFileExists $installer
 
 <#################################

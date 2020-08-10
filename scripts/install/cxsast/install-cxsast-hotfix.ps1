@@ -17,7 +17,7 @@ The installer file is determined in this order:
 param (
  # Automation args
  # installers should be the filename of the zip file as distributed by Checkmarx but stripped of any password protection
- [Parameter(Mandatory = $False)] [String] $installer = "9.0.0.HF3*zip",
+ [Parameter(Mandatory = $False)] [String] $installer = "9.0.0.HF3.zip",
  [Parameter(Mandatory = $True)] [String] $zip_password = "",
 
  # The default paths are a convention and not normally changed. Take caution if passing in args. 

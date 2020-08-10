@@ -91,18 +91,6 @@ mkdir -force "$expectedpath" | Out-Null
 <##################################
     Search & obtain the installers
 ###################################>
-[InstallerLocator] $locator = [InstallerLocator]::New($installer, $expectedpath, $s3prefix)
-$locator.Locate()
-$installer = $locator.installer
-
-
-$files = $(Get-ChildItem "$expectedpath" -Recurse -Filter "*zip" | Select-Object -ExpandProperty FullName)
-$files | ForEach-Object {
-    Expand-Archive -Path $_ -DestinationPath $expectedpath -Force
-}
-
-# At this point the installer vars are actually pointing to zip files.. Lets find the actual executables now that they're unzipped.
-$installer = $(Get-ChildItem "$expectedpath" -Recurse -Filter "CxSetup.AC_and_Migration.exe" | Sort-Object -Descending | Select-Object -First 1 -ExpandProperty FullName)
 VerifyFileExists $installer
 
 
