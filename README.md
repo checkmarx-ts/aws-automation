@@ -1,8 +1,11 @@
 # Work In Progress
-This is a work in progress. Please do not make use of this unless directed to by Checkmarx Professional Services. 
+This is a work in progress. Do not make use of this unless directed to by Checkmarx Professional Services. 
 
 # aws-automation
 Resources and documentation on how to run Checkmarx in AWS.
+
+# Architecture and Infrastructure
+
 
 # Requirements
 
@@ -69,7 +72,7 @@ Deploy the Cloud Formation template ```250-s3-bucket.yml``` using the AWS Consol
 aws cloudformation create-stack --stack-name checkmarx-ts-s3 --template-body file://250-s3-bucket.yml --parameters ParameterKey=pBucketName,ParameterValue="checkmarx-ts" --tags Key=Owner,Value=Ben Key=Environment,Value=Development
 ```
 ## Inflate your s3 bucket
-Now that your s3 bucket is up, you need to load it with dependencies - things that this Checkmarx automation will use. 
+Now that your s3 bucket is up, you need to load it with dependencies. 
 
 Follow the steps in [cloudformation/251-inflate-s3-bucket.md](cloudformation/251-inflate-s3-bucket.md) to populate your bucket.
 
@@ -172,6 +175,7 @@ A work in progress
     * EFS
     * NAS
     * Widows File Server
+    See: https://d1.awsstatic.com/whitepapers/Amazon%20Partner%20Network_NAS%20Solutions%20for%20AWS_2019_FINAL.pdf
 
 * SSL
     * Termination & Dataflows

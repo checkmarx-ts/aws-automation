@@ -1,0 +1,566 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create Checkmarx SAST servers
+
+Parameters:
+  pBaseAmiId:
+    Description: The AMI ID of the base image Checkmarx will install onto (e.g. ami-0fb16d6843cf910d7)
+    Type: String
+    Default: ami-0fb16d6843cf910d7
+  pVpcId:
+    Description: The ID of the VPC Checkmarx will be deployed in (e.g. vpc-01f164835a3b8889c)
+    Type: String
+    Default: vpc-01f164835a3b8889c
+  ps3Bucket:
+    Description: The name of the S3 Bucket you use with Checkmarx. (e.g. cx-bucket)
+    Type: String
+    Default: cx-na-lab-bucket  
+  pSqlHost:
+    Description: Hostname of your SQL Server (e.g. clab-90-upgrades.cgg6d4lroxdq.us-west-2.rds.amazonaws.com or localhost\SQLExpress)
+    Type: String
+    Default: clab-90-upgrades.cgg6d4lroxdq.us-west-2.rds.amazonaws.com
+  pSsmSqlUsername:
+    Description: The path of the SSM parameter that contains the Checkmarx SQL Username (e.g. /checkmarx/dev/sql/username)
+    Type: String
+    Default: /checkmarx/dev/sql/username
+  pSsmSqlPassword:
+    Description: The path of the SSM parameter that contains the Checkmarx SQL Password (e.g. /checkmarx/dev/sql/password)
+    Type: String
+    Default: /checkmarx/dev/sql/password
+  pSsmTomcatUsername:
+    Description: The path of the SSM parameter that contains the Checkmarx Tomcat Username (e.g. /checkmarx/dev/tomcat/username)
+    Type: String
+    Default: /checkmarx/dev/tomcat/username
+  pSsmTomcatPassword:
+    Description: The path of the SSM parameter that contains the Checkmarx Tomcat Password (e.g. /checkmarx/dev/tomcat/password)
+    Type: String
+    Default: /checkmarx/dev/tomcat/password
+  pssmPfxPassword:
+    Description: The path of the SSM Parameter that contains the password to the PFX file used for configuring SSL (e.g. /checkmarx/dev/pfx/password)
+    Type: String
+    Default: /checkmarx/dev/pfx/password
+  pCheckmarxAddress:
+    Description: The FQDN of the Checkmarx environment (e.g. checkmarx.mycompany.com)
+    Type: String 
+    Default: http://localhost
+  pManagerSubnets:
+    Description: Subnets into which to deploy the manager server(s)
+    Type: List<AWS::EC2::Subnet::Id>
+    Default: subnet-003fee140a33ba0be, subnet-05cc70fddb87d3ee1
+  pManagerAvailabilityZones:
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+    Description: AZs for the manager servers
+    Default: us-west-2a, us-west-2b
+  pManagerSecurityGroups:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Manager security groups
+    Default: sg-07edd462dbbec1394, sg-0f452206a286e41ac
+  pEc2InstanceKey:
+    Type: String
+    Default: stokes-oregon
+    Description: The key for ec2 instances    
+  pEbsKey:
+    Type: String
+    Description: The key used to encrypt ebs volumes. Find the default key arn with aws kms describe-key --key-id alias/aws/ebs
+    Default: arn:aws:kms:us-west-2:275043232443:key/7d3e7622-21c9-4588-8d07-dc708f33062a
+  pManagerIamProfile:
+    Type: String
+    Description: IAM Profile for the manager. Format of arn:aws:iam::<account-id>:instance-profile/<instance-profile-name>.
+    Default: arn:aws:iam::275043232443:instance-profile/checkmarx-cxsast-manager
+  pManagerIamRole:
+    Type: String
+    Description: IAM Rolename for the manager (e.g. checkmarx-cxsast-manager). It is typically the last segment of the instance profile.
+    Default: checkmarx-cxsast-manager
+    
+Mappings:
+  dev:
+    us-west-2:
+      LoadBalancerTargetGroup: 
+        - arn:aws:elasticloadbalancing:us-west-2:275043232443:targetgroup/90testing/39676da55ee2e920
+
+Resources:
+  CxManagerLT90:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs:
+              VolumeSize: 100
+              Encrypted: true
+              KmsKeyId: !Ref pEbsKey
+              VolumeType: gp2
+          - DeviceName: /dev/sdm
+            Ebs:
+              VolumeSize: 250
+              Encrypted: true
+              KmsKeyId: !Ref pEbsKey
+              VolumeType: gp2
+        EbsOptimized: true
+        IamInstanceProfile:
+          Arn: !Ref pManagerIamProfile
+        ImageId: !Ref pBaseAmiId
+        InstanceType: c5.2xlarge
+        KeyName: !Ref pEc2InstanceKey
+        SecurityGroupIds: !Ref pManagerSecurityGroups
+        UserData: 
+          Fn::Base64: 
+            !Join
+              - ''
+              - - |
+                  <script>
+                - 'cfn-init.exe -v -s '
+                - !Ref 'AWS::StackId'
+                - ' -r CxManagerLT90'
+                - ' --configsets ascending'
+                - ' --region '
+                - !Ref 'AWS::Region'
+                - |-
+                  </script>
+      LaunchTemplateName: CxManagerTemplate90
+    Metadata:
+      AWS::CloudFormation::Authentication:
+        s3access:
+          type: s3
+          buckets:
+            - !Ref ps3Bucket
+          roleName: !Ref pManagerIamRole
+      AWS::CloudFormation::Init:
+        configSets:
+          ascending:
+            # Chocolatey (package manager) not recommended for production unless you are already using it within your organization.
+            - chocolatey
+            # Initial bootstrapping and fetching automation scripts
+            - bootstrap
+            - get-automation-scripts
+            - pre-install-customer-specific-steps
+            # Join a domain - use the example script to join to domain if needed.
+            #- domain-join
+            # Install checkmarx dependencies - you may swap your own implementation for these if needed.
+            - install-dotnet-framework
+            - install-7zip
+            - install-cpp2010
+            - install-cpp2015
+            - install-git
+            - install-iis
+            - install-java
+            - install-dotnet-core
+            # These package managers are needed only for OSA - you may swap your own implementation for these if needed. 
+            - python3
+            - nodejs
+            - maven 
+            - gradle 
+            - nuget            
+            # The system should reboot before Checkmarx installation to refresh the environment variables (seems to be an issue with cfn-init not refreshing)
+            - reboot
+            - checkmarx-license  
+            # The 8.9-> 9.0 Upgrade requires 89 to be installed first in order to run the migration on the database. After successful migration you do not need to run checkmarx89 or checkmarx90-migration configsets          
+            - checkmarx89
+            - checkmarx90-migration
+            # Install checkmarx 9.0
+            - checkmarx90
+            # Configure Checkmarx
+            - post-install-configuration
+            # Configure SSL - you should override the SSL configuration, especially certificate provisioning, if needed
+            - ssl-configuration
+            # Git trace logging can be useful for troubleshooting git connectivity, especially for new installations.
+            - git-trace-logging
+            - onComplete
+        pre-install-customer-specific-steps:
+          # Things unique to your set up or environment can be performed in this configset
+          commands:
+            100-reconfigure-d-drive:
+              # Sets the a drive over 249 GB to D drive and removes existing D Drive
+              command: powershell.exe -Command ".\reconfigure-d-drive.ps1"
+              cwd: "C:\\programdata\\checkmarx\\aws-automation\\scripts\\configure"
+              waitAfterCompletion: 0 
+        chocolatey:
+          commands:
+            100-install-chocolatey:
+              command: powershell.exe -Command "Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))"
+              waitAfterCompletion: 0
+            110-tools:
+              command: powershell.exe -Command "choco install googlechrome notepadplusplus -y"
+              waitAfterCompletion: 0    
+              ignoreErrors: true             
+        bootstrap:
+          commands:
+            100-bucket-environment-variable:
+              command:
+                Fn::Sub:
+                  - |
+                    powershell.exe -Command [System.Environment]::SetEnvironmentVariable('CheckmarxBucket', '${S3Bucket}', [System.EnvironmentVariableTarget]::Machine) 
+                  - {
+                    S3Bucket: !Ref ps3Bucket              
+                    }                    
+              waitAfterCompletion: 0
+            110-make-checkmarx-folder:
+              command: powershell.exe -Command "md -force 'C:\programdata\checkmarx\automation\installers'"                                
+              waitAfterCompletion: 0              
+        get-automation-scripts:
+          sources:
+            "C:\\programdata\\checkmarx": "https://codeload.github.com/checkmarx-ts/aws-automation/zip/development"
+            #"C:\\programdata\\checkmarx\\aws-automation": !Join [ "", ["https://", !Ref ps3Bucket , ".s3.amazonaws.com/installation/common/aws-automation.zip"     
+          commands:
+            100-set-path:
+              command: powershell.exe -Command "mv c:\programdata\checkmarx\aws-automation-development c:\programdata\checkmarx\aws-automation"
+              waitAfterCompletion: 60
+        domain-join:  
+          commands:    
+            100-domain-join:
+              command: 
+                !Sub
+                  - |
+                    powershell.exe -Command .\domain-join.ps1 -domainJoinUsername corp\Admin -domainJoinUserPassword '/some/ssm/path' -primaryDns ${DNS1} -secondaryDns ${DNS2} -domainName "some domain" 
+                  - 
+                    DNS1: 
+                      'Fn::ImportValue': 'PrimaryDNS'
+                    DNS2: 
+                      'Fn::ImportValue': 'SecondaryDNS'
+              cwd: C:\\programdata\\checkmarx\\automation\\installers
+              waitAfterCompletion: forever  # An implicit reboot will occur during domain join so we must wait 'forever' for the machine to reboot
+        install-dotnet-framework:
+          files:
+             "C:\\programdata\\checkmarx\\automation\\installers\\NDP472-KB4054530-x86-x64-AllOS-ENU.exe":
+               source: !Join [ "", ["https://", !Ref ps3Bucket, ".s3.amazonaws.com/installation/common/NDP472-KB4054530-x86-x64-AllOS-ENU.exe" ] ]
+               authentication: s3access
+          commands:
+            100-print-dotnet-version:
+              command: powershell.exe -Command "(Get-ItemProperty 'HKLM:SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').Release"
+              ignoreErrors: true
+              waitAfterCompletion: 0              
+            200-install-dotnet-framework:
+              command: C:\programdata\checkmarx\automation\installers\NDP472-KB4054530-x86-x64-AllOS-ENU.exe /q /norestart
+              cwd: "C:\\programdata\\checkmarx\\automation\\installers"
+              ignoreErrors: true
+              waitAfterCompletion: 0
+            300-reboot:
+              # The dotnet framework installation requires a reboot
+              command: powershell.exe -Command Restart-Computer -Force
+              waitAfterCompletion: forever
+        install-7zip:
+          files:
+             "C:\\programdata\\checkmarx\\automation\\installers\\7z1900-x64.exe":
+               source: !Join [ "", ["https://", !Ref ps3Bucket, ".s3.amazonaws.com/installation/common/7z1900-x64.exe" ] ]
+               authentication: s3access
+          commands:
+            100-install:
+              command: C:\programdata\checkmarx\automation\installers\7z1900-x64.exe /S
+              cwd: "C:\\programdata\\checkmarx\\automation\\installers"
+              waitAfterCompletion: 0
+            200-add-to-path:
+              # 7zip installer does not add to path automatically
+              command: powershell.exe -Command "[Environment]::SetEnvironmentVariable('Path',[Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::Machine) + ';C:\Program Files\7-Zip',[EnvironmentVariableTarget]::Machine)"
+              waitAfterCompletion: 0                    
+        install-cpp2010:
+          files:
+             "C:\\programdata\\checkmarx\\automation\\installers\\vcredist_x64.exe":
+               source: !Join [ "", ["https://", !Ref ps3Bucket, ".s3.amazonaws.com/installation/common/vcredist_x64.exe" ] ]
+               authentication: s3access
+          commands:
+            100-install:
+              command: C:\programdata\checkmarx\automation\installers\vcredist_x64.exe /passive /norestart
+              cwd: "C:\\programdata\\checkmarx\\automation\\installers"
+              waitAfterCompletion: 0      
+        install-cpp2015:
+          files:
+             "C:\\programdata\\checkmarx\\automation\\installers\\vc_redist2015.x64.exe":
+               source: !Join [ "", ["https://", !Ref ps3Bucket, ".s3.amazonaws.com/installation/common/vc_redist2015.x64.exe" ] ]
+               authentication: s3access
+          commands:
+            100-install:
+              command: C:\programdata\checkmarx\automation\installers\vc_redist2015.x64.exe /passive /norestart
+              cwd: "C:\\programdata\\checkmarx\\automation\\installers"
+              waitAfterCompletion: 0
+        install-git:
+          files:
+             "C:\\programdata\\checkmarx\\automation\\installers\\Git-2.27.0-64-bit.exe":
+               source: !Join [ "", ["https://", !Ref ps3Bucket, ".s3.amazonaws.com/installation/common/Git-2.27.0-64-bit.exe" ] ]
+               authentication: s3access
+          commands:
+            100-install:
+              command: C:\programdata\checkmarx\automation\installers\Git-2.27.0-64-bit.exe /VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS
+              cwd: "C:\\programdata\\checkmarx\\automation\\installers"
+              waitAfterCompletion: 0     
+        install-iis:
+          files:
+             "C:\\programdata\\checkmarx\\automation\\installers\\rewrite_amd64.msi":
+               source: !Join [ "", ["https://", !Ref ps3Bucket, ".s3.amazonaws.com/installation/common/rewrite_amd64.msi" ] ]
+               authentication: s3access
+             "C:\\programdata\\checkmarx\\automation\\installers\\requestRouter_amd64.msi":
+               source: !Join [ "", ["https://", !Ref ps3Bucket, ".s3.amazonaws.com/installation/common/requestRouter_amd64.msi" ] ]
+               authentication: s3access               
+          commands:
+            100-install-iis:
+              command: powershell.exe -Command "Install-WindowsFeature -name Web-Server -IncludeManagementTools; Add-WindowsFeature Web-Http-Redirect; Install-WindowsFeature -Name  Web-Health -IncludeAllSubFeature; Install-WindowsFeature -Name  Web-Performance -IncludeAllSubFeature; Install-WindowsFeature -Name Web-Security -IncludeAllSubFeature; Install-WindowsFeature -Name  Web-Scripting-Tools -IncludeAllSubFeature"
+              cwd: "C:\\programdata\\checkmarx\\automation\\installers"
+              waitAfterCompletion: 0     
+            110-install-iis-rewrite-module:
+              command: "C:\\programdata\\checkmarx\\automation\\installers\\rewrite_amd64.msi /QN /l C:\\programdata\\checkmarx\\automation\\installers\\rewrite_amd64.log"
+              ignoreErrors: true
+              waitAfterCompletion: 0  
+            120-install-iis-application-request-routing-module:
+              command: "C:\\programdata\\checkmarx\\automation\\installers\\requestRouter_amd64.msi /QN /l C:\\programdata\\checkmarx\\automation\\installers\\requestRouter_amd64.log"
+              ignoreErrors: true
+              waitAfterCompletion: 0    
+        install-java:
+          files:
+             "C:\\programdata\\checkmarx\\automation\\installers\\OpenJDK8U-jdk_x64_windows_hotspot_8u252b09.msi":
+               source: !Join [ "", ["https://", !Ref ps3Bucket, ".s3.amazonaws.com/installation/common/OpenJDK8U-jdk_x64_windows_hotspot_8u252b09.msi" ] ]
+               authentication: s3access
+          commands:
+            100-install:
+              # Java is installed via a (simple) script because there is a quirk when running the msi directly from CFN Init that causes the installation to fail.
+              command: powershell.exe -Command ".\install-java.ps1 -installer C:\\programdata\\checkmarx\\automation\\installers\\OpenJDK8U-jdk_x64_windows_hotspot_8u252b09.msi"
+              cwd: "C:\\programdata\\checkmarx\\aws-automation\\scripts\\install\\common"
+              waitAfterCompletion: 0
+        install-dotnet-core:
+          files:
+             "C:\\programdata\\checkmarx\\automation\\installers\\dotnet-hosting-2.1.16-win.exe":
+               source: !Join [ "", ["https://", !Ref ps3Bucket, ".s3.amazonaws.com/installation/common/dotnet-hosting-2.1.16-win.exe" ] ]
+               authentication: s3access
+          commands:
+            100-install:
+              command: C:\programdata\checkmarx\automation\installers\dotnet-hosting-2.1.16-win.exe /quiet /install /norestart
+              cwd: "C:\\programdata\\checkmarx\\automation\\installers"
+              waitAfterCompletion: 0                                                                                                                 
+        reboot:
+          commands: 
+            999-reboot-to-refresh-environment:
+              # Reboot is required for CFN Init context to gain access to any environment variables set (such as java added to system path)
+              command: powershell.exe -Command Restart-Computer -Force
+              waitAfterCompletion: forever
+        checkmarx-license:
+          commands:
+            100-automatic-license-generator:
+              command: powershell.exe -Command ".\license-from-alg.ps1"
+              cwd: "C:\\programdata\\checkmarx\\aws-automation\\scripts\\configure"
+              waitAfterCompletion: 0                 
+        checkmarx89:
+          files:
+             "C:\\programdata\\checkmarx\\automation\\installers\\CxSAST.890.Release.Setup_8.9.0.210.zip":
+               source: !Join [ "", ["https://", !Ref ps3Bucket, ".s3.amazonaws.com/installation/cxsast/8.9/CxSAST.890.Release.Setup_8.9.0.210.zip" ] ]
+               authentication: s3access          
+          commands:
+            095-unzip:
+              command: powershell.exe -Command "Expand-Archive 'C:\programdata\checkmarx\automation\installers\CxSAST.890.Release.Setup_8.9.0.210.zip' -DestinationPath 'c:\programdata\checkmarx\automation\installers\CxSAST.890.Release.Setup_8.9.0.210' -Force"                
+              ignoreErrors: true 
+              waitAfterCompletion: 0
+            100-install-checkmarx89:
+              command:
+                !Sub powershell.exe -Command ".\install-cxsast89.ps1 -installer 'C:\programdata\checkmarx\automation\installers\CxSAST.890.Release.Setup_8.9.0.210\CxSetup.exe' -ACCEPT_EULA -MANAGER -WEB -ENGINE -BI -PORT 80 -SQLAUTH -SQLSERVER '${pSqlHost}' -SQLUSER '${pSsmSqlUsername}' -SQLPWD '${pSsmSqlPassword}' -CXARM_SQLAUTH -CXARM_DB_HOST '${pSqlHost}' -CXARM_DB_USER '${pSsmSqlUsername}' -CXARM_DB_PASSWORD '${pSsmSqlPassword}'"
+              cwd: "C:\\programdata\\checkmarx\\aws-automation\\scripts\\install\\cxsast"
+              waitAfterCompletion: 0   
+        checkmarx90-migration:
+          files:
+             "C:\\programdata\\checkmarx\\automation\\installers\\CxSAST.900.Release.Setup_9.0.0.40085.zip":
+               source: !Join [ "", ["https://", !Ref ps3Bucket, ".s3.amazonaws.com/installation/cxsast/9.0/CxSAST.900.Release.Setup_9.0.0.40085.zip" ] ]
+               authentication: s3access           
+          commands:
+            095-unzip:
+              command: powershell.exe -Command "Expand-Archive 'C:\programdata\checkmarx\automation\installers\CxSAST.900.Release.Setup_9.0.0.40085.zip' -DestinationPath 'c:\programdata\checkmarx\automation\installers\CxSAST.900.Release.Setup_9.0.0.40085' -Force"                
+              ignoreErrors: true 
+              waitAfterCompletion: 0
+            100-install-checkmarx90-ac-migration:
+              command:
+                !Sub powershell.exe -Command ".\install-cxsast90-accesscontrol-migration.ps1 -installer 'C:\programdata\checkmarx\automation\installers\CxSAST.900.Release.Setup_9.0.0.40085\CxSetup.AC_and_Migration.exe' -ACCEPT_EULA -ACCESSCONTROL -PORT 80 -CXSAST_ADDRESS '${pCheckmarxAddress}' -SQLAUTH  -SQLSERVER '${pSqlHost}' -SQLUSER '${pSsmSqlUsername}' -SQLPWD '${pSsmSqlPassword}' "
+              cwd: "C:\\programdata\\checkmarx\\aws-automation\\scripts\\install\\cxsast"
+              waitAfterCompletion: 0 
+            200-view-migration-logs:
+              command: powershell.exe -Command cat 'C:\Program Files\Checkmarx\Logs\ACMigrationTool\Logs\Trace\Cx.AccessControl.All*'
+              ignoreErrors: true
+              waitAfterCompletion: 0
+        checkmarx90:
+          files:        
+             "C:\\programdata\\checkmarx\\automation\\installers\\CxSAST.900.Release.Setup_9.0.0.40085.zip":
+               source: !Join [ "", ["https://", !Ref ps3Bucket, ".s3.amazonaws.com/installation/cxsast/9.0/CxSAST.900.Release.Setup_9.0.0.40085.zip" ] ]
+               authentication: s3access      
+             "C:\\programdata\\checkmarx\\automation\\installers\\9.0.0.HF3.zip":
+               source: !Join [ "", ["https://", !Ref ps3Bucket, ".s3.amazonaws.com/installation/cxsast/9.0/9.0.0.HF3.zip" ] ]
+               authentication: s3access                        
+          commands:
+            095-unzip:
+              command: powershell.exe -Command "Expand-Archive 'C:\programdata\checkmarx\automation\installers\CxSAST.900.Release.Setup_9.0.0.40085.zip' -DestinationPath 'c:\programdata\checkmarx\automation\installers\CxSAST.900.Release.Setup_9.0.0.40085' -Force"                
+              ignoreErrors: true 
+              waitAfterCompletion: 0            
+            100-install-checkmarx-cxsast90: 
+              command:
+                !Sub powershell.exe -Command ".\install-cxsast90.ps1 -installer 'C:\programdata\checkmarx\automation\installers\CxSAST.900.Release.Setup_9.0.0.40085\CxSetup.exe' -MANAGER -WEB -ENGINE -BI -ACCESSCONTROL -VALIDATED_ACCESSCONTROL_MIGRATION -ACCEPT_EULA -PORT 80 -CXSAST_ADDRESS '${pCheckmarxAddress}' -SQLAUTH -SQLSERVER '${pSqlHost}' -SQLUSER '${pSsmSqlUsername}' -SQLPWD '${pSsmSqlPassword}' -CXARM_SQLAUTH -CXARM_DB_HOST '${pSqlHost}' -CXARM_DB_USER '${pSsmSqlUsername}' -CXARM_DB_PASSWORD '${pSsmSqlPassword}'"
+              cwd: "C:\\programdata\\checkmarx\\aws-automation\\scripts\\install\\cxsast"
+              waitAfterCompletion: 0        
+            122-install-checkmarx-cxsast9-hf3: 
+              command: powershell.exe -Command ".\install-cxsast-hotfix.ps1 -installer 'C:\programdata\checkmarx\automation\installers\9.0.0.HF3.zip'"
+              cwd: "C:\\programdata\\checkmarx\\aws-automation\\scripts\\install\\cxsast"
+              waitAfterCompletion: 0
+        post-install-configuration:
+          commands:
+            010-configure-windows-defender-exclusions:
+              command: powershell.exe -Command ".\configure-windows-defender.ps1"
+              cwd: "C:\\programdata\\checkmarx\\aws-automation\\scripts\\configure"
+              waitAfterCompletion: 0
+            020-cloudwatch-logs:
+              command: powershell.exe -Command ".\configure-cloudwatch-logs.ps1"
+              cwd: "C:\\programdata\\checkmarx\\aws-automation\\scripts\\configure"
+              waitAfterCompletion: 0   
+            030-configure-max-engine-scans:
+              command: powershell.exe -Command ".\configure-max-scans-per-machine.ps1 -scans 1"
+              cwd: "C:\\programdata\\checkmarx\\aws-automation\\scripts\\configure"
+              ignoreErrors: true
+              waitAfterCompletion: 0    
+            040-configure-session-timeout:
+              command: powershell.exe -Command ".\configure-session-timeout.ps1 -timeout '00:15:00' "
+              cwd: "C:\\programdata\\checkmarx\\aws-automation\\scripts\\configure"
+              ignoreErrors: true
+              waitAfterCompletion: 0                           
+            100-harden-iis:
+              command: powershell.exe -Command ".\configure-iis-hardening.ps1"
+              cwd: "C:\\programdata\\checkmarx\\aws-automation\\scripts\\configure"
+              waitAfterCompletion: 0
+            110-configure-cxarm-iis-reverseproxy:
+              command: powershell.exe -Command ".\configure-cxarm-iis-reverseproxy.ps1"
+              cwd: "C:\\programdata\\checkmarx\\aws-automation\\scripts\\configure"
+              waitAfterCompletion: 0
+        ssl-configuration:              
+          commands:
+            100-get-certificates:
+              # Getting a certificate onto the server should be overridden by customers to do whatever
+              # is required for internal certificate provisioning. 
+              # The default implementation uses letsencrypt.org certificates using the route53 plugin. 
+              command:  powershell.exe -Command ".\request-lets-encrypt.ps1 -domain 'test.dev.checkmarx-ts.com' -password 'pass_for_pfx_file' -email 'ben.stokes@checkmarx.com' "
+              cwd: "C:\\programdata\\checkmarx\\aws-automation\\scripts\\ssl"
+              waitAfterCompletion: 0
+            200-configure:
+              # Use the below line as an example to specify your own values. The default implementation will use a letsencrypt.org cert on the machine via POSH ACME
+              # command: powershell.exe -Command ".\configure-manager-ssl.ps1 -pfxfile 'C:\path\to\certificate.pfx' -pfxpassword 'password to pfx file' -domainname 'test.dev.checkmarx-ts.com' -thumbprint 'ABCD1234 thumbprint of your certificate'"
+              # Use the below command with no arguments to find the cert from lets encrypt via POSH ACME
+              command:  powershell.exe -Command ".\configure-manager-ssl.ps1"
+              cwd: "C:\\programdata\\checkmarx\\aws-automation\\scripts\\ssl"
+              waitAfterCompletion: 0
+
+        # Python, nodejs, nuget, maven, and gradle are only required for OSA Scanning on the manager. 
+        python3:
+          files:
+            "C:\\programdata\\checkmarx\\automation\\installers\\python-3.8.5-amd64.exe":
+              source: "https://www.python.org/ftp/python/3.8.5/python-3.8.5-amd64.exe"
+          commands:
+            200-install-python3:
+              command: "C:\\programdata\\checkmarx\\automation\\installers\\python-3.8.5-amd64.exe /quiet InstallAllUsers=1 PrependPath=1 Include_dev=0 Include_test=0"
+              waitAfterCompletion: 0  
+        nodejs:
+          files:
+            "C:\\programdata\\checkmarx\\automation\\installers\\node-v12.18.3-x64.msi":
+              source: "https://nodejs.org/dist/v12.18.3/node-v12.18.3-x64.msi"
+          commands:
+            100-install-nodejs-npm:
+              command: "C:\\programdata\\checkmarx\\automation\\installers\\node-v12.18.3-x64.msi /QN /L*V C:\\programdata\\checkmarx\\automation\\installers\\node-v12.18.3-x64.log"
+              waitAfterCompletion: 0
+        nuget:
+          files:   
+            "C:\\programdata\\checkmarx\\automation\\installers\\nuget.exe":
+              source: "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"   
+          commands:
+            # Nuget does not have an installer it just needs to be "installed" by adding it to the system path
+            100-create-nuget-folder:
+              command: powershell.exe -Command "md -force c:\programdata\checkmarx\automation\installers\nuget"
+              waitAfterCompletion: 0              
+            200-mv-nuget:
+              command: move c:\programdata\checkmarx\automation\installers\nuget.exe c:\programdata\checkmarx\automation\installers\nuget\nuget.exe
+              waitAfterCompletion: 0              
+            300-install-nuget:
+              command: powershell.exe -Command "[Environment]::SetEnvironmentVariable('Path',[Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::Machine) + ';c:\programdata\checkmarx\automation\installers\nuget',[EnvironmentVariableTarget]::Machine)"
+              waitAfterCompletion: 0  
+        maven:
+          files:   
+            "C:\\programdata\\checkmarx\\automation\\installers\\apache-maven-3.6.3-bin.zip":
+              source: "http://mirror.metrocast.net/apache/maven/maven-3/3.6.3/binaries/apache-maven-3.6.3-bin.zip"
+          commands:
+            100-unzip:
+              command: powershell.exe -Command "Expand-Archive 'C:\programdata\checkmarx\automation\installers\apache-maven-3.6.3-bin.zip' -DestinationPath 'C:\programdata\checkmarx\automation\installers' -Force"
+              waitAfterCompletion: 0
+            200-install:
+              # Maven does not have an installer it just needs to be "installed" by adding it to the system path
+              command: powershell.exe -Command "[Environment]::SetEnvironmentVariable('Path',[Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::Machine) + ';C:\programdata\checkmarx\automation\installers\apache-maven-3.6.3',[EnvironmentVariableTarget]::Machine)"
+              waitAfterCompletion: 0   
+            300-set-maven-home:
+              # MAVEN_HOME environment variable should be set
+              command: powershell.exe -Command "[Environment]::SetEnvironmentVariable('MAVEN_HOME', 'C:\programdata\checkmarx\automation\installers\apache-maven-3.6.3', 'Machine')" 
+              waitAfterCompletion: 0 
+        gradle: 
+          files:   
+            "C:\\programdata\\checkmarx\\automation\\installers\\gradle-6.5.1-bin.zip":
+              source: "https://downloads.gradle-dn.com/distributions/gradle-6.5.1-bin.zip"    
+          commands:
+            100-unzip:
+              command: powershell.exe -Command "Expand-Archive 'C:\programdata\checkmarx\automation\installers\gradle-6.5.1-bin.zip' -DestinationPath 'C:\programdata\checkmarx\automation\installers' -Force"
+              waitAfterCompletion: 0              
+            200-install:
+              # Maven does not have an installer it just needs to be "installed" by adding it to the system path
+              command: powershell.exe -Command "[Environment]::SetEnvironmentVariable('Path',[Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::Machine) + ';C:\programdata\checkmarx\automation\installers\gradle-6.5.1\bin',[EnvironmentVariableTarget]::Machine)"
+              waitAfterCompletion: 0  
+        git-trace-logging: 
+          # Git tracing can be helpful for troubleshooting git connectivity issues
+          commands:
+            # The order in which these env vars are set does not matter
+            100-git-trace:
+              command: powershell.exe -Command "[System.Environment]::SetEnvironmentVariable('GIT_TRACE', 'c:\program files\checkmarx\logs\git\GIT_TRACE.txt', [System.EnvironmentVariableTarget]::Machine)"
+              waitAfterCompletion: 0  
+            100-git-trace-pack-access:
+              command: powershell.exe -Command "[System.Environment]::SetEnvironmentVariable('GIT_TRACE_PACK_ACCESS', 'c:\program files\checkmarx\logs\git\GIT_TRACE_PACK_ACCESS.txt', [System.EnvironmentVariableTarget]::Machine)"
+              waitAfterCompletion: 0  
+            100-git-trace-packet:
+              command: powershell.exe -Command "[System.Environment]::SetEnvironmentVariable('GIT_TRACE_PACKET', 'c:\program files\checkmarx\logs\git\GIT_TRACE_PACKET.txt', [System.EnvironmentVariableTarget]::Machine)"
+              waitAfterCompletion: 0  
+            100-git-trace-performance:
+              command: powershell.exe -Command "[System.Environment]::SetEnvironmentVariable('GIT_TRACE_PERFORMANCE', 'c:\program files\checkmarx\logs\git\GIT_TRACE_PERFORMANCE.txt', [System.EnvironmentVariableTarget]::Machine)"
+              waitAfterCompletion: 0  
+            100-git-trace-setup:
+              command: powershell.exe -Command "[System.Environment]::SetEnvironmentVariable('GIT_TRACE_SETUP', 'c:\program files\checkmarx\logs\git\GIT_TRACE_SETUP.txt', [System.EnvironmentVariableTarget]::Machine)"
+              waitAfterCompletion: 0  
+            100-git-trace-merge-verbosity:
+              command: powershell.exe -Command "[System.Environment]::SetEnvironmentVariable('GIT_MERGE_VERBOSITY', 'c:\program files\checkmarx\logs\git\GIT_MERGE_VERBOSITY.txt', [System.EnvironmentVariableTarget]::Machine)"
+              waitAfterCompletion: 0  
+            100-git-trace-curl-verbose:
+              command: powershell.exe -Command "[System.Environment]::SetEnvironmentVariable('GIT_CURL_VERBOSE', 'c:\program files\checkmarx\logs\git\GIT_CURL_VERBOSE.txt', [System.EnvironmentVariableTarget]::Machine)"
+              waitAfterCompletion: 0  
+            100-git-trace-shallow:
+              command: powershell.exe -Command "[System.Environment]::SetEnvironmentVariable('GIT_TRACE_SHALLOW', 'c:\program files\checkmarx\logs\git\GIT_TRACE_SHALLOW.txt', [System.EnvironmentVariableTarget]::Machine)"
+              waitAfterCompletion: 0                   
+        onComplete:
+          commands:                              
+            200-signal-resource:
+              command: !Join 
+                - ''
+                - - >-
+                    cfn-signal.exe -e %ERRORLEVEL% --resource CxManagerAS90
+                    --stack 
+                  - !Ref 'AWS::StackName'
+                  - '         --region '
+                  - !Ref 'AWS::Region'
+
+  CxManagerAS90:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: CxAutoScaleManager90
+      AvailabilityZones: !Ref pManagerAvailabilityZones
+      DesiredCapacity: "1"
+      LaunchTemplate:
+        LaunchTemplateId: !Ref CxManagerLT90
+        Version: !GetAtt CxManagerLT90.LatestVersionNumber
+      MaxSize: "1"
+      MinSize: "1"
+      TargetGroupARNs: !FindInMap ['Dev', !Ref 'AWS::Region', 'LoadBalancerTargetGroup']
+      VPCZoneIdentifier: !Ref pManagerSubnets
+      Tags:
+        - Key: Name
+          PropagateAtLaunch: true
+          Value: CxManager90-AS
+        - Key: Layer
+          PropagateAtLaunch: false
+          Value: Management Servers
+        - Key: ResourceType
+          PropagateAtLaunch: true
+          Value: "EC2 Instance"
+        - Key: Purpose
+          PropagateAtLaunch: true
+          Value: "manager"
+
