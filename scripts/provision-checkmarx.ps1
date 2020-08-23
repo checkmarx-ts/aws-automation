@@ -3,21 +3,28 @@ Write-Output "$(get-date) ------------------------------------------------------
 Write-Output "$(get-date) -------------------------------------------------------------------------"
 Write-Output "$(get-date) -------------------------------------------------------------------------"
 Write-Output "$(get-date) provision-checkmarx.ps1 script execution beginning"
+Write-Output "$(get-date) env:CheckmarxEnvironment = $env:CheckmarxEnvironment"
+Write-Output "$(get-date) env:CheckmarxBucket = $env:CheckmarxBucket"
+Write-Output "$(get-date) env:CheckmarxComponentType = $env:CheckmarxComponentType"
 
-$attemptDomainJoin = $false
+$ssmprefix = "/checkmarx/${env:CheckmarxEnvironment}"
+Write-Output "$(get-date) ssmprefix = $ssmprefix"
+#Get-SSMParameter -Name  -WithDecryption $True
 
 ###############################################################################
 #  Domain Join
 ###############################################################################
-if ((Get-WmiObject -Class Win32_ComputerSystem | Select -ExpandProperty PartOfDomain) -eq $True) {
-    Write-Output "$(get-date) The computer is joined to a domain"
-} else {
-    Write-Output "$(get-date) The computer is not joined to a domain"
-    if ($attemptDomainJoin) {
-        Write-Output "$(get-date) Joining the computer to the domain. A reboot will occur."
-        C:\programdata\checkmarx\aws-automation\scripts\configure\domain-join.ps1 -domainJoinUserName "corp\Admin" -domainJoinUserPassword "pass" -primaryDns "dns1" -secondaryDns "dns2" -domainName "corp.company.com"
-        # In case the implicit restart does not occur or is overridden
-        Restart-Computer
+if ($env:CheckmarxComponentType -eq "Manager") {
+    if ((Get-WmiObject -Class Win32_ComputerSystem | Select -ExpandProperty PartOfDomain) -eq $True) {
+        Write-Output "$(get-date) The computer is joined to a domain"
+    } else {
+        Write-Output "$(get-date) The computer is not joined to a domain"
+        if (!([String]::IsNullOrEmpty($(Get-SSMParameter -Name "${ssmprefix}/domain/name" ).Value))) {  # If the domain info is set in SSM parameters then join the domain
+            Write-Output "$(get-date) Joining the computer to the domain. A reboot will occur."
+            C:\programdata\checkmarx\aws-automation\scripts\configure\domain-join.ps1 -domainJoinUserName "${ssmprefix}/domain/admin/username" -domainJoinUserPassword "${ssmprefix}/domain/admin/password" -primaryDns "${ssmprefix}/domain/dns/primary" -secondaryDns "${ssmprefix}/domain/dns/secondary" -domainName "${ssmprefix}/domain/name"
+            # In case the implicit restart does not occur or is overridden
+            Restart-Computer
+        }
     }
 }
 
@@ -79,94 +86,98 @@ if (![String]::IsNullOrEmpty($cpp2015_version)) {
 ###############################################################################
 # Git Install
 ###############################################################################
-if (Test-Path -Path "C:\Program Files\Git\bin\git.exe") {
-    Write-Output "$(get-date) Git is already installed - skipping installation"
-} else {
-    Write-Output "$(get-date) Installing Git"
-    C:\programdata\checkmarx\aws-automation\scripts\install\common\install-git.ps1
-    Write-Output "$(get-date) ... finished Installing Git"
-    Start-Process "C:\Program Files\Git\bin\git.exe" -ArgumentList "--version" -RedirectStandardOutput ".\git-version.log" -Wait -NoNewWindow
-    cat ".\git-version.log"
+if ($env:CheckmarxComponentType -eq "Manager") {
+    if (Test-Path -Path "C:\Program Files\Git\bin\git.exe") {
+        Write-Output "$(get-date) Git is already installed - skipping installation"
+    } else {
+        Write-Output "$(get-date) Installing Git"
+        C:\programdata\checkmarx\aws-automation\scripts\install\common\install-git.ps1
+        Write-Output "$(get-date) ... finished Installing Git"
+        Start-Process "C:\Program Files\Git\bin\git.exe" -ArgumentList "--version" -RedirectStandardOutput ".\git-version.log" -Wait -NoNewWindow
+        cat ".\git-version.log"
+    }
 }
 
-###############################################################################
-# IIS Install
-###############################################################################
-Write-Output "$(get-date) Installing IIS"
-C:\programdata\checkmarx\aws-automation\scripts\install\common\install-iis.ps1
-Write-Output "$(get-date) ... finished Installing IIS"
+if ($env:CheckmarxComponentType -eq "Manager") {
+    ###############################################################################
+    # IIS Install
+    ###############################################################################
+    Write-Output "$(get-date) Installing IIS"
+    C:\programdata\checkmarx\aws-automation\scripts\install\common\install-iis.ps1
+    Write-Output "$(get-date) ... finished Installing IIS"
 
-###############################################################################
-# IIS Rewrite Module Install
-###############################################################################
-if (Test-Path -Path "C:\Windows\System32\inetsrv\rewrite.dll") {
-     Write-Output "$(get-date) IIS Rewrite Module is already installed - skipping installation"
-} else {
-    Write-Output "$(get-date) Installing IIS rewrite Module"
-    C:\programdata\checkmarx\aws-automation\scripts\install\common\install-iis-url-rewrite-module.ps1
-    Write-Output "$(get-date) ... finished Installing IIS Rewrite Module"
-}
+    ###############################################################################
+    # IIS Rewrite Module Install
+    ###############################################################################
+    if (Test-Path -Path "C:\Windows\System32\inetsrv\rewrite.dll") {
+        Write-Output "$(get-date) IIS Rewrite Module is already installed - skipping installation"
+    } else {
+        Write-Output "$(get-date) Installing IIS rewrite Module"
+        C:\programdata\checkmarx\aws-automation\scripts\install\common\install-iis-url-rewrite-module.ps1
+        Write-Output "$(get-date) ... finished Installing IIS Rewrite Module"
+    }
 
-###############################################################################
-# IIS Application Request Routing Install
-###############################################################################
-if (($(C:\Windows\System32\inetsrv\appcmd.exe list modules) | Where  { $_ -match "ApplicationRequestRouting" } | ForEach-Object { echo $_ }).length -gt 1) {
-     Write-Output "$(get-date) IIS Application Request Routing Module is already installed - skipping installation"
-} else {
-    Write-Output "$(get-date) Installing IIS Application Request Routing Module"
-    C:\programdata\checkmarx\aws-automation\scripts\install\common\install-iis-application-request-routing-module.ps1
-    Write-Output "$(get-date) ... finished Installing IIS Application Request Routing Module"
-}
+    ###############################################################################
+    # IIS Application Request Routing Install
+    ###############################################################################
+    if (($(C:\Windows\System32\inetsrv\appcmd.exe list modules) | Where  { $_ -match "ApplicationRequestRouting" } | ForEach-Object { echo $_ }).length -gt 1) {
+        Write-Output "$(get-date) IIS Application Request Routing Module is already installed - skipping installation"
+    } else {
+        Write-Output "$(get-date) Installing IIS Application Request Routing Module"
+        C:\programdata\checkmarx\aws-automation\scripts\install\common\install-iis-application-request-routing-module.ps1
+        Write-Output "$(get-date) ... finished Installing IIS Application Request Routing Module"
+    }
 
-###############################################################################
-# Dotnet Core Hosting 2.1.16
-###############################################################################
-if (Test-Path -Path "C:\Program Files\dotnet") {
-     Write-Output "$(get-date) Microsoft .NET Core 2.1.16 Windows Server Hosting is already installed - skipping installation"
-} else {
-    Write-Output "$(get-date) Installing Microsoft .NET Core 2.1.16 Windows Server Hosting"
-    C:\programdata\checkmarx\aws-automation\scripts\install\common\install-dotnetcore-hosting-2.1.16-win.ps1
-    Write-Output "$(get-date) ... finished Installing Microsoft .NET Core 2.1.16 Windows Server Hosting"
-}
+    ###############################################################################
+    # Dotnet Core Hosting 2.1.16
+    ###############################################################################
+    if (Test-Path -Path "C:\Program Files\dotnet") {
+        Write-Output "$(get-date) Microsoft .NET Core 2.1.16 Windows Server Hosting is already installed - skipping installation"
+    } else {
+        Write-Output "$(get-date) Installing Microsoft .NET Core 2.1.16 Windows Server Hosting"
+        C:\programdata\checkmarx\aws-automation\scripts\install\common\install-dotnetcore-hosting-2.1.16-win.ps1
+        Write-Output "$(get-date) ... finished Installing Microsoft .NET Core 2.1.16 Windows Server Hosting"
+    }
 
-###############################################################################
-# Install SQL Server Express
-###############################################################################
-if (!(Test-Path -Path "C:\ProgramData\chocolatey\choco.exe")) {
-    Write-Output "$(get-date) Installing Chocolatey (required for SQL Server Express)"
-    Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
-    Write-Output "$(get-date) ...finished installing Chocolatey"
-} else {
-    Write-Output "$(get-date) Chocolatey (required for SQL Server Express) is already installed - skipping installation"
-}
-if ((get-service sql*).length -eq 0) {
-    Write-Output "$(get-date) Installing SQL Server Express"
-    choco install sql-server-express --no-progress --install-args="/BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1" -y
-    Write-Output "$(get-date) ...finished installing SQL Server Express"
-} else {
-    Write-Output "$(get-date) SQL Server Express is already installed - skipping installation"
-}
+    ###############################################################################
+    # Install SQL Server Express
+    ###############################################################################
+    if (!(Test-Path -Path "C:\ProgramData\chocolatey\choco.exe")) {
+        Write-Output "$(get-date) Installing Chocolatey (required for SQL Server Express)"
+        Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+        Write-Output "$(get-date) ...finished installing Chocolatey"
+    } else {
+        Write-Output "$(get-date) Chocolatey (required for SQL Server Express) is already installed - skipping installation"
+    }
+    if ((get-service sql*).length -eq 0) {
+        Write-Output "$(get-date) Installing SQL Server Express"
+        choco install sql-server-express --no-progress --install-args="/BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1" -y
+        Write-Output "$(get-date) ...finished installing SQL Server Express"
+    } else {
+        Write-Output "$(get-date) SQL Server Express is already installed - skipping installation"
+    }
 
-###############################################################################
-# AdoptOpenJDK Install
-###############################################################################
-if (Test-Path -Path "C:\Program Files\AdoptOpenJDK\bin\java.exe") {
-    Write-Output "$(get-date) Java is already installed - skipping installation"
-} else {
-    Write-Output "$(get-date) Installing Java"
-    C:\programdata\checkmarx\aws-automation\scripts\install\common\install-java.ps1
-    Write-Output "$(get-date) ... finished Installing Java"
-    Start-Process "C:\Program Files\AdoptOpenJDK\bin\java.exe" -ArgumentList "-version" -RedirectStandardError ".\java-version.log" -Wait -NoNewWindow
-    cat ".\java-version.log"
-    
-    # Java is the last of the dependencies, so at this point we need to reboot again
-    #Write-Output "$(get-date) restarting to refresh the environment"
-    #restart-computer -force
-}
+    ###############################################################################
+    # AdoptOpenJDK Install
+    ###############################################################################
+    if (Test-Path -Path "C:\Program Files\AdoptOpenJDK\bin\java.exe") {
+        Write-Output "$(get-date) Java is already installed - skipping installation"
+    } else {
+        Write-Output "$(get-date) Installing Java"
+        C:\programdata\checkmarx\aws-automation\scripts\install\common\install-java.ps1
+        Write-Output "$(get-date) ... finished Installing Java"
+        Start-Process "C:\Program Files\AdoptOpenJDK\bin\java.exe" -ArgumentList "-version" -RedirectStandardError ".\java-version.log" -Wait -NoNewWindow
+        cat ".\java-version.log"
+        
+        # Java is the last of the dependencies, so at this point we need to reboot again
+        #Write-Output "$(get-date) restarting to refresh the environment"
+        #restart-computer -force
+    }
 
-###############################################################################
-# Generate Checkmarx License
-###############################################################################
-Write-Output "$(get-date) Running automatic license generator"
-C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
-Write-Output "$(get-date) ... finished running automatic license generator"
+    ###############################################################################
+    # Generate Checkmarx License
+    ###############################################################################
+    Write-Output "$(get-date) Running automatic license generator"
+    C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
+    Write-Output "$(get-date) ... finished running automatic license generator"
+}
