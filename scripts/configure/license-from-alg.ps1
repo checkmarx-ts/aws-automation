@@ -35,7 +35,8 @@ $hid = $hid.Substring(0, $hid.IndexOf("_") )
 log "Using $hid as HID input to ALG"
 
 log "Generating license for HID `"${hid}`"..."
-Start-Process "java.exe" -ArgumentList "-jar c:\programdata\checkmarx\alg\ALG-CLI-1.0.0-jar-with-dependencies.jar -file `"C:\programdata\checkmarx\alg\settings.xml`" -hid $hid" -WorkingDirectory "C:\ProgramData\checkmarx\alg\" -Wait -NoNewWindow
+$javaexe = $(Get-ChildItem "C:\Program Files" -Recurse -Filter "java.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
+Start-Process "$javaexe" -ArgumentList "-jar c:\programdata\checkmarx\alg\ALG-CLI-1.0.0-jar-with-dependencies.jar -file `"C:\programdata\checkmarx\alg\settings.xml`" -hid $hid" -WorkingDirectory "C:\ProgramData\checkmarx\alg\" -Wait -NoNewWindow
 log "...ALG finished. Log is:"
 Get-Content "c:\programdata\checkmarx\alg\licenseGeneratorInfo.log"
 
