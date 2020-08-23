@@ -10,16 +10,13 @@ Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManage
 $ProgressPreference = "SilentlyContinue"
 
 # Install the tools
-choco install notepadplusplus -y
-choco install vim -y
-choco install firefox -y
-choco install googlechrome -y
-choco install 7zip.install -y
-choco install sql-server-management-studio -y
-choco install wireshark -y
-choco install vscode -y
-choco install fiddler -y
-choco install postman -y
-choco install sysinternals -y
+choco install notepadplusplus --no-progress -y
+choco install vim --no-progress -y
+choco install firefox --no-progress -y
+choco install googlechrome --no-progress -y
+choco install sql-server-management-studio --no-progress -y
+choco install vscode --no-progress -y
+choco install postman --no-progress -y
+choco install sysinternals --no-progress -y
 
 log "Finished installing tools"
