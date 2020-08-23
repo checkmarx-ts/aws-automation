@@ -76,20 +76,6 @@ if (![String]::IsNullOrEmpty($cpp2015_version)) {
     Write-Output "$(get-date) ... finished Installing Microsoft Visual C++ 2015 Redistributable Update 3 RC"
 }
 
-
-###############################################################################
-# AdoptOpenJDK Install
-###############################################################################
-if (Test-Path -Path "C:\Program Files\AdoptOpenJDK\bin\java.exe") {
-    Write-Output "$(get-date) Java is already installed - skipping installation"
-} else {
-    Write-Output "$(get-date) Installing Java"
-    C:\programdata\checkmarx\aws-automation\scripts\install\common\install-java.ps1
-    Write-Output "$(get-date) ... finished Installing Java"
-    Start-Process "C:\Program Files\AdoptOpenJDK\bin\java.exe" -ArgumentList "-version" -RedirectStandardError ".\java-version.log" -Wait -NoNewWindow
-    cat ".\java-version.log"
-}
-
 ###############################################################################
 # Git Install
 ###############################################################################
@@ -144,17 +130,43 @@ if (Test-Path -Path "C:\Program Files\dotnet") {
 }
 
 ###############################################################################
+# Install SQL Server Express
+###############################################################################
+if (!(Test-Path -Path "C:\ProgramData\chocolatey\choco.exe")) {
+    Write-Output "$(get-date) Installing Chocolatey (required for SQL Server Express)"
+    Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+    Write-Output "$(get-date) ...finished installing Chocolatey"
+} else {
+    Write-Output "$(get-date) Chocolatey (required for SQL Server Express) is already installed - skipping installation"
+}
+if ((get-service sql*).length -eq 0) {
+    Write-Output "$(get-date) Installing SQL Server Express"
+    choco install sql-server-express --no-progress --install-args="/BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1" -y
+    Write-Output "$(get-date) ...finished installing SQL Server Express"
+} else {
+    Write-Output "$(get-date) SQL Server Express is already installed - skipping installation"
+}
+
+###############################################################################
+# AdoptOpenJDK Install
+###############################################################################
+if (Test-Path -Path "C:\Program Files\AdoptOpenJDK\bin\java.exe") {
+    Write-Output "$(get-date) Java is already installed - skipping installation"
+} else {
+    Write-Output "$(get-date) Installing Java"
+    C:\programdata\checkmarx\aws-automation\scripts\install\common\install-java.ps1
+    Write-Output "$(get-date) ... finished Installing Java"
+    Start-Process "C:\Program Files\AdoptOpenJDK\bin\java.exe" -ArgumentList "-version" -RedirectStandardError ".\java-version.log" -Wait -NoNewWindow
+    cat ".\java-version.log"
+    
+    # Java is the last of the dependencies, so at this point we need to reboot again
+    #Write-Output "$(get-date) restarting to refresh the environment"
+    #restart-computer -force
+}
+
+###############################################################################
 # Generate Checkmarx License
 ###############################################################################
 Write-Output "$(get-date) Running automatic license generator"
 C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
 Write-Output "$(get-date) ... finished running automatic license generator"
-
-
-###############################################################################
-# Install SQL Server Express
-###############################################################################
-if (!(Test-Path -Path "C:\ProgramData\chocolatey\choco.exe")) {
-    Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
-}
-choco install sql-server-express --no-progress --install-args="/BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1" -y
