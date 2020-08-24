@@ -220,7 +220,7 @@ if ($env:CheckmarxComponentType -eq "Manager") {
     ###############################################################################
     # SQL Server install should come *after* the Checkmarx installation media is unzipped. The SQL Server
     # installer is packaged in the third_party folder from the zip. 
-    if ($sqlserver.StartsWith("localhost") {    # assume when connection string starts with localhost that we should install express
+    if ($sqlserver.StartsWith("localhost")) {    # assume when connection string starts with localhost that we should install express
         if ((get-service sql*).length -eq 0) {
             $sqlserverexe = $(Get-ChildItem "C:\programdata\checkmarx\automation\installers\${installer_name}" -Recurse -Filter "SQLEXPR*.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
             Write-Output "$(get-date) Installing SQL Server from ${sqlserverexe}"
