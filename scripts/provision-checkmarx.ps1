@@ -23,6 +23,8 @@ $hotfix_zip_password = $(Get-SSMParameter -Name "${ssmprefix}/hotfix/zip_passwor
 $hotfix_zip = $hotfix_source.Substring($hotfix_source.LastIndexOf("/") + 1)
 $hotfix_name = $($hotfix_zip.Replace(".zip", ""))
 
+$sqlserver = $(Get-SSMParameter -Name "${ssmprefix}/sql/host" ).Value
+
 $cloudwatch_logs_enabled = $(Get-SSMParameter -Name "${ssmprefix}/cloudwatch_logs_enabled" ).Value
 
 Write-Output "$(get-date) installer_source = $installer_source"
@@ -37,6 +39,8 @@ Write-Output "$(get-date) hotfix_zip = $hotfix_zip"
 Write-Output "$(get-date) hotfix_name = $hotfix_name"
 
 Write-Output "$(get-date) cloudwatch_logs_enabled = $cloudwatch_logs_enabled"
+
+Write-Output "$(get-date) sqlserver = $sqlserver"
 
 
 ###############################################################################
@@ -185,25 +189,7 @@ if ($env:CheckmarxComponentType -eq "Manager") {
         Write-Output "$(get-date) Installing Microsoft .NET Core 2.1.16 Windows Server Hosting"
         C:\programdata\checkmarx\aws-automation\scripts\install\common\install-dotnetcore-hosting-2.1.16-win.ps1
         Write-Output "$(get-date) ... finished Installing Microsoft .NET Core 2.1.16 Windows Server Hosting"
-    }
-
-    ###############################################################################
-    # Install SQL Server Express
-    ###############################################################################
-    if (!(Test-Path -Path "C:\ProgramData\chocolatey\choco.exe")) {
-        Write-Output "$(get-date) Installing Chocolatey (required for SQL Server Express)"
-        Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
-        Write-Output "$(get-date) ...finished installing Chocolatey"
-    } else {
-        Write-Output "$(get-date) Chocolatey (required for SQL Server Express) is already installed - skipping installation"
-    }
-    if ((get-service sql*).length -eq 0) {
-        Write-Output "$(get-date) Installing SQL Server Express"
-        choco install sql-server-express --no-progress --install-args="/BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1" -y
-        Write-Output "$(get-date) ...finished installing SQL Server Express"
-    } else {
-        Write-Output "$(get-date) SQL Server Express is already installed - skipping installation"
-    }
+    }    
 }
 
 # Download and unzip the installer
@@ -227,6 +213,24 @@ Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"c:\programdata\
 cat .\hotfix7z.err
 cat .\hotfix7z.out
 Write-Output "$(get-date) ...finished unzipping"
+
+if ($env:CheckmarxComponentType -eq "Manager") {
+    ###############################################################################
+    # Install SQL Server Express
+    ###############################################################################
+    # SQL Server install should come *after* the Checkmarx installation media is unzipped. The SQL Server
+    # installer is packaged in the third_party folder from the zip. 
+    if ($sqlserver.StartsWith("localhost") {    # assume when connection string starts with localhost that we should install express
+        if ((get-service sql*).length -eq 0) {
+            $sqlserverexe = $(Get-ChildItem "C:\programdata\checkmarx\automation\installers\${installer_name}" -Recurse -Filter "SQLEXPR*.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
+            Write-Output "$(get-date) Installing SQL Server from ${sqlserverexe}"
+            Start-Process "$sqlserverexe" -ArgumentList "/IACCEPTSQLSERVERLICENSETERMS /Q /ACTION=install /INSTANCEID=SQLEXPRESS /INSTANCENAME=SQLEXPRESS /UPDATEENABLED=FALSE /BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1" -Wait -NoNewWindow
+            Write-Output "$(get-date) ...finished Installing SQL Server"
+        } else {
+            Write-Output "$(get-date) SQL Server Express is already installed - skipping installation"
+        }
+    }
+}
 
 $cxsetup = $(Get-ChildItem "C:\programdata\checkmarx\automation\installers\${installer_name}" -Recurse -Filter "CxSetup.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
 Write-Output "$(get-date) Installing CxSAST with $installer_args"
