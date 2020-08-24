@@ -23,6 +23,8 @@ $hotfix_zip_password = $(Get-SSMParameter -Name "${ssmprefix}/hotfix/zip_passwor
 $hotfix_zip = $hotfix_source.Substring($hotfix_source.LastIndexOf("/") + 1)
 $hotfix_name = $($hotfix_zip.Replace(".zip", ""))
 
+$cloudwatch_logs_enabled = $(Get-SSMParameter -Name "${ssmprefix}/cloudwatch_logs_enabled" ).Value
+
 Write-Output "$(get-date) installer_source = $installer_source"
 Write-Output "$(get-date) installer_args = $installer_args"
 Write-Output "$(get-date) installer_zip_password = $installer_zip_password"
@@ -34,6 +36,8 @@ Write-Output "$(get-date) hotfix_args = $hotfix_args"
 Write-Output "$(get-date) hotfix_zip_password = $hotfix_zip_password"
 Write-Output "$(get-date) hotfix_zip = $hotfix_zip"
 Write-Output "$(get-date) hotfix_name = $hotfix_name"
+
+Write-Output "$(get-date) cloudwatch_logs_enabled = $cloudwatch_logs_enabled"
 
 
 ###############################################################################
@@ -292,7 +296,18 @@ if (Test-Path -Path "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config
     Write-Output "$(get-date) Finished initial ETL sync"
   }
 
+$is_engine_installed = (![String]::IsNullOrEmpty((Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Engine Server' -Name "Path")))
+if ($is_engine_installed ) {
+    Write-Output "$(get-date) Configuring max scans for the engine"
+    C:\programdata\checkmarx\aws-automation\scripts\configure\configure-max-scans-per-machine.ps1 -scans 1
+    Write-Output "$(get-date) ... finished configuring engine max scans"
+}
 
+if ($cloudwatch_logs_enabled) {
+    Write-Output "$(get-date) Configuring cloudwatch logs"
+    C:\programdata\checkmarx\aws-automation\scripts\configure\configure-cloudwatch-logs.ps1
+    Write-Output "$(get-date) ... finished configuring cloudwatch logs"
+}
 
 ###############################################################################
 # Install Tools
