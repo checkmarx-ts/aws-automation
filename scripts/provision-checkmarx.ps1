@@ -12,17 +12,29 @@ Write-Output "$(get-date) ssmprefix = $ssmprefix"
 
 # Get the installer variables
 $installer_source = $(Get-SSMParameter -Name "${ssmprefix}/installer/source" ).Value
-$installer_args = $(Get-SSMParameter -Name "${ssmprefix}/installer/args/$env:CheckmarxComponentType" -WithDecryption).Value
-$installer_zip_password = $(Get-SSMParameter -Name "${ssmprefix}/installer/zip_password" -WithDecryption).Value
+$installer_args = $(Get-SSMParameter -Name "${ssmprefix}/installer/args/$env:CheckmarxComponentType" -WithDecryption $True).Value
+$installer_zip_password = $(Get-SSMParameter -Name "${ssmprefix}/installer/zip_password" -WithDecryption $True).Value
 $installer_zip = $installer_source.Substring($installer_source.LastIndexOf("/") + 1)
 $installer_name = $($installer_zip.Replace(".zip", ""))
 
 # Get the hotfix variables
 $hotfix_source = $(Get-SSMParameter -Name "${ssmprefix}/hotfix/source" ).Value
-$hotfix_args = $(Get-SSMParameter -Name "${ssmprefix}/hotfix/args/$env:CheckmarxComponentType" -WithDecryption).Value
-$hotfix_zip_password = $(Get-SSMParameter -Name "${ssmprefix}/hotfix/zip_password" -WithDecryption).Value
+$hotfix_args = $(Get-SSMParameter -Name "${ssmprefix}/hotfix/args/$env:CheckmarxComponentType" -WithDecryption $True).Value
+$hotfix_zip_password = $(Get-SSMParameter -Name "${ssmprefix}/hotfix/zip_password" -WithDecryption $True).Value
 $hotfix_zip = $hotfix_source.Substring($hotfix_source.LastIndexOf("/") + 1)
 $hotfix_name = $($hotfix_zip.Replace(".zip", ""))
+
+Write-Output "$(get-date) installer_source = $installer_source"
+Write-Output "$(get-date) installer_args = $installer_args"
+Write-Output "$(get-date) installer_zip_password = $installer_zip_password"
+Write-Output "$(get-date) installer_zip = $installer_zip"
+Write-Output "$(get-date) installer_name = $installer_name"
+
+Write-Output "$(get-date) hotfix_source = $hotfix_source"
+Write-Output "$(get-date) hotfix_args = $hotfix_args"
+Write-Output "$(get-date) hotfix_zip_password = $hotfix_zip_password"
+Write-Output "$(get-date) hotfix_zip = $hotfix_zip"
+Write-Output "$(get-date) hotfix_name = $hotfix_name"
 
 
 ###############################################################################
