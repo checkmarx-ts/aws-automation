@@ -32,7 +32,6 @@ Write-Output "$(get-date) installer_zip = $installer_zip"
 Write-Output "$(get-date) installer_name = $installer_name"
 
 Write-Output "$(get-date) hotfix_source = $hotfix_source"
-Write-Output "$(get-date) hotfix_args = $hotfix_args"
 Write-Output "$(get-date) hotfix_zip_password = $hotfix_zip_password"
 Write-Output "$(get-date) hotfix_zip = $hotfix_zip"
 Write-Output "$(get-date) hotfix_name = $hotfix_name"
