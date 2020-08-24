@@ -269,6 +269,13 @@ if ($env:CheckmarxComponentType -eq "Manager") {
     Write-Output "$(get-date) finished configuring IIS to reverse proxy CxARM"
 }
 
+if ($env:CheckmarxComponentType -eq "Engine") {
+  # When the engine is installed by itself it can't piggy back on the opening of 80,443 by IIS install, so we need to explicitly open the port
+  Write-Output "$(get-date) Adding host firewall rule for for the Engine Server"
+  New-NetFirewallRule -DisplayName "CxScanEngine HTTP Port 80" -Direction Inbound -LocalPort 80 -Protocol TCP -Action Allow
+  New-NetFirewallRule -DisplayName "CxScanEngine HTTP Port 443" -Direction Inbound -LocalPort 443 -Protocol TCP -Action Allow
+}
+
 ###############################################################################
 # Install Tools
 ###############################################################################
