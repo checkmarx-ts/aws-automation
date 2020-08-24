@@ -202,13 +202,6 @@ if ($env:CheckmarxComponentType -eq "Manager") {
         #Write-Output "$(get-date) restarting to refresh the environment"
         #restart-computer -force
     }
-
-    ###############################################################################
-    # Generate Checkmarx License
-    ###############################################################################
-    Write-Output "$(get-date) Running automatic license generator"
-    C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
-    Write-Output "$(get-date) ... finished running automatic license generator"
 }
 
 # Download and unzip the installer
@@ -248,6 +241,14 @@ Start-Process "$hotfixexe" -ArgumentList "-cmd" -Wait -NoNewWindow
 Write-Output "$(get-date) ...finished installing"    
 
 if ($env:CheckmarxComponentType -eq "Manager") {
+
+    ###############################################################################
+    # Generate Checkmarx License
+    ###############################################################################
+    Write-Output "$(get-date) Running automatic license generator"
+    C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
+    Write-Output "$(get-date) ... finished running automatic license generator"
+
     ###############################################################################
     # Post Install Windows Configuration
     ###############################################################################
