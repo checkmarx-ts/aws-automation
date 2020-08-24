@@ -62,6 +62,22 @@ if ($env:CheckmarxComponentType -eq "Manager") {
     }
 }
 
+###############################################################################
+# AdoptOpenJDK Install
+###############################################################################
+# Java should be installed before the dotnet framework because it can piggy back
+# on the required reboot which will set the java home. Otherwise CX_JAVA_HOME needs
+# to be set on the command line arguments for the CxSAST installer - but if present
+# on the machine then it will be detected automatically. 
+if (Test-Path -Path "C:\Program Files\AdoptOpenJDK\bin\java.exe") {
+    Write-Output "$(get-date) Java is already installed - skipping installation"
+} else {
+    Write-Output "$(get-date) Installing Java"
+    C:\programdata\checkmarx\aws-automation\scripts\install\common\install-java.ps1
+    Write-Output "$(get-date) ... finished Installing Java"
+    Start-Process "C:\Program Files\AdoptOpenJDK\bin\java.exe" -ArgumentList "-version" -RedirectStandardError ".\java-version.log" -Wait -NoNewWindow
+    cat ".\java-version.log"
+}
 
 ###############################################################################
 #  .NET Framework 4.7.1 Install
@@ -189,23 +205,6 @@ if ($env:CheckmarxComponentType -eq "Manager") {
         Write-Output "$(get-date) ...finished installing SQL Server Express"
     } else {
         Write-Output "$(get-date) SQL Server Express is already installed - skipping installation"
-    }
-
-    ###############################################################################
-    # AdoptOpenJDK Install
-    ###############################################################################
-    if (Test-Path -Path "C:\Program Files\AdoptOpenJDK\bin\java.exe") {
-        Write-Output "$(get-date) Java is already installed - skipping installation"
-    } else {
-        Write-Output "$(get-date) Installing Java"
-        C:\programdata\checkmarx\aws-automation\scripts\install\common\install-java.ps1
-        Write-Output "$(get-date) ... finished Installing Java"
-        Start-Process "C:\Program Files\AdoptOpenJDK\bin\java.exe" -ArgumentList "-version" -RedirectStandardError ".\java-version.log" -Wait -NoNewWindow
-        cat ".\java-version.log"
-        
-        # Java is the last of the dependencies, so at this point we need to reboot again
-        #Write-Output "$(get-date) restarting to refresh the environment"
-        #restart-computer -force
     }
 }
 
