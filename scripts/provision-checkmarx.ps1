@@ -65,9 +65,8 @@ if ($env:CheckmarxComponentType -eq "Manager") {
 # AdoptOpenJDK Install
 ###############################################################################
 # Java should be installed before the dotnet framework because it can piggy back
-# on the required reboot which will set the java home. Otherwise CX_JAVA_HOME needs
-# to be set on the command line arguments for the CxSAST installer - but if present
-# on the machine then it will be detected automatically. 
+# on the required reboot which will put java on the path and refresh env vars
+# which may come in useful later.
 if (Test-Path -Path "C:\Program Files\AdoptOpenJDK\bin\java.exe") {
     Write-Output "$(get-date) Java is already installed - skipping installation"
 } else {
