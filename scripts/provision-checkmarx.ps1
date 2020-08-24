@@ -19,7 +19,6 @@ $installer_name = $($installer_zip.Replace(".zip", ""))
 
 # Get the hotfix variables
 $hotfix_source = $(Get-SSMParameter -Name "${ssmprefix}/hotfix/source" ).Value
-$hotfix_args = $(Get-SSMParameter -Name "${ssmprefix}/hotfix/args/$env:CheckmarxComponentType" -WithDecryption $True).Value
 $hotfix_zip_password = $(Get-SSMParameter -Name "${ssmprefix}/hotfix/zip_password" -WithDecryption $True).Value
 $hotfix_zip = $hotfix_source.Substring($hotfix_source.LastIndexOf("/") + 1)
 $hotfix_name = $($hotfix_zip.Replace(".zip", ""))
