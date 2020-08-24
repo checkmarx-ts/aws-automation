@@ -103,15 +103,15 @@ if ($env:CheckmarxComponentType -eq "Manager") {
     # Git Install
     ###############################################################################
 
-        if (Test-Path -Path "C:\Program Files\Git\bin\git.exe") {
-            Write-Output "$(get-date) Git is already installed - skipping installation"
-        } else {
-            Write-Output "$(get-date) Installing Git"
-            C:\programdata\checkmarx\aws-automation\scripts\install\common\install-git.ps1
-            Write-Output "$(get-date) ... finished Installing Git"
-            Start-Process "C:\Program Files\Git\bin\git.exe" -ArgumentList "--version" -RedirectStandardOutput ".\git-version.log" -Wait -NoNewWindow
-            cat ".\git-version.log"
-        }
+    if (Test-Path -Path "C:\Program Files\Git\bin\git.exe") {
+        Write-Output "$(get-date) Git is already installed - skipping installation"
+    } else {
+        Write-Output "$(get-date) Installing Git"
+        C:\programdata\checkmarx\aws-automation\scripts\install\common\install-git.ps1
+        Write-Output "$(get-date) ... finished Installing Git"
+        Start-Process "C:\Program Files\Git\bin\git.exe" -ArgumentList "--version" -RedirectStandardOutput ".\git-version.log" -Wait -NoNewWindow
+        cat ".\git-version.log"
+    }
     
     ###############################################################################
     # IIS Install
