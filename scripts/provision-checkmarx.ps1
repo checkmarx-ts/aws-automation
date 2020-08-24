@@ -50,6 +50,7 @@ if ($env:CheckmarxComponentType -eq "Manager") {
                 C:\programdata\checkmarx\aws-automation\scripts\configure\domain-join.ps1 -domainJoinUserName "${ssmprefix}/domain/admin/username" -domainJoinUserPassword "${ssmprefix}/domain/admin/password" -primaryDns "${ssmprefix}/domain/dns/primary" -secondaryDns "${ssmprefix}/domain/dns/secondary" -domainName "${ssmprefix}/domain/name"
                 # In case the implicit restart does not occur or is overridden
                 Restart-Computer
+            }    
         } catch {
             Write-Output "$(get-date) An error occured while joining to domain. Is the ${ssmprefix}/domain/name ssm parameter set?"
             $_
