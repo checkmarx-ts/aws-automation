@@ -228,7 +228,7 @@ cat .\hotfix7z.out
 Write-Output "$(get-date) ...finished unzipping"
 
 $cxsetup = $(Get-ChildItem "C:\programdata\checkmarx\automation\installers\${installer_name}" -Recurse -Filter "CxSetup.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
-Write-Output "$(get-date) Installing CxSAST with $cxsetup_install"
+Write-Output "$(get-date) Installing CxSAST with $installer_args"
 Start-Process "$cxsetup" -ArgumentList "${installer_args}" -Wait -NoNewWindow -RedirectStandardError ".\cxinstaller.err" -RedirectStandardOutput ".\cxinstaller.out"
 Write-Output "$(get-date) ...finished installing"
 Write-Output "$(get-date) installer StandardError:"
