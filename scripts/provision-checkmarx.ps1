@@ -9,7 +9,21 @@ Write-Output "$(get-date) env:CheckmarxComponentType = $env:CheckmarxComponentTy
 
 $ssmprefix = "/checkmarx/${env:CheckmarxEnvironment}"
 Write-Output "$(get-date) ssmprefix = $ssmprefix"
-#Get-SSMParameter -Name  -WithDecryption $True
+
+# Get the installer variables
+$installer_source = $(Get-SSMParameter -Name "${ssmprefix}/installer/source" ).Value
+$installer_args = $(Get-SSMParameter -Name "${ssmprefix}/installer/args/$env:CheckmarxComponentType" -WithDecryption).Value
+$installer_zip_password = $(Get-SSMParameter -Name "${ssmprefix}/installer/zip_password" -WithDecryption).Value
+$installer_zip = $installer_source.Substring($installer_source.LastIndexOf("/") + 1)
+$installer_name = $($installer_zip.Replace(".zip", ""))
+
+# Get the hotfix variables
+$hotfix_source = $(Get-SSMParameter -Name "${ssmprefix}/hotfix/source" ).Value
+$hotfix_args = $(Get-SSMParameter -Name "${ssmprefix}/hotfix/args/$env:CheckmarxComponentType" -WithDecryption).Value
+$hotfix_zip_password = $(Get-SSMParameter -Name "${ssmprefix}/hotfix/zip_password" -WithDecryption).Value
+$hotfix_zip = $hotfix_source.Substring($hotfix_source.LastIndexOf("/") + 1)
+$hotfix_name = $($hotfix_zip.Replace(".zip", ""))
+
 
 ###############################################################################
 #  Domain Join
@@ -43,8 +57,9 @@ if ($dotnet_release -ge 461308 ) {
     C:\programdata\checkmarx\aws-automation\scripts\install\common\install-dotnetframework.ps1
     Write-Output "$(get-date) ... finished dotnet framework install"
     Write-Output "$(get-date) Rebooting now"
-    sleep 5
+
     Restart-Computer -Force # force in case anyone is logged in
+    sleep 30
 }
 
 ###############################################################################
@@ -83,22 +98,23 @@ if (![String]::IsNullOrEmpty($cpp2015_version)) {
     Write-Output "$(get-date) ... finished Installing Microsoft Visual C++ 2015 Redistributable Update 3 RC"
 }
 
-###############################################################################
-# Git Install
-###############################################################################
 if ($env:CheckmarxComponentType -eq "Manager") {
-    if (Test-Path -Path "C:\Program Files\Git\bin\git.exe") {
-        Write-Output "$(get-date) Git is already installed - skipping installation"
-    } else {
-        Write-Output "$(get-date) Installing Git"
-        C:\programdata\checkmarx\aws-automation\scripts\install\common\install-git.ps1
-        Write-Output "$(get-date) ... finished Installing Git"
-        Start-Process "C:\Program Files\Git\bin\git.exe" -ArgumentList "--version" -RedirectStandardOutput ".\git-version.log" -Wait -NoNewWindow
-        cat ".\git-version.log"
-    }
-}
+    ###############################################################################
+    # Git Install
+    ###############################################################################
 
-if ($env:CheckmarxComponentType -eq "Manager") {
+        if (Test-Path -Path "C:\Program Files\Git\bin\git.exe") {
+            Write-Output "$(get-date) Git is already installed - skipping installation"
+        } else {
+            Write-Output "$(get-date) Installing Git"
+            C:\programdata\checkmarx\aws-automation\scripts\install\common\install-git.ps1
+            Write-Output "$(get-date) ... finished Installing Git"
+            Start-Process "C:\Program Files\Git\bin\git.exe" -ArgumentList "--version" -RedirectStandardOutput ".\git-version.log" -Wait -NoNewWindow
+            cat ".\git-version.log"
+        }
+    }
+
+
     ###############################################################################
     # IIS Install
     ###############################################################################
@@ -181,3 +197,65 @@ if ($env:CheckmarxComponentType -eq "Manager") {
     C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
     Write-Output "$(get-date) ... finished running automatic license generator"
 }
+
+# Download and unzip the installer
+Write-Output "$(get-date) Downloading $installer_source..."
+(New-Object System.Net.WebClient).DownloadFile("$installer_source", "c:\programdata\checkmarx\automation\installers\${installer_zip}")
+Write-Output "$(get-date) ...finished downloading $installer_source to c:\programdata\checkmarx\automation\installers\${installer_zip}"
+
+Write-Output "$(get-date) Unzipping c:\programdata\checkmarx\automation\installers\${installer_zip}"
+Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"c:\programdata\checkmarx\automation\installers\${installer_zip}`" -aoa -o`"C:\programdata\checkmarx\automation\installers\${installer_name}`" -p`"${installer_zip_password}`"" -Wait -NoNewWindow -RedirectStandardError .\installer7z.err -RedirectStandardOutput .\installer7z.out
+cat .\installer7z.err
+cat .\installer7z.out
+Write-Output "$(get-date) ...finished unzipping"
+
+# Download and unzip the hotfix
+Write-Output "$(get-date) Downloading $hotfix_source..."
+(New-Object System.Net.WebClient).DownloadFile("$hotfix_source", "c:\programdata\checkmarx\automation\installers\${hotfix_zip}")
+Write-Output "$(get-date) ...finished downloading $hotfix_source to c:\programdata\checkmarx\automation\installers\${hotfix_zip}"
+
+Write-Output "$(get-date) Unzipping c:\programdata\checkmarx\automation\installers\${hotfix_zip}"
+Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"c:\programdata\checkmarx\automation\installers\${hotfix_zip}`" -aoa -o`"C:\programdata\checkmarx\automation\installers\${hotfix_name}`" -p`"${hotfix_zip_password}`"" -Wait -NoNewWindow -RedirectStandardError .\hotfix7z.err -RedirectStandardOutput .\hotfix7z.out
+cat .\hotfix7z.err
+cat .\hotfix7z.out
+Write-Output "$(get-date) ...finished unzipping"
+
+$cxsetup = $(Get-ChildItem "C:\programdata\checkmarx\automation\installers\${installer_name}" -Recurse -Filter "CxSetup.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
+
+if ($installer_name.Contains("9.0.0")) {
+    $cxsetup_install = "C:\programdata\checkmarx\aws-automation\scripts\install\cxsast\install-cxsast90.ps1 ${installer_args}"
+    Write-Output "$(get-date) Installing CxSAST with $cxsetup_install"
+    iex $cxsetup_install
+
+} elseif ($installer_name.Contains("8.9.0")) {
+    $cxsetup_install = "C:\programdata\checkmarx\aws-automation\scripts\install\cxsast\install-cxsast89.ps1 ${installer_args}"
+    Write-Output "$(get-date) Installing CxSAST with $cxsetup_install"
+    iex $cxsetup_install
+}
+
+if ($env:CheckmarxComponentType -eq "Manager") {
+    ###############################################################################
+    # Post Install Windows Configuration
+    ###############################################################################
+    Write-Output "$(get-date) Hardening IIS"
+    C:\programdata\checkmarx\aws-automation\scripts\configure\configure-iis-hardening.ps1
+    Write-Output "$(get-date) ...finished hardening IIS"
+
+    Write-Output "$(get-date) Configuring windows defender"
+    C:\programdata\checkmarx\aws-automation\scripts\configure\configure-windows-defender.ps1
+    Write-Output "$(get-date) ...finished configuring windows defender"
+
+    ###############################################################################
+    # Reverse proxy CxARM
+    ###############################################################################
+    Write-Output "$(get-date) Configuring IIS to reverse proxy CxARM"
+    C:\programdata\checkmarx\aws-automation\scripts\configure\configure-cxarm-iis-reverseproxy.ps1
+    Write-Output "$(get-date) finished configuring IIS to reverse proxy CxARM"
+}
+
+###############################################################################
+# Install Tools
+###############################################################################
+Write-Output "$(get-date) Installing tools"
+C:\programdata\checkmarx\aws-automation\scripts\lab\install-tools.ps1 
+Write-Output "$(get-date) ...finished installing tools."
