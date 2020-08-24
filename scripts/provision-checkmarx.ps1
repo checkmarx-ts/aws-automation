@@ -44,12 +44,16 @@ if ($env:CheckmarxComponentType -eq "Manager") {
         Write-Output "$(get-date) The computer is joined to a domain"
     } else {
         Write-Output "$(get-date) The computer is not joined to a domain"
-        if (!([String]::IsNullOrEmpty($(Get-SSMParameter -Name "${ssmprefix}/domain/name" ).Value))) {  # If the domain info is set in SSM parameters then join the domain
-            Write-Output "$(get-date) Joining the computer to the domain. A reboot will occur."
-            C:\programdata\checkmarx\aws-automation\scripts\configure\domain-join.ps1 -domainJoinUserName "${ssmprefix}/domain/admin/username" -domainJoinUserPassword "${ssmprefix}/domain/admin/password" -primaryDns "${ssmprefix}/domain/dns/primary" -secondaryDns "${ssmprefix}/domain/dns/secondary" -domainName "${ssmprefix}/domain/name"
-            # In case the implicit restart does not occur or is overridden
-            Restart-Computer
-        }
+        try {
+            if (!([String]::IsNullOrEmpty($(Get-SSMParameter -Name "${ssmprefix}/domain/name" ).Value))) {  # If the domain info is set in SSM parameters then join the domain
+                Write-Output "$(get-date) Joining the computer to the domain. A reboot will occur."
+                C:\programdata\checkmarx\aws-automation\scripts\configure\domain-join.ps1 -domainJoinUserName "${ssmprefix}/domain/admin/username" -domainJoinUserPassword "${ssmprefix}/domain/admin/password" -primaryDns "${ssmprefix}/domain/dns/primary" -secondaryDns "${ssmprefix}/domain/dns/secondary" -domainName "${ssmprefix}/domain/name"
+                # In case the implicit restart does not occur or is overridden
+                Restart-Computer
+        } catch {
+            Write-Output "$(get-date) An error occured while joining to domain. Is the ${ssmprefix}/domain/name ssm parameter set?"
+            $_
+        }    
     }
 }
 
@@ -230,17 +234,18 @@ cat .\hotfix7z.out
 Write-Output "$(get-date) ...finished unzipping"
 
 $cxsetup = $(Get-ChildItem "C:\programdata\checkmarx\automation\installers\${installer_name}" -Recurse -Filter "CxSetup.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
+Write-Output "$(get-date) Installing CxSAST with $cxsetup_install"
+Start-Process "$cxsetup" -ArgumentList "${installer_args}" -Wait -NoNewWindow -RedirectStandardError ".\cxinstaller.err" -RedirectStandardOutput ".\cxinstaller.out"
+Write-Output "$(get-date) ...finished installing"
+Write-Output "$(get-date) installer StandardError:"
+cat .\cxinstaller.err
+Write-Output "$(get-date) installer StandardOutput:"
+cat .\cxinstaller.out
 
-if ($installer_name.Contains("9.0.0")) {
-    $cxsetup_install = "C:\programdata\checkmarx\aws-automation\scripts\install\cxsast\install-cxsast90.ps1 ${installer_args}"
-    Write-Output "$(get-date) Installing CxSAST with $cxsetup_install"
-    iex $cxsetup_install
-
-} elseif ($installer_name.Contains("8.9.0")) {
-    $cxsetup_install = "C:\programdata\checkmarx\aws-automation\scripts\install\cxsast\install-cxsast89.ps1 ${installer_args}"
-    Write-Output "$(get-date) Installing CxSAST with $cxsetup_install"
-    iex $cxsetup_install
-}
+Write-Output "$(get-date) Installing hotfix ${hotfix_name}"
+$hotfixexe = $(Get-ChildItem "C:\programdata\checkmarx\automation\installers\${hotfix_name}" -Recurse -Filter "*HF*.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
+Start-Process "$hotfixexe" -ArgumentList "-cmd" -Wait -NoNewWindow
+Write-Output "$(get-date) ...finished installing"    
 
 if ($env:CheckmarxComponentType -eq "Manager") {
     ###############################################################################
