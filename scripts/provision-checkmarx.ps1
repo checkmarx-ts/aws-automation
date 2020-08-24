@@ -276,6 +276,24 @@ if ($env:CheckmarxComponentType -eq "Engine") {
   New-NetFirewallRule -DisplayName "CxScanEngine HTTP Port 443" -Direction Inbound -LocalPort 443 -Protocol TCP -Action Allow
 }
 
+if (Test-Path -Path "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties") {
+    # The db.properties file can have a bug where extra spaces are not trimmed off of the DB_HOST line
+    # which can cause connection string concatenation to fail due to a space between the host and :port
+    # For example:
+    #     TARGET_CONNECTION_STRING=jdbc:sqlserver://sqlserverdev.ckbq3owrgyjd.us-east-1.rds.amazonaws.com :1433;DatabaseName=CxARM[class java.lang.String]
+    #
+    # As a work around we trim the end off of each line in db.properties
+    Write-Output "$(get-date) Fixing db.properties"
+    (Get-Content "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties") | ForEach-Object {$_.TrimEnd()} | Set-Content "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties"
+  
+    Write-Output "$(get-date) Running the initial ETL sync for CxArm"
+    # Todo: figure this out for Windows Auth
+    Start-Process "C:\Program Files\Checkmarx\Checkmarx Risk Management\ETL\etl_executor.exe" -ArgumentList "-q -console -VSILENT_FLOW=true -Dinstall4j.logToStderr=true -Dinstall4j.debug=true -Dinstall4j.detailStdout=true" -WorkingDirectory "C:\Program Files\Checkmarx\Checkmarx Risk Management\ETL" -NoNewWindow -Wait #sql server auth vars -VSOURCE_PASS_SILENT=${db_password} -VTARGET_PASS_SILENT=${db_password}
+    Write-Output "$(get-date) Finished initial ETL sync"
+  }
+
+
+
 ###############################################################################
 # Install Tools
 ###############################################################################
