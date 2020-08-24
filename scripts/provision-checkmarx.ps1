@@ -274,3 +274,5 @@ if ($env:CheckmarxComponentType -eq "Manager") {
 Write-Output "$(get-date) Installing tools"
 C:\programdata\checkmarx\aws-automation\scripts\lab\install-tools.ps1 
 Write-Output "$(get-date) ...finished installing tools."
+
+Disable-ScheduledTask -TaskName "provision-checkmarx"
