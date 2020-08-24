@@ -112,9 +112,7 @@ if ($env:CheckmarxComponentType -eq "Manager") {
             Start-Process "C:\Program Files\Git\bin\git.exe" -ArgumentList "--version" -RedirectStandardOutput ".\git-version.log" -Wait -NoNewWindow
             cat ".\git-version.log"
         }
-    }
-
-
+    
     ###############################################################################
     # IIS Install
     ###############################################################################
