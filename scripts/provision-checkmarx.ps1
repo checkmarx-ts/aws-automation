@@ -25,16 +25,19 @@ class Utility {
     [String] static Find([String] $fpath, [String] $filename) {
         return $(Get-ChildItem "$fpath" -Recurse -Filter $filename | Sort -Descending | Select -First 1 -ExpandProperty FullName)
     }
-    [String] static Debug([String] $stage) {
-        Write-Host "Debugging $stage"
-        Write-Host ""; Write-Host ""
-        Write-Host "Searching for any running msiexec processes:"
-        get-process msiexe*
-        Write-Host ""; Write-Host ""
-        Write-Host "Searching for any running cxsetup processes:"
-        get-process cxsetup*
-        Write-Host ""; Write-Host ""
-        return ""    
+    [Void] static Debug([String] $stage) {
+        $msiexecs = Get-Process msiexe*
+        $cxprocs = Get-Process cx*
+        if ($msiexecs.count -gt 0 -or $cxprocs.count -gt 0) {
+            Write-Host "#########################################"
+            Write-Host "# Debugging ${stage} - found running processes"
+            Write-Host "#########################################"
+            Write-Host "$(Get-Date) Found these running msiexec.exe process:"
+            $msiexecs | Format-Table
+            Write-Host "$(Get-Date) Found these running cx* processes:"
+            $cxprocs | Format-Table
+            Write-Host "#########################################"
+        }
     }
     [String] static Fetch([String] $source) {
         $filename = [Utility]::Basename($source)
@@ -61,6 +64,7 @@ $config = Import-PowerShellDataFile -Path C:\checkmarx-config.psd1
 Write-Host "$(Get-Date) Creating Checkmarx folders"
 $cx_home = if ($env:CheckmarxHome -eq $null) { "C:\programdata\checkmarx" } Else { $env:CheckmarxHome }
 md -Force "$cx_home"
+Write-Host "";
 
 ###############################################################################
 #  Resolve configuration values
@@ -85,12 +89,12 @@ cat C:\checkmarx-config.psd1
 Get-HotFix | Format-Table
 
 @"
-
 ###############################################################################
 # Checking systeminfo.exe
 ################################################################################
 "@ | Write-Output
-systeminfo.exe
+systeminfo.exe > c:\systeminfo.log
+cat c:\systeminfo.log
 
 @"
 
@@ -504,15 +508,18 @@ if ($config.Checkmarx.ComponentType -eq "Manager" -and ($config.Checkmarx.Instal
 ###############################################################################
 # Set ASP.Net Session Timeout for the Portal
 ###############################################################################
-Write-Host "$(Get-Date) Configuring Timeout for CxSAST Web Portal to: $($config.Checkmarx.PortalSessionTimeout)"
-# Session timeout if you wish to change it. Default is 1440 minutes (1 day) 
-# Set-WebConfigurationProperty cmdlet is smart enough to convert it into minutes, which is what .net uses
-# See https://checkmarx.atlassian.net/wiki/spaces/PTS/pages/85229666/Configuring+session+timeout+in+Checkmarx
-# See https://blogs.iis.net/jeonghwan/iis-powershell-user-guide-comparing-representative-iis-ui-tasks for examples
-# $sessionTimeoutInMinutes = "01:20:00" # 1 hour 20 minutes - must use timespan format here (HH:MM:SS) and do NOT set any seconds as seconds are invalid options.
-# Prefer this over direct XML file access to support variety of session state providers
-Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST/Default Web Site/CxWebClient' -filter "system.web/sessionState" -name "timeout" -value "$($config.Checkmarx.PortalSessionTimeout)"
-Write-Host "$(Get-Date) ... finished configuring timeout"
+if ($config.Checkmarx.Installer.Args.Contains("WEB=1")) {
+    Write-Host "$(Get-Date) Configuring Timeout for CxSAST Web Portal to: $($config.Checkmarx.PortalSessionTimeout)"
+    # Session timeout if you wish to change it. Default is 1440 minutes (1 day) 
+    # Set-WebConfigurationProperty cmdlet is smart enough to convert it into minutes, which is what .net uses
+    # See https://checkmarx.atlassian.net/wiki/spaces/PTS/pages/85229666/Configuring+session+timeout+in+Checkmarx
+    # See https://blogs.iis.net/jeonghwan/iis-powershell-user-guide-comparing-representative-iis-ui-tasks for examples
+    # $sessionTimeoutInMinutes = "01:20:00" # 1 hour 20 minutes - must use timespan format here (HH:MM:SS) and do NOT set any seconds as seconds are invalid options.
+    # Prefer this over direct XML file access to support variety of session state providers
+    Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST/Default Web Site/CxWebClient' -filter "system.web/sessionState" -name "timeout" -value "$($config.Checkmarx.PortalSessionTimeout)"
+    Write-Host "$(Get-Date) ... finished configuring timeout"
+}
+
 
 ###############################################################################
 # Open Firewall for Engine
