@@ -26,6 +26,7 @@ class Utility {
         return $(Get-ChildItem "$fpath" -Recurse -Filter $filename | Sort -Descending | Select -First 1 -ExpandProperty FullName)
     }
     [Void] static Debug([String] $stage) {
+        sleep 2
         $msiexecs = Get-Process msiexe*
         $cxprocs = Get-Process cx*
         if ($msiexecs.count -gt 0 -or $cxprocs.count -gt 0) {
@@ -149,6 +150,7 @@ $(whoami)
 $($env:TEMP)
 "@ | Write-Host
 }
+"Debug info completed" | Set-Content C:\cx-init-debug.lock
 
 [Utility]::Debug("start")
 
