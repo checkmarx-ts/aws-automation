@@ -197,13 +197,19 @@ if ([String]::IsNullOrEmpty($pfxfile) -or [String]::IsNullOrEmpty($domainname)) 
 log "Importing the certificate into LocalMachine\My"
 $cert = Import-PfxCertificate -FilePath $pfxfile -CertStoreLocation Cert:\LocalMachine\My -Password $Secure_String_Pwd
 
+$isManager = !([String]::IsNullOrEmpty((Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\CheckmarxWebPortal' -Name "Path" -ErrorAction SilentlyContinue)))
+$isEngine =  !([String]::IsNullOrEmpty((Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Engine Server' -Name "Path" -ErrorAction SilentlyContinue)))
 
-ConfigureEngineTls $domainname $cert.Thumbprint
-ConfigureIIS $domainname $cert.Thumbprint
-ConfigureWSResolver $domainname
-UpdateHostsFile $domainname
-ConfigureManagerServicesTransportSecurity
-ConfigureAccessControl 
+if ($isEngine) {
+  ConfigureEngineTls $domainname $cert.Thumbprint
+}
+if ($isManager) {  
+  ConfigureIIS $domainname $cert.Thumbprint
+  ConfigureWSResolver $domainname
+  UpdateHostsFile $domainname
+  ConfigureManagerServicesTransportSecurity
+  ConfigureAccessControl 
+}
 
 try {
     restart-service cx*
