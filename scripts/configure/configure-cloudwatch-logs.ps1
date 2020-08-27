@@ -96,7 +96,6 @@ If (-Not (Test-Path "C:\Program Files\Amazon\AmazonCloudWatchAgent\amazon-cloudw
     # Install the agent
     Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"C:\programdata\checkmarx\automation\dependencies\amazon-cloudwatch-agent.msi`" /QN /L*V `"C:\programdata\checkmarx\automation\dependencies\amazon-cloudwatch-agent.log`"" -Wait -NoNewWindow
     log "Cloudwatch agent installed. Log file:"
-    cat "C:\programdata\checkmarx\automation\dependencies\amazon-cloudwatch-agent.log"
 } else {
     log "The cloudwatch logs agent is already installed"
 }
