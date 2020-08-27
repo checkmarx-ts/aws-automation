@@ -186,11 +186,10 @@ if ([Utility]::Exists($7zip_path)) {
     Write-Host "$(Get-Date) 7-Zip is already installed at ${7zip_path} - skipping installation"
 } else {
     [Utility]::Debug("pre-7zip")
-    Write-Host "$(Get-Date) Installing 7zip"
     $sevenzipinstaller = [Utility]::Fetch($config.Dependencies.Sevenzip)
+    Write-Host "$(Get-Date) Installing 7zip from $sevenzipinstaller"
     Start-Process -FilePath "$sevenzipinstaller" -ArgumentList "/S" -Wait -NoNewWindow
     $newpath = [Utility]::Addpath($(Get-ChildItem 'HKLM:\SOFTWARE\7*Zip\' | Get-ItemPropertyValue -Name Path))
-    Write-Host "$(Get-Date) ... finished Installing 7zip"
     [Utility]::Debug("post-7zip")
 }
 
@@ -210,7 +209,6 @@ if ([Utility]::Exists("c:\programdata\checkmarx\artifacts\${installer_zip}")) {
     Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"${cxinstaller}`" -aoa -o`"C:\programdata\checkmarx\artifacts\${installer_name}`" -p`"$($config.Checkmarx.Installer.ZipKey)`"" -Wait -NoNewWindow -RedirectStandardError .\installer7z.err -RedirectStandardOutput .\installer7z.out
     cat .\installer7z.err
     cat .\installer7z.out
-    Write-Host "$(Get-Date) ...finished unzipping ${installer_zip}"
 } 
 
 # Download and unzip the hotfix
@@ -224,7 +222,6 @@ if ([Utility]::Exists("c:\programdata\checkmarx\artifacts\${hotfix_zip}")) {
     Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"$hfinstaller`" -aoa -o`"C:\programdata\checkmarx\artifacts\${hotfix_name}`" -p`"$($config.Checkmarx.Hotfix.ZipKey)`"" -Wait -NoNewWindow -RedirectStandardError .\hotfix7z.err -RedirectStandardOutput .\hotfix7z.out
     cat .\hotfix7z.err
     cat .\hotfix7z.out
-    Write-Host "$(Get-Date) ...finished unzipping ${hotfix_zip}"
 } 
 
 
@@ -236,10 +233,9 @@ if (![String]::IsNullOrEmpty($cpp2010_version)) {
     Write-Host "$(Get-Date) C++ 2010 Redistributable is already installed - skipping installation"    
 } else {
     [Utility]::Debug("pre-cpp2010")
-    Write-Host "$(Get-Date) Installing C++ 2010 Redistributable"
     $cpp2010_installer = [Utility]::Find("vcredist_x64.exe")
+    Write-Host "$(Get-Date) Installing C++ 2010 Redistributable from $cpp2010_installer"
     Start-Process -FilePath "$cpp2010_installer" -ArgumentList "/passive /norestart" -Wait -NoNewWindow
-    Write-Host "$(Get-Date) ... finished Installing C++ 2010 Redistributable"
     [Utility]::Debug("post-cpp2010")
 }
 
@@ -255,9 +251,8 @@ if (![String]::IsNullOrEmpty($cpp2015_version)) {
     # This only applies for CxSAST 9.0+ so make sure it exists.
     if ([Utility]::Exists($cpp2015_installer)) {
         [Utility]::Debug("pre-cpp2015")
-        Write-Host "$(Get-Date) Installing Microsoft Visual C++ 2015 Redistributable Update 3 RC"
+        Write-Host "$(Get-Date) Installing Microsoft Visual C++ 2015 Redistributable Update 3 RC from $cpp2015_installer"
         Start-Process -FilePath "$cpp2015_installer" -ArgumentList "/passive /norestart" -Wait -NoNewWindow
-        Write-Host "$(Get-Date) ... finished Installing Microsoft Visual C++ 2015 Redistributable Update 3 RC"
         [Utility]::Debug("post-cpp2015")
     } 
 }
@@ -272,11 +267,10 @@ if (![String]::IsNullOrEmpty($cpp2015_version)) {
 if ([Utility]::Exists("C:\Program Files\AdoptOpenJDK\bin\java.exe")) {
     Write-Host "$(Get-Date) Java is already installed - skipping installation"
 } else {
-    Write-Host "$(Get-Date) Installing Java"
     $javainstaller = [Utility]::Fetch($config.Dependencies.AdoptOpenJdk)
     [Utility]::Debug("pre-java")
+    Write-Host "$(Get-Date) Installing Java from $javainstaller"
     Start-Process -FilePath "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$javainstaller`" ADDLOCAL=FeatureMain,FeatureEnvironment,FeatureJarFileRunWith,FeatureJavaHome INSTALLDIR=`"c:\Program Files\AdoptOpenJDK\`" /quiet /L*V `"$javainstaller.log`"" -Wait -NoNewWindow
-    Write-Host "$(Get-Date) ... finished Installing Java"
     [Utility]::Debug("post-java")
     Start-Process "C:\Program Files\AdoptOpenJDK\bin\java.exe" -ArgumentList "-version" -RedirectStandardError ".\java-version.log" -Wait -NoNewWindow
     cat ".\java-version.log"
@@ -292,12 +286,12 @@ Write-Host "$(Get-Date) Found .net version ${dotnet_version}; release string: $d
 if ($dotnet_release -gt 461308 ) {
     Write-Host "$(Get-Date) Dotnet 4.7.1 (release string: 461308 ) or higher already installed - skipping installation"
 } else {
-    Write-Host "$(Get-Date) Installing dotnet framework - a reboot will be required"
     $dotnetinstaller = [Utility]::Fetch($config.Dependencies.DotnetFramework)
     [Utility]::Debug("pre-dotnetframework")
+    Write-Host "$(Get-Date) Installing dotnet framework from $dotnetinstaller - a reboot will be required"
     Start-Process -FilePath "$dotnetinstaller" -ArgumentList "/passive /norestart" -Wait -NoNewWindow
     [Utility]::Debug("post-dotnetframework")
-    Write-Host "$(Get-Date) ... finished dotnet framework install. Rebooting now"   
+    Write-Host "$(Get-Date) Finished dotnet framework install. Rebooting."   
     Restart-Computer -Force; 
     sleep 30 # force in case anyone is logged in
 }
@@ -310,12 +304,11 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
     if (Test-Path -Path "C:\Program Files\Git\bin\git.exe") {
         Write-Host "$(Get-Date) Git is already installed - skipping installation"
     } else {
-        Write-Host "$(Get-Date) Installing Git"
         $gitinstaller = [Utility]::Fetch($config.Dependencies.Git)
         [Utility]::Debug("pre-git")
+        Write-Host "$(Get-Date) Installing Git from $gitinstaller"
         Start-Process -FilePath "$gitinstaller" -ArgumentList "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS" -Wait -NoNewWindow
         [Utility]::Debug("post-git")
-        Write-Host "$(Get-Date) ... finished Installing Git"
         Start-Process "C:\Program Files\Git\bin\git.exe" -ArgumentList "--version" -RedirectStandardOutput ".\git-version.log" -Wait -NoNewWindow
         cat ".\git-version.log"
     }
@@ -353,12 +346,11 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
     if (Test-Path -Path "C:\Windows\System32\inetsrv\rewrite.dll") {
         Write-Host "$(Get-Date) IIS Rewrite Module is already installed - skipping installation"
     } else {
-        Write-Host "$(Get-Date) Installing IIS rewrite Module"
         $rewriteinstaller = [Utility]::Fetch($config.Dependencies.IisRewriteModule)
         [Utility]::Debug("pre-iis-urlrewrite")  
+        Write-Host "$(Get-Date) Installing IIS rewrite Module from $rewriteinstaller"
         Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$rewriteinstaller`" /L*V `".\rewrite_install.log`" /QN" -Wait -NoNewWindow
         [Utility]::Debug("post-iis-urlrewrite")  
-        Write-Host "$(Get-Date) ... finished Installing IIS Rewrite Module"
     }
 }
 
@@ -369,10 +361,10 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
 if ($config.Checkmarx.ComponentType -eq "Manager") {
     if (($(C:\Windows\System32\inetsrv\appcmd.exe list modules) | Where  { $_ -match "ApplicationRequestRouting" } | ForEach-Object { echo $_ }).length -gt 1) {
         Write-Host "$(Get-Date) IIS Application Request Routing Module is already installed - skipping installation"
-    } else {
-        Write-Host "$(Get-Date) Installing IIS Application Request Routing Module"
+    } else {        
         $requestroutinginstaller = [Utility]::Fetch($config.Dependencies.IisApplicationRequestRoutingModule)
         [Utility]::Debug("pre-iis-apprequestrouting")  
+        Write-Host "$(Get-Date) Installing IIS Application Request Routing Module from $requestroutinginstaller"
         Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$requestroutinginstaller`" /L*V `".\arr_install.log`" /QN" -Wait -NoNewWindow        
         [Utility]::Debug("post-iis-apprequestrouting")  
         Write-Host "$(Get-Date) ... finished Installing IIS Application Request Routing Module"
@@ -390,11 +382,10 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
         # Only required for 9.0+ so make sure it exists
         $dotnetcore_installer = [Utility]::Find("dotnet-hosting-2.1.16-win.exe")
         if ([Utility]::Exists($dotnetcore_installer)) {
-            Write-Host "$(Get-Date) Installing Microsoft .NET Core 2.1.16 Windows Server Hosting"
+            Write-Host "$(Get-Date) Installing Microsoft .NET Core 2.1.16 Windows Server Hosting from $dotnetcore_installer"
             [Utility]::Debug("pre-dotnetcore")  
             Start-Process -FilePath "$dotnetcore_installer" -ArgumentList "/quiet /install /norestart" -Wait -NoNewWindow
             [Utility]::Debug("post-dotnetcore")  
-            Write-Host "$(Get-Date) ... finished Installing Microsoft .NET Core 2.1.16 Windows Server Hosting"
         }
     }    
 }
@@ -423,40 +414,46 @@ if (($config.Checkmarx.ComponentType -eq "Manager") -and ($config.MsSql.UseLocal
 ###############################################################################
 # Generate Checkmarx License
 ###############################################################################
-if ($config.Checkmarx.License.Url -ne $null) {
-    if ($config.Checkmarx.License.Url.EndsWith(".cxl")) {
-        Write-Host "$(Get-Date) License file provided and will be downloaded."
-        [Utility]::Fetch($config.Checkmarx.License.Url)
-    } elseif ($config.Checkmarx.license.Url -eq "ALG") {
-        Write-Host "$(Get-Date) Running automatic license generator"
-        C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
-        Write-Host "$(Get-Date) ... finished running automatic license generator"
-    } else {
-        Write-Host "$(Get-Date) config.Checkmarx.License.Url value provided ($($config.Checkmarx.License.Url)) but not sure how to handle. Valid values are 'ALG' and 's3://bucket/keyprefix/somelicensefile.cxl' (must end in .cxl)"
-    }
-    $license_file = [Utility]::Find("*.cxl")
-    if ([Utility]::Exists($license_file)) {
-        Write-Host "$(Get-Date) Using $license_file"
-        $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) LIC=""$($license_file)"""
-    } 
+if ($config.Checkmarx.License.Url -eq $null) {
+    Write-Host "$(Get-Date) No license url specified"
+} elseif ($config.Checkmarx.License.Url.EndsWith(".cxl")) {
+    Write-Host "$(Get-Date) License file provided and will be downloaded."
+    [Utility]::Fetch($config.Checkmarx.License.Url)
+} elseif ($config.Checkmarx.License.Url -eq "ALG") {
+    Write-Host "$(Get-Date) Running automatic license generator"
+    C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
+    Write-Host "$(Get-Date) ... finished running automatic license generator"
+} else {
+    Write-Host "$(Get-Date) config.Checkmarx.License.Url value provided ($($config.Checkmarx.License.Url)) but not sure how to handle. Valid values are 'ALG' and 's3://bucket/keyprefix/somelicensefile.cxl' (must end in .cxl)"
 }
+
+# Update the installation command line arguments to specify the license file
+$license_file = [Utility]::Find("*.cxl")
+if ([Utility]::Exists($license_file)) {
+    Write-Host "$(Get-Date) Using $license_file"
+    $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) LIC=""$($license_file)"""
+} 
 
 
 ###############################################################################
 # Install Checkmarx
 ###############################################################################
 $cxsetup = [Utility]::Find("CxSetup.exe")
-$config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) SQLSERVER=""$($config.MsSql.Host)"""
+
+# Augment the installer augments with known configuration
+$config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) SQLSERVER=""$($config.MsSql.Host)"" CXARM_DB_HOST=""$($config.MsSql.Host)"""
 if ($config.MsSql.UseSqlAuth -eq "True") {
     $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) SQLAUTH=1 SQLUSER=($config.MsSql.Username) SQLPWD=""${sql_password}"""
     if ($config.Checkmarx.Installer.Args.Contains("BI=1")) {
-        $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) CXARM_SQLAUTH=1 CXARM_DB_USER=($config.MsSql.Username) CXARM_DB_PASSWORD=""${sql_password}"" CXARM_DB_HOST=""$($config.MsSql.Host)"""
+        $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) CXARM_SQLAUTH=1 CXARM_DB_USER=($config.MsSql.Username) CXARM_DB_PASSWORD=""${sql_password}"""
     }
 }
 
 [Utility]::Debug("pre-cx-uninstall")  
 Start-Process -FilePath "$cxsetup" -ArgumentList "/uninstall /quiet" -Wait -NoNewWindow
 [Utility]::Debug("post-cx-uninstall")  
+# Components should be installed in a certain order or else the install can hang. Order is manager, then web, then engine. 
+# This is accomplished with temp_args and temporarily replacing component choices in order to install in order
 if ($config.Checkmarx.Installer.Args.Contains("MANAGER=1")){
     $temp_args = $config.Checkmarx.Installer.Args
     $temp_args = $temp_args.Replace("WEB=1", "WEB=0").Replace("ENGINE=1", "ENGINE=0").Replace("AUDIT=1", "AUDIT=0")
