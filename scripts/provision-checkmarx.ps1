@@ -20,7 +20,7 @@ class Utility {
         return $fullname.Substring($fullname.LastIndexOf("/") + 1)
     }
     [String] static Find([String] $filename) {
-        return $(Get-ChildItem C:\programdata\checkmarx\automation -Recurse -Filter $filename | Sort -Descending | Select -First 1 -ExpandProperty FullName)
+        return $(Get-ChildItem C:\programdata\checkmarx -Recurse -Filter $filename | Sort -Descending | Select -First 1 -ExpandProperty FullName)
     }
     [String] static Find([String] $fpath, [String] $filename) {
         return $(Get-ChildItem "$fpath" -Recurse -Filter $filename | Sort -Descending | Select -First 1 -ExpandProperty FullName)
@@ -32,10 +32,16 @@ class Utility {
             Write-Host "#########################################"
             Write-Host "# Debugging ${stage} - found running processes"
             Write-Host "#########################################"
+        }
+        if ($msiexecs.count -gt 0){ 
             Write-Host "$(Get-Date) Found these running msiexec.exe process:"
-            $msiexecs | Format-Table
+            $msiexecs | Format-Table | Out-File -FilePath C:\cx.debug; cat c:\cx.debug
+            $msiexecs | % { Get-WmiObject Win32_Process -Filter "ProcessId = $($_.Id)" }#| Select-Object ProcessId, Name, ExecutablePath, CommandLine | FL }
+        }
+        if ($cxprocs.count -gt 0) {
             Write-Host "$(Get-Date) Found these running cx* processes:"
-            $cxprocs | Format-Table
+            $cxprocs | Format-Table | Out-File -FilePath C:\cx.debug; cat c:\cx.debug
+            $cxprocs | % { Get-WmiObject Win32_Process -Filter "ProcessId = $($_.Id)" } #| Select-Object ProcessId, Name, ExecutablePath, CommandLine | FL }
             Write-Host "#########################################"
         }
     }
@@ -43,12 +49,12 @@ class Utility {
         $filename = [Utility]::Basename($source)
         if ($source.StartsWith("https://")) {
             Write-Host "$(Get-Date) Downloading $source"
-            (New-Object System.Net.WebClient).DownloadFile("$source", "c:\programdata\checkmarx\automation\installers\${filename}")
+            (New-Object System.Net.WebClient).DownloadFile("$source", "c:\programdata\checkmarx\artifacts\${filename}")
         } elseif ($source.StartsWith("s3://")) {        
             $bucket = $source.Replace("s3://", "").Split("/")[0]
             $key = $source.Replace("s3://${bucket}", "")
             Write-Host "$(Get-Date) Downloading $source from bucket $bucket with key $key"
-            Read-S3Object -BucketName $bucket -Key $key -File "C:\programdata\checkmarx\automation\installers\$filename"
+            Read-S3Object -BucketName $bucket -Key $key -File "C:\programdata\checkmarx\artifacts\$filename"
         }
         $fullname = [Utility]::Find($filename)
         Write-Host "$(Get-Date) ... found $fullname"
@@ -73,6 +79,7 @@ Write-Host "$(Get-Date) Resolving configuration values"
 $sql_password = $(Get-SSMParameter -Name "$($config.Aws.SsmPath)/sql/password" -WithDecryption $True).Value
 $cx_api_password = $(Get-SSMParameter -Name "$($config.Aws.SsmPath)/api/password" -WithDecryption $True).Value
 $tomcat_password = $(Get-SSMParameter -Name "$($config.Aws.SsmPath)/tomcat/password" -WithDecryption $True).Value
+$pfx_password = $(Get-SSMParameter -Name "$($config.Aws.SsmPath)/pfx/password" -WithDecryption $True).Value
 
 Write-Host "$(Get-Date) env:CheckmarxBucket = $env:CheckmarxBucket"
 Write-Host "$(Get-Date) checkmarx-config.psd1 configuration:"
@@ -191,12 +198,12 @@ if ([Utility]::Exists($7zip_path)) {
 # need to be installed so this is one of the first steps.    
 $installer_zip = [Utility]::Basename($config.Checkmarx.Installer.Url)
 $installer_name = $($installer_zip.Replace(".zip", ""))
-if ([Utility]::Exists("c:\programdata\checkmarx\automation\installers\${installer_zip}")) {
+if ([Utility]::Exists("c:\programdata\checkmarx\artifacts\${installer_zip}")) {
     Write-Host "$(Get-Date) Skipping download of $($config.Checkmarx.Installer.Url) because it already has been downloaded"
 } else {
     $cxinstaller = [Utility]::Fetch($config.Checkmarx.Installer.Url)
-    Write-Host "$(Get-Date) Unzipping c:\programdata\checkmarx\automation\installers\${installer_zip}"
-    Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"${cxinstaller}`" -aoa -o`"C:\programdata\checkmarx\automation\installers\${installer_name}`" -p`"$($config.Checkmarx.Installer.ZipKey)`"" -Wait -NoNewWindow -RedirectStandardError .\installer7z.err -RedirectStandardOutput .\installer7z.out
+    Write-Host "$(Get-Date) Unzipping c:\programdata\checkmarx\artifacts\${installer_zip}"
+    Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"${cxinstaller}`" -aoa -o`"C:\programdata\checkmarx\artifacts\${installer_name}`" -p`"$($config.Checkmarx.Installer.ZipKey)`"" -Wait -NoNewWindow -RedirectStandardError .\installer7z.err -RedirectStandardOutput .\installer7z.out
     cat .\installer7z.err
     cat .\installer7z.out
     Write-Host "$(Get-Date) ...finished unzipping ${installer_zip}"
@@ -205,12 +212,12 @@ if ([Utility]::Exists("c:\programdata\checkmarx\automation\installers\${installe
 # Download and unzip the hotfix
 $hotfix_zip = [Utility]::Basename($config.Checkmarx.Hotfix.Url)
 $hotfix_name = $($hotfix_zip.Replace(".zip", ""))
-if ([Utility]::Exists("c:\programdata\checkmarx\automation\installers\${hotfix_zip}")) {
+if ([Utility]::Exists("c:\programdata\checkmarx\artifacts\${hotfix_zip}")) {
     Write-Host "$(Get-Date) Skipping download of $($config.Checkmarx.Hotfix.Url) because it already has been downloaded"
 } else {
     $hfinstaller = [Utility]::Fetch($config.Checkmarx.Hotfix.Url)
-    Write-Host "$(Get-Date) Unzipping c:\programdata\checkmarx\automation\installers\${hotfix_zip}"
-    Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"$hfinstaller`" -aoa -o`"C:\programdata\checkmarx\automation\installers\${hotfix_name}`" -p`"$($config.Checkmarx.Hotfix.ZipKey)`"" -Wait -NoNewWindow -RedirectStandardError .\hotfix7z.err -RedirectStandardOutput .\hotfix7z.out
+    Write-Host "$(Get-Date) Unzipping c:\programdata\checkmarx\artifacts\${hotfix_zip}"
+    Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"$hfinstaller`" -aoa -o`"C:\programdata\checkmarx\artifacts\${hotfix_name}`" -p`"$($config.Checkmarx.Hotfix.ZipKey)`"" -Wait -NoNewWindow -RedirectStandardError .\hotfix7z.err -RedirectStandardOutput .\hotfix7z.out
     cat .\hotfix7z.err
     cat .\hotfix7z.out
     Write-Host "$(Get-Date) ...finished unzipping ${hotfix_zip}"
@@ -615,7 +622,7 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
     if ($config.PackageManagers.Maven -ne $null) {
         $maven = [Utility]::Fetch($config.PackageManagers.Maven)
         Write-Host "$(Get-Date) Installing Maven from $maven"
-        Expand-Archive $maven -DestinationPath 'C:\programdata\checkmarx\automation\installers' -Force
+        Expand-Archive $maven -DestinationPath 'C:\programdata\checkmarx\artifacts' -Force
         $mvnfolder = [Utility]::Basename($maven).Replace("-bin.zip", "")
         [Utility]::Addpath("${mvnfolder}\bin")
         [Environment]::SetEnvironmentVariable('MAVEN_HOME', $mvnfolder, 'Machine')
@@ -625,13 +632,40 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
     if ($config.PackageManagers.Gradle -ne $null) {
         $gradle = [Utility]::Fetch($config.PackageManagers.Gradle)
         Write-Host "$(Get-Date) Installing Gradle from $gradle"
-        Expand-Archive $gradle -DestinationPath 'C:\programdata\checkmarx\automation\installers' -Force
+        Expand-Archive $gradle -DestinationPath 'C:\programdata\checkmarx\artifacts' -Force
         $gradlefolder = [Utility]::Basename($gradle).Replace("-bin.zip", "")
         [Utility]::Addpath("${gradlefolder}\bin")
         Write-Host "$(Get-Date) ...finished installing nodejs"
     }
 }
 
+###############################################################################
+# SSL Configuration
+###############################################################################
+Write-Host "$(Get-Date) Configuring SSL"
+$hostname = ([System.Net.Dns]::GetHostByName(($env:computerName))).HostName
+$ssl_file = ""
+if ($config.Ssl.Url -ne $null) {
+    $ssl_file = [Utility]::Fetch($config.Ssl.Url)
+    if ([Utility]::Basename($ssl_file).EndsWith(".ps1")) {
+        Write-Host "$(Get-Date) SSL URL identified as a powershell script. Executing $ssl_file"
+        powershell.exe "& $ssl_file"
+        Write-Host "$(Get-Date) ... finished executing $ssl_file"
+    } elseif ([Utility]::Basename($ssl_File).EndsWith(".pfx")) {
+        Write-Host "$(Get-Date) SSL URL is a .pfx file that has been downloaded"        
+    }
+} else {
+    Write-Host "$(Get-Date) No SSL URL provided. Defaulting to self signed certificate"   
+    Write-Host "$(Get-Date) Creating self signed cert for $hostname"
+    $ssc = New-SelfSignedCertificate -DnsName $hostname -FriendlyName "$hostname" -Subject "cn=$hostname" -CertStoreLocation cert:\LocalMachine\My
+    md -force "C:\programdata\checkmarx\ssl"
+    $ssc | Export-PfxCertificate -FilePath "C:\programdata\checkmarx\ssl\server.pfx" -Password (ConvertTo-SecureString $pfx_password -AsPlainText -Force)
+    $ssc | Remove-Item 
+}
+
+Write-Host "$(Get-Date) configuring ssl"
+C:\programdata\checkmarx\aws-automation\scripts\ssl\configure-ssl.ps1 -domainName $hostname
+Write-Host "$(Get-Date) ... finished configuring ssl"
 
 ###############################################################################
 # Disable the provisioning task

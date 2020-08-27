@@ -81,8 +81,8 @@ $cloudwatch_config = @"
 log "Cloudwatch log config file generated is: "
 $cloudwatch_config
 
-md "C:\programdata\checkmarx\automation\dependencies" -force 
-$ConfigFile = "C:\programdata\checkmarx\automation\checkmarx-cloudwatch.json"
+md "C:\programdata\checkmarx\artifacts" -force 
+$ConfigFile = "C:\programdata\checkmarx\artifacts\checkmarx-cloudwatch.json"
 $cloudwatch_config | Set-Content $ConfigFile
 
 
@@ -91,10 +91,10 @@ If (-Not (Test-Path "C:\Program Files\Amazon\AmazonCloudWatchAgent\amazon-cloudw
     log "Downloading the latest cloudwatch logs agent..."
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072;
     $ProgressPreference = "SilentlyContinue"
-    Invoke-WebRequest -Uri "https://s3.amazonaws.com/amazoncloudwatch-agent/windows/amd64/latest/amazon-cloudwatch-agent.msi" -OutFile "C:\programdata\checkmarx\automation\dependencies\amazon-cloudwatch-agent.msi" -UseBasicParsing
+    Invoke-WebRequest -Uri "https://s3.amazonaws.com/amazoncloudwatch-agent/windows/amd64/latest/amazon-cloudwatch-agent.msi" -OutFile "C:\programdata\checkmarx\artifacts\amazon-cloudwatch-agent.msi" -UseBasicParsing
 
     # Install the agent
-    Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"C:\programdata\checkmarx\automation\dependencies\amazon-cloudwatch-agent.msi`" /QN /L*V `"C:\programdata\checkmarx\automation\dependencies\amazon-cloudwatch-agent.log`"" -Wait -NoNewWindow
+    Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"C:\programdata\checkmarx\artifacts\amazon-cloudwatch-agent.msi`" /QN /L*V `"C:\programdata\checkmarx\artifacts\amazon-cloudwatch-agent.log`"" -Wait -NoNewWindow
     log "Cloudwatch agent installed. Log file:"
 } else {
     log "The cloudwatch logs agent is already installed"

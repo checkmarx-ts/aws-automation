@@ -62,3 +62,6 @@ if ($Renewal.IsPresent) {
   $certs = Get-PACertificate
   log "Certs are here: $(($certs).PfxFile)"
 }
+
+md -force c:\programdata\checkmarx\ssl
+cp $certs.PfxFile c:\programdata\checkmarx\ssl\server.pfx
