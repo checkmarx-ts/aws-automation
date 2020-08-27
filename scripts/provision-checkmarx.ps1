@@ -25,6 +25,18 @@ class Utility {
     [String] static Find([String] $fpath, [String] $filename) {
         return $(Get-ChildItem "$fpath" -Recurse -Filter $filename | Sort -Descending | Select -First 1 -ExpandProperty FullName)
     }
+    [String] static Debug([String] $stage) {
+        Write-Host "---------------------------------------------------------------"
+        Write-Host "---------------------------------------------------------------"
+        Write-Host "Searching for any running msiexec processes:"
+        get-process msiexe*
+        Write-Host "---------------------------------------------------------------"
+        Write-Host "Searching for any running msiexec processes:"
+        get-process cxsetup*
+        Write-Host "---------------------------------------------------------------"
+        Write-Host "---------------------------------------------------------------"    
+        return $stage    
+    }
     [String] static Fetch([String] $source) {
         $filename = [Utility]::Basename($source)
         if ($source.StartsWith("https://")) {
@@ -66,6 +78,28 @@ Write-Host "$(Get-Date) env:CheckmarxBucket = $env:CheckmarxBucket"
 Write-Host "$(Get-Date) checkmarx-config.psd1 configuration:"
 cat C:\checkmarx-config.psd1
 
+###############################################################################
+#  Debug Info
+###############################################################################
+Write-Host "$(Get-Date) Checking for installed hotfixes"
+Get-HotFix
+Write-Host "$(Get-Date) Checking systeminfo.exe"
+systeminfo.exe 
+Write-Host "$(Get-Date) Checking for all installed updates"
+Wmic qfe list
+Write-Host "$(Get-Date) Host info"
+Get-Host
+Write-Host "$(Get-Date) Powershell version"
+(Get-Host).Version
+Write-Host "$(Get-Date) OS Info"
+Get-WmiObject Win32_OperatingSystem | Select PSComputerName, Caption, OSArchitecture, Version, BuildNumber | FL
+Write-Host "$(Get-Date) User info"
+whoami
+Write-Host "$(Get-Date) Temp path"
+$env:TEMP
+
+[Utility]::Debug("start")
+
 
 ###############################################################################
 #  Domain Join
@@ -98,11 +132,13 @@ $7zip_path = $(Get-ChildItem 'HKLM:\SOFTWARE\7*Zip\' | Get-ItemPropertyValue -Na
 if ([Utility]::Exists($7zip_path)) {
     Write-Host "$(Get-Date) 7-Zip is already installed at ${7zip_path} - skipping installation"
 } else {
+    [Utility]::Debug("pre-7zip")
     Write-Host "$(Get-Date) Installing 7zip"
     $sevenzipinstaller = [Utility]::Fetch($config.Dependencies.Sevenzip)
     Start-Process -FilePath "$sevenzipinstaller" -ArgumentList "/S" -Wait -NoNewWindow
     $newpath = [Utility]::Addpath($(Get-ChildItem 'HKLM:\SOFTWARE\7*Zip\' | Get-ItemPropertyValue -Name Path))
     Write-Host "$(Get-Date) ... finished Installing 7zip"
+    [Utility]::Debug("post-7zip")
 }
 
 
@@ -146,10 +182,12 @@ $cpp2010_version = $(Get-ChildItem 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\VisualS
 if (![String]::IsNullOrEmpty($cpp2010_version)) {
     Write-Host "$(Get-Date) C++ 2010 Redistributable is already installed - skipping installation"    
 } else {
+    [Utility]::Debug("pre-cpp2010")
     Write-Host "$(Get-Date) Installing C++ 2010 Redistributable"
     $cpp2010_installer = [Utility]::Find("vcredist_x64.exe")
     Start-Process -FilePath "$cpp2010_installer" -ArgumentList "/passive /norestart" -Wait -NoNewWindow
     Write-Host "$(Get-Date) ... finished Installing C++ 2010 Redistributable"
+    [Utility]::Debug("post-cpp2010")
 }
 
 
@@ -163,9 +201,11 @@ if (![String]::IsNullOrEmpty($cpp2015_version)) {
 } else {
     # This only applies for CxSAST 9.0+ so make sure it exists.
     if ([Utility]::Exists($cpp2015_installer)) {
+        [Utility]::Debug("pre-cpp2015")
         Write-Host "$(Get-Date) Installing Microsoft Visual C++ 2015 Redistributable Update 3 RC"
         Start-Process -FilePath "$cpp2015_installer" -ArgumentList "/passive /norestart" -Wait -NoNewWindow
         Write-Host "$(Get-Date) ... finished Installing Microsoft Visual C++ 2015 Redistributable Update 3 RC"
+        [Utility]::Debug("post-cpp2015")
     } 
 }
 
@@ -181,8 +221,10 @@ if ([Utility]::Exists("C:\Program Files\AdoptOpenJDK\bin\java.exe")) {
 } else {
     Write-Host "$(Get-Date) Installing Java"
     $javainstaller = [Utility]::Fetch($config.Dependencies.AdoptOpenJdk)
+    [Utility]::Debug("pre-java")
     Start-Process -FilePath "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$javainstaller`" ADDLOCAL=FeatureMain,FeatureEnvironment,FeatureJarFileRunWith,FeatureJavaHome INSTALLDIR=`"c:\Program Files\AdoptOpenJDK\`" /quiet /L*V `"$javainstaller.log`"" -Wait -NoNewWindow
     Write-Host "$(Get-Date) ... finished Installing Java"
+    [Utility]::Debug("post-java")
     Start-Process "C:\Program Files\AdoptOpenJDK\bin\java.exe" -ArgumentList "-version" -RedirectStandardError ".\java-version.log" -Wait -NoNewWindow
     cat ".\java-version.log"
 }
@@ -199,7 +241,9 @@ if ($dotnet_release -gt 461308 ) {
 } else {
     Write-Host "$(Get-Date) Installing dotnet framework - a reboot will be required"
     $dotnetinstaller = [Utility]::Fetch($config.Dependencies.DotnetFramework)
+    [Utility]::Debug("pre-dotnetframework")
     Start-Process -FilePath "$dotnetinstaller" -ArgumentList "/passive /norestart" -Wait -NoNewWindow
+    [Utility]::Debug("post-dotnetframework")
     Write-Host "$(Get-Date) ... finished dotnet framework install. Rebooting now"   
     Restart-Computer -Force; 
     sleep 30 # force in case anyone is logged in
@@ -215,7 +259,9 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
     } else {
         Write-Host "$(Get-Date) Installing Git"
         $gitinstaller = [Utility]::Fetch($config.Dependencies.Git)
+        [Utility]::Debug("pre-git")
         Start-Process -FilePath "$gitinstaller" -ArgumentList "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS" -Wait -NoNewWindow
+        [Utility]::Debug("post-git")
         Write-Host "$(Get-Date) ... finished Installing Git"
         Start-Process "C:\Program Files\Git\bin\git.exe" -ArgumentList "--version" -RedirectStandardOutput ".\git-version.log" -Wait -NoNewWindow
         cat ".\git-version.log"
@@ -226,15 +272,20 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
 ###############################################################################
 # IIS Install
 ###############################################################################
-if ($config.Checkmarx.ComponentType -eq "Manager") {
+if ($config.Checkmarx.ComponentType -eq "Manager" -and -not ([Utility]::Exists("c:\iis.install"))) {
     Write-Host "$(Get-Date) Installing IIS"
+    [Utility]::Debug("pre-iis")    
     Install-WindowsFeature -name Web-Server -IncludeManagementTools
     Add-WindowsFeature Web-Http-Redirect  
     Install-WindowsFeature -Name  Web-Health -IncludeAllSubFeature
     Install-WindowsFeature -Name  Web-Performance -IncludeAllSubFeature
     Install-WindowsFeature -Name Web-Security -IncludeAllSubFeature
     Install-WindowsFeature -Name  Web-Scripting-Tools -IncludeAllSubFeature
-    Write-Host "$(Get-Date) ... finished Installing IIS"
+    [Utility]::Debug("post-iis")    
+    Write-Host "$(Get-Date) ... finished Installing IIS. Rebooting."
+    "IIS completed" | Set-Content c:\iis.install
+    Restart-Computer -Force
+    Sleep 30
 }
 
 
@@ -247,7 +298,9 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
     } else {
         Write-Host "$(Get-Date) Installing IIS rewrite Module"
         $rewriteinstaller = [Utility]::Fetch($config.Dependencies.IisRewriteModule)
+        [Utility]::Debug("pre-iis-urlrewrite")  
         Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$rewriteinstaller`" /L*V `".\rewrite_install.log`" /QN" -Wait -NoNewWindow
+        [Utility]::Debug("post-iis-urlrewrite")  
         Write-Host "$(Get-Date) ... finished Installing IIS Rewrite Module"
     }
 }
@@ -262,7 +315,9 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
     } else {
         Write-Host "$(Get-Date) Installing IIS Application Request Routing Module"
         $requestroutinginstaller = [Utility]::Fetch($config.Dependencies.IisApplicationRequestRoutingModule)
+        [Utility]::Debug("pre-iis-apprequestrouting")  
         Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$requestroutinginstaller`" /L*V `".\arr_install.log`" /QN" -Wait -NoNewWindow        
+        [Utility]::Debug("post-iis-apprequestrouting")  
         Write-Host "$(Get-Date) ... finished Installing IIS Application Request Routing Module"
     }
 }
@@ -279,7 +334,9 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
         $dotnetcore_installer = [Utility]::Find("dotnet-hosting-2.1.16-win.exe")
         if ([Utility]::Exists($dotnetcore_installer)) {
             Write-Host "$(Get-Date) Installing Microsoft .NET Core 2.1.16 Windows Server Hosting"
+            [Utility]::Debug("pre-dotnetcore")  
             Start-Process -FilePath "$dotnetcore_installer" -ArgumentList "/quiet /install /norestart" -Wait -NoNewWindow
+            [Utility]::Debug("post-dotnetcore")  
             Write-Host "$(Get-Date) ... finished Installing Microsoft .NET Core 2.1.16 Windows Server Hosting"
         }
     }    
@@ -295,7 +352,9 @@ if (($config.Checkmarx.ComponentType -eq "Manager") -and ($config.Sql.UseLocalSq
     if ((get-service sql*).length -eq 0) {
         $sqlserverexe = [Utility]::Find("SQLEXPR*.exe")
         Write-Host "$(Get-Date) Installing SQL Server from ${sqlserverexe}"
+        [Utility]::Debug("pre-sql-server-express")  
         Start-Process -FilePath "$sqlserverexe" -ArgumentList "/IACCEPTSQLSERVERLICENSETERMS /Q /ACTION=install /INSTANCEID=SQLEXPRESS /INSTANCENAME=SQLEXPRESS /UPDATEENABLED=FALSE /BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1" -Wait -NoNewWindow
+        [Utility]::Debug("post-sql-server-express")  
         $sqlserverlog = $(Get-ChildItem "C:\Program Files\Microsoft SQL Server\110\Setup Bootstrap\Log" -Recurse -Filter "Summary.txt" | Sort -Descending | Select -First 1 -ExpandProperty FullName) 
         Write-Host "$(Get-Date) ...finished Installing SQL Server. Log is:"
         cat $sqlserverlog        
@@ -317,12 +376,16 @@ if ($config.Sql.UseSqlAuth -eq "True") {
     }
 }
 
+[Utility]::Debug("pre-cx-uninstall")  
 Start-Process -FilePath "$cxsetup" -ArgumentList "/uninstall /quiet" -Wait -NoNewWindow
+[Utility]::Debug("post-cx-uninstall")  
 if ($config.Installer.Args.Contains("MANAGER=1")){
     $temp_args = $config.Installer.Args
     $temp_args = $temp_args.Replace("WEB=1", "WEB=0").Replace("ENGINE=1", "ENGINE=0").Replace("AUDIT=1", "AUDIT=0")
     Write-Host "$(Get-Date) Installing CxSAST with $temp_args"
+    [Utility]::Debug("pre-cx-installer-mgr")  
     Start-Process -FilePath "$cxsetup" -ArgumentList "$temp_args" -Wait -NoNewWindow
+    [Utility]::Debug("post-cx-installer-mgr")  
     Write-Host "$(Get-Date) ...finished installing"
 }
 
@@ -330,12 +393,16 @@ if ($config.Installer.Args.Contains("WEB=1")){
     $temp_args = $config.Installer.Args
     $temp_args = $temp_args.Replace("ENGINE=1", "ENGINE=0").Replace("AUDIT=1", "AUDIT=0")
     Write-Host "$(Get-Date) Installing CxSAST with $temp_args"
+    [Utility]::Debug("pre-cx-installer-web")  
     Start-Process -FilePath "$cxsetup" -ArgumentList "$temp_args" -Wait -NoNewWindow
+    [Utility]::Debug("post-cx-installer-web")  
     Write-Host "$(Get-Date) ...finished installing"
 }
 
 Write-Host "$(Get-Date) Installing CxSAST with $($config.Installer.Args)"
+[Utility]::Debug("pre-cx-installer-all")  
 Start-Process -FilePath "$cxsetup" -ArgumentList "$($config.Installer.Args)" -Wait -NoNewWindow
+[Utility]::Debug("post-cx-installer-all")  
 Write-Host "$(Get-Date) ...finished installing"
 
 
@@ -344,7 +411,9 @@ Write-Host "$(Get-Date) ...finished installing"
 ###############################################################################
 $hotfixexe = [Utility]::Find("*HF*.exe")
 Write-Host "$(Get-Date) Installing hotfix ${hotfix_name}"
+[Utility]::Debug("pre-cx-hotfix")  
 Start-Process -FilePath "$hotfixexe" -ArgumentList "-cmd" -Wait -NoNewWindow
+[Utility]::Debug("post-cx-hotfix")  
 Write-Host "$(Get-Date) ...finished installing"    
 
 
@@ -489,3 +558,14 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
 Write-Host "$(Get-Date) disabling provision-checkmarx scheduled task"
 Disable-ScheduledTask -TaskName "provision-checkmarx"
 Write-Host "$(Get-Date) provisioning has completed"
+
+
+###############################################################################
+#  Debug Info
+###############################################################################
+Write-Host "$(Get-Date) Checking for installed hotfixes"
+Get-HotFix
+Write-Host "$(Get-Date) Checking systeminfo.exe"
+systeminfo.exe 
+Write-Host "$(Get-Date) Checking for all installed updates"
+Wmic qfe list
