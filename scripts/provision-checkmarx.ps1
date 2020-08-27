@@ -88,6 +88,7 @@ cat C:\checkmarx-config.psd1
 ###############################################################################
 #  Debug Info
 ###############################################################################
+if (!([Utility]::Exists("C:\cx-init-debug.lock")) {
 @"
 ###############################################################################
 # Checking for installed hotfixes
@@ -147,6 +148,7 @@ $(whoami)
 ################################################################################
 $($env:TEMP)
 "@ | Write-Host
+}
 
 [Utility]::Debug("start")
 
@@ -322,7 +324,7 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
 # IIS Install
 ###############################################################################
 if ($config.Checkmarx.ComponentType -eq "Manager") {
-    if ([Utility]::Exists("c:\iis.install")) {
+    if ([Utility]::Exists("c:\iis.lock")) {
         Write-Host "$(Get-Date) IIS is already installed - skipping installation"
     } else {
         Write-Host "$(Get-Date) Installing IIS"
@@ -335,8 +337,8 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
         Install-WindowsFeature -Name  Web-Scripting-Tools -IncludeAllSubFeature
         [Utility]::Debug("post-iis")    
         Write-Host "$(Get-Date) ... finished Installing IIS. Rebooting."
-        # the iis.install file is used to track state and prevent reinstallation and reboots on subsequent script execution
-        "IIS completed" | Set-Content c:\iis.install
+        # the iis.lock file is used to track state and prevent reinstallation and reboots on subsequent script execution
+        "IIS completed" | Set-Content c:\iis.lock
         Restart-Computer -Force
         Sleep 30
     }
