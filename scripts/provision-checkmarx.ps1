@@ -467,7 +467,7 @@ Write-Host "$(Get-Date) ...finished installing"
 $hotfixexe = [Utility]::Find("*HF*.exe")
 Write-Host "$(Get-Date) Installing hotfix ${hotfix_name}"
 [Utility]::Debug("pre-cx-hotfix")  
-Start-Process -FilePath "$hotfixexe" -ArgumentList "-cmd" -Wait -NoNewWindow
+Start-Process -FilePath "$hotfixexe" -ArgumentList "-cmd ACCEPT_EULA=Y" -Wait -NoNewWindow
 [Utility]::Debug("post-cx-hotfix")  
 Write-Host "$(Get-Date) ...finished installing"    
 
