@@ -677,7 +677,7 @@ if ($config.Ssl.Url -ne $null) {
 }
 
 Write-Host "$(Get-Date) configuring ssl"
-C:\programdata\checkmarx\aws-automation\scripts\ssl\configure-ssl.ps1 -domainName $hostname
+C:\programdata\checkmarx\aws-automation\scripts\ssl\configure-ssl.ps1 -domainName $hostname -pfxpassword $pfx_password
 Write-Host "$(Get-Date) ... finished configuring ssl"
 
 ###############################################################################
