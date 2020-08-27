@@ -295,7 +295,7 @@ if (($config.Checkmarx.ComponentType -eq "Manager") -and ($config.Sql.UseLocalSq
     if ((get-service sql*).length -eq 0) {
         $sqlserverexe = [Utility]::Find("SQLEXPR*.exe")
         Write-Host "$(Get-Date) Installing SQL Server from ${sqlserverexe}"
-        Start-Process "$sqlserverexe" -ArgumentList "/IACCEPTSQLSERVERLICENSETERMS /Q /ACTION=install /INSTANCEID=SQLEXPRESS /INSTANCENAME=SQLEXPRESS /UPDATEENABLED=FALSE /BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1" -Wait -NoNewWindow
+        Start-Process -FilePath "$sqlserverexe" -ArgumentList "/IACCEPTSQLSERVERLICENSETERMS /Q /ACTION=install /INSTANCEID=SQLEXPRESS /INSTANCENAME=SQLEXPRESS /UPDATEENABLED=FALSE /BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1" -Wait -NoNewWindow
         $sqlserverlog = $(Get-ChildItem "C:\Program Files\Microsoft SQL Server\110\Setup Bootstrap\Log" -Recurse -Filter "Summary.txt" | Sort -Descending | Select -First 1 -ExpandProperty FullName) 
         Write-Host "$(Get-Date) ...finished Installing SQL Server. Log is:"
         cat $sqlserverlog        
@@ -309,8 +309,13 @@ if (($config.Checkmarx.ComponentType -eq "Manager") -and ($config.Sql.UseLocalSq
 # Install Checkmarx
 ###############################################################################
 $cxsetup = [Utility]::Find("CxSetup.exe")
-Write-Host "$(Get-Date) Installing CxSAST with $installer_args"
-Start-Process "$cxsetup" -ArgumentList "$($config.Installer.Args)" -Wait -NoNewWindow -RedirectStandardError ".\cxinstaller.err" -RedirectStandardOutput ".\cxinstaller.out"
+$config.Installer.Args = "$($config.Installer.Args) SQLSERVER=""$($config.Sql.Host),$($config.Sql.Port)"""
+if ($config.Sql.UseSqlAuth -eq "True") {
+    $config.Installer.Args = "$($config.Installer.Args) SQLAUTH=1 SQLUSER=($config.Sql.Username) SQLPWD=""${sql_password}"""
+}
+Start-Process -FilePath "$cxsetup" -ArgumentList "/uninstall /quiet" -Wait -NoNewWindow
+Write-Host "$(Get-Date) Installing CxSAST with $($config.Installer.Args)"
+Start-Process -FilePath "$cxsetup" -ArgumentList "$($config.Installer.Args)" -Wait -NoNewWindow -RedirectStandardError ".\cxinstaller.err" -RedirectStandardOutput ".\cxinstaller.out"
 Write-Host "$(Get-Date) ...finished installing"
 Write-Host "$(Get-Date) installer StandardError:"
 cat .\cxinstaller.err
@@ -322,7 +327,7 @@ cat .\cxinstaller.out
 ###############################################################################
 $hotfixexe = [Utility]::Find("*HF*.exe")
 Write-Host "$(Get-Date) Installing hotfix ${hotfix_name}"
-Start-Process "$hotfixexe" -ArgumentList "-cmd" -Wait -NoNewWindow
+Start-Process -FilePath "$hotfixexe" -ArgumentList "-cmd" -Wait -NoNewWindow
 Write-Host "$(Get-Date) ...finished installing"    
 
 
