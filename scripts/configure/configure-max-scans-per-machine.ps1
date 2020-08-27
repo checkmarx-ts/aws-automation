@@ -25,6 +25,7 @@ if ([String]::IsNullOrEmpty($config_file)) {
   exit 1
 }
 
+$config_file = "$(Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Engine Server' -Name 'Path')\CxSourceAnalyzerEngine.WinService.exe.config"
 [Xml]$xml = Get-Content "$config_file"
 $obj = $xml.configuration.appSettings.add | where {$_.Key -eq "MAX_SCANS_PER_MACHINE" }
 log "MAX_SCANS_PER_MACHINE initial value is $($obj.value)"

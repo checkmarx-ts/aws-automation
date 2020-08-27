@@ -26,17 +26,15 @@ class Utility {
         return $(Get-ChildItem "$fpath" -Recurse -Filter $filename | Sort -Descending | Select -First 1 -ExpandProperty FullName)
     }
     [String] static Debug([String] $stage) {
-        Write-Host "---------------------------------------------------------------"
-        Write-Host "---------------------------------------------------------------"
+        Write-Host "Debugging $stage"
+        Write-Host ""; Write-Host ""
         Write-Host "Searching for any running msiexec processes:"
         get-process msiexe*
-        Write-Host "---------------------------------------------------------------"
-        Write-Host "---------------------------------------------------------------"
+        Write-Host ""; Write-Host ""
         Write-Host "Searching for any running cxsetup processes:"
         get-process cxsetup*
-        Write-Host "---------------------------------------------------------------"
-        Write-Host "---------------------------------------------------------------"    
-        return $stage    
+        Write-Host ""; Write-Host ""
+        return ""    
     }
     [String] static Fetch([String] $source) {
         $filename = [Utility]::Basename($source)
@@ -62,10 +60,7 @@ $config = Import-PowerShellDataFile -Path C:\checkmarx-config.psd1
 ###############################################################################
 Write-Host "$(Get-Date) Creating Checkmarx folders"
 $cx_home = if ($env:CheckmarxHome -eq $null) { "C:\programdata\checkmarx" } Else { $env:CheckmarxHome }
-$cx_automation_state = Join-Path -Path $cx_home -ChildPath "automation-state"
-
-New-Item -Path $cx_home -Force
-New-Item -Path $cx_automation_state -Force
+md -Force "$cx_home"
 
 ###############################################################################
 #  Resolve configuration values
@@ -82,25 +77,67 @@ cat C:\checkmarx-config.psd1
 ###############################################################################
 #  Debug Info
 ###############################################################################
-Write-Host "$(Get-Date) Checking for installed hotfixes"
-Get-HotFix
-Write-Host "$(Get-Date) Checking systeminfo.exe"
-systeminfo.exe 
-Write-Host "$(Get-Date) Checking for all installed updates"
-Wmic qfe list
-Write-Host "$(Get-Date) Host info"
-Get-Host
-Write-Host "$(Get-Date) Powershell version"
-(Get-Host).Version
-Write-Host "$(Get-Date) OS Info"
-Get-WmiObject Win32_OperatingSystem | Select PSComputerName, Caption, OSArchitecture, Version, BuildNumber | FL
-Write-Host "$(Get-Date) User info"
-whoami
-Write-Host "$(Get-Date) Temp path"
-$env:TEMP
+@"
+###############################################################################
+# Checking for installed hotfixes
+################################################################################
+"@ | Write-Output
+Get-HotFix | Format-Table
+
+@"
+
+###############################################################################
+# Checking systeminfo.exe
+################################################################################
+"@ | Write-Output
+systeminfo.exe
+
+@"
+
+###############################################################################
+# Checking for all installed updates
+################################################################################
+"@ | Write-Output
+Wmic qfe list  | Format-Table
+
+@"
+
+###############################################################################
+# Host Info
+################################################################################
+"@ | Write-Output
+Get-Host | Format-Table
+
+@"
+
+###############################################################################
+# Powershell Info
+################################################################################
+"@ | Write-Output
+(Get-Host).Version  | Format-Table
+
+@"
+
+###############################################################################
+# Powershell Info
+################################################################################
+"@ | Write-Output
+Get-WmiObject Win32_OperatingSystem | Select PSComputerName, Caption, OSArchitecture, Version, BuildNumber | Format-Table
+
+@"
+
+###############################################################################
+# whoami
+################################################################################
+$(whoami)
+
+###############################################################################
+# env:TEMP
+################################################################################
+$($env:TEMP)
+"@ | Write-Host
 
 [Utility]::Debug("start")
-
 
 ###############################################################################
 #  Domain Join
@@ -148,28 +185,28 @@ if ([Utility]::Exists($7zip_path)) {
 ###############################################################################
 # Download and unzip the installer. It has many dependencies inside the zip file that
 # need to be installed so this is one of the first steps.    
-$installer_zip = [Utility]::Basename($config.Installer.Url)
+$installer_zip = [Utility]::Basename($config.Checkmarx.Installer.Url)
 $installer_name = $($installer_zip.Replace(".zip", ""))
 if ([Utility]::Exists("c:\programdata\checkmarx\automation\installers\${installer_zip}")) {
-    Write-Host "$(Get-Date) Skipping download of $($config.Installer.Url) because it already has been downloaded"
+    Write-Host "$(Get-Date) Skipping download of $($config.Checkmarx.Installer.Url) because it already has been downloaded"
 } else {
-    $cxinstaller = [Utility]::Fetch($config.Installer.Url)
+    $cxinstaller = [Utility]::Fetch($config.Checkmarx.Installer.Url)
     Write-Host "$(Get-Date) Unzipping c:\programdata\checkmarx\automation\installers\${installer_zip}"
-    Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"${cxinstaller}`" -aoa -o`"C:\programdata\checkmarx\automation\installers\${installer_name}`" -p`"$($config.Installer.ZipKey)`"" -Wait -NoNewWindow -RedirectStandardError .\installer7z.err -RedirectStandardOutput .\installer7z.out
+    Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"${cxinstaller}`" -aoa -o`"C:\programdata\checkmarx\automation\installers\${installer_name}`" -p`"$($config.Checkmarx.Installer.ZipKey)`"" -Wait -NoNewWindow -RedirectStandardError .\installer7z.err -RedirectStandardOutput .\installer7z.out
     cat .\installer7z.err
     cat .\installer7z.out
     Write-Host "$(Get-Date) ...finished unzipping ${installer_zip}"
 } 
 
 # Download and unzip the hotfix
-$hotfix_zip = [Utility]::Basename($config.Hotfix.Url)
+$hotfix_zip = [Utility]::Basename($config.Checkmarx.Hotfix.Url)
 $hotfix_name = $($hotfix_zip.Replace(".zip", ""))
 if ([Utility]::Exists("c:\programdata\checkmarx\automation\installers\${hotfix_zip}")) {
-    Write-Host "$(Get-Date) Skipping download of $($config.Hotfix.Url) because it already has been downloaded"
+    Write-Host "$(Get-Date) Skipping download of $($config.Checkmarx.Hotfix.Url) because it already has been downloaded"
 } else {
-    $hfinstaller = [Utility]::Fetch($config.Hotfix.Url)
+    $hfinstaller = [Utility]::Fetch($config.Checkmarx.Hotfix.Url)
     Write-Host "$(Get-Date) Unzipping c:\programdata\checkmarx\automation\installers\${hotfix_zip}"
-    Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"$hfinstaller`" -aoa -o`"C:\programdata\checkmarx\automation\installers\${hotfix_name}`" -p`"$($config.Hotfix.ZipKey)`"" -Wait -NoNewWindow -RedirectStandardError .\hotfix7z.err -RedirectStandardOutput .\hotfix7z.out
+    Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"$hfinstaller`" -aoa -o`"C:\programdata\checkmarx\automation\installers\${hotfix_name}`" -p`"$($config.Checkmarx.Hotfix.ZipKey)`"" -Wait -NoNewWindow -RedirectStandardError .\hotfix7z.err -RedirectStandardOutput .\hotfix7z.out
     cat .\hotfix7z.err
     cat .\hotfix7z.out
     Write-Host "$(Get-Date) ...finished unzipping ${hotfix_zip}"
@@ -273,22 +310,26 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
 ###############################################################################
 # IIS Install
 ###############################################################################
-if ($config.Checkmarx.ComponentType -eq "Manager" -and -not ([Utility]::Exists("c:\iis.install"))) {
-    Write-Host "$(Get-Date) Installing IIS"
-    [Utility]::Debug("pre-iis")    
-    Install-WindowsFeature -name Web-Server -IncludeManagementTools
-    Add-WindowsFeature Web-Http-Redirect  
-    Install-WindowsFeature -Name  Web-Health -IncludeAllSubFeature
-    Install-WindowsFeature -Name  Web-Performance -IncludeAllSubFeature
-    Install-WindowsFeature -Name Web-Security -IncludeAllSubFeature
-    Install-WindowsFeature -Name  Web-Scripting-Tools -IncludeAllSubFeature
-    [Utility]::Debug("post-iis")    
-    Write-Host "$(Get-Date) ... finished Installing IIS. Rebooting."
-    "IIS completed" | Set-Content c:\iis.install
-    Restart-Computer -Force
-    Sleep 30
+if ($config.Checkmarx.ComponentType -eq "Manager") {
+    if ([Utility]::Exists("c:\iis.install")) {
+        Write-Host "$(Get-Date) IIS is already installed - skipping installation"
+    } else {
+        Write-Host "$(Get-Date) Installing IIS"
+        [Utility]::Debug("pre-iis")    
+        Install-WindowsFeature -name Web-Server -IncludeManagementTools
+        Add-WindowsFeature Web-Http-Redirect  
+        Install-WindowsFeature -Name  Web-Health -IncludeAllSubFeature
+        Install-WindowsFeature -Name  Web-Performance -IncludeAllSubFeature
+        Install-WindowsFeature -Name Web-Security -IncludeAllSubFeature
+        Install-WindowsFeature -Name  Web-Scripting-Tools -IncludeAllSubFeature
+        [Utility]::Debug("post-iis")    
+        Write-Host "$(Get-Date) ... finished Installing IIS. Rebooting."
+        # the iis.install file is used to track state and prevent reinstallation and reboots on subsequent script execution
+        "IIS completed" | Set-Content c:\iis.install
+        Restart-Computer -Force
+        Sleep 30
+    }
 }
-
 
 ###############################################################################
 # IIS Rewrite Module Install
@@ -347,7 +388,7 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
 ###############################################################################
 # Install SQL Server Express
 ###############################################################################
-if (($config.Checkmarx.ComponentType -eq "Manager") -and ($config.Sql.UseLocalSqlExpress -eq "True")) {
+if (($config.Checkmarx.ComponentType -eq "Manager") -and ($config.MsSql.UseLocalSqlExpress -eq "True")) {
     # SQL Server install should come *after* the Checkmarx installation media is unzipped. The SQL Server
     # installer is packaged in the third_party folder from the zip. 
     if ((get-service sql*).length -eq 0) {
@@ -369,19 +410,19 @@ if (($config.Checkmarx.ComponentType -eq "Manager") -and ($config.Sql.UseLocalSq
 # Install Checkmarx
 ###############################################################################
 $cxsetup = [Utility]::Find("CxSetup.exe")
-$config.Installer.Args = "$($config.Installer.Args) SQLSERVER=""$($config.Sql.Host)"""
-if ($config.Sql.UseSqlAuth -eq "True") {
-    $config.Installer.Args = "$($config.Installer.Args) SQLAUTH=1 SQLUSER=($config.Sql.Username) SQLPWD=""${sql_password}"""
-    if ($config.Installer.Args.Contains("BI=1")) {
-        $config.Installer.Args = "$($config.Installer.Args) CXARM_SQLAUTH=1 CXARM_DB_USER=($config.Sql.Username) CXARM_DB_PASSWORD=""${sql_password}"" CXARM_DB_HOST=""$($config.Sql.Host)"""
+$config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) SQLSERVER=""$($config.MsSql.Host)"""
+if ($config.MsSql.UseSqlAuth -eq "True") {
+    $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) SQLAUTH=1 SQLUSER=($config.MsSql.Username) SQLPWD=""${sql_password}"""
+    if ($config.Checkmarx.Installer.Args.Contains("BI=1")) {
+        $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) CXARM_SQLAUTH=1 CXARM_DB_USER=($config.MsSql.Username) CXARM_DB_PASSWORD=""${sql_password}"" CXARM_DB_HOST=""$($config.MsSql.Host)"""
     }
 }
 
 [Utility]::Debug("pre-cx-uninstall")  
 Start-Process -FilePath "$cxsetup" -ArgumentList "/uninstall /quiet" -Wait -NoNewWindow
 [Utility]::Debug("post-cx-uninstall")  
-if ($config.Installer.Args.Contains("MANAGER=1")){
-    $temp_args = $config.Installer.Args
+if ($config.Checkmarx.Installer.Args.Contains("MANAGER=1")){
+    $temp_args = $config.Checkmarx.Installer.Args
     $temp_args = $temp_args.Replace("WEB=1", "WEB=0").Replace("ENGINE=1", "ENGINE=0").Replace("AUDIT=1", "AUDIT=0")
     Write-Host "$(Get-Date) Installing CxSAST with $temp_args"
     [Utility]::Debug("pre-cx-installer-mgr")  
@@ -390,8 +431,8 @@ if ($config.Installer.Args.Contains("MANAGER=1")){
     Write-Host "$(Get-Date) ...finished installing"
 }
 
-if ($config.Installer.Args.Contains("WEB=1")){
-    $temp_args = $config.Installer.Args
+if ($config.Checkmarx.Installer.Args.Contains("WEB=1")){
+    $temp_args = $config.Checkmarx.Installer.Args
     $temp_args = $temp_args.Replace("ENGINE=1", "ENGINE=0").Replace("AUDIT=1", "AUDIT=0")
     Write-Host "$(Get-Date) Installing CxSAST with $temp_args"
     [Utility]::Debug("pre-cx-installer-web")  
@@ -400,9 +441,9 @@ if ($config.Installer.Args.Contains("WEB=1")){
     Write-Host "$(Get-Date) ...finished installing"
 }
 
-Write-Host "$(Get-Date) Installing CxSAST with $($config.Installer.Args)"
+Write-Host "$(Get-Date) Installing CxSAST with $($config.Checkmarx.Installer.Args)"
 [Utility]::Debug("pre-cx-installer-all")  
-Start-Process -FilePath "$cxsetup" -ArgumentList "$($config.Installer.Args)" -Wait -NoNewWindow
+Start-Process -FilePath "$cxsetup" -ArgumentList "$($config.Checkmarx.Installer.Args)" -Wait -NoNewWindow
 [Utility]::Debug("post-cx-installer-all")  
 Write-Host "$(Get-Date) ...finished installing"
 
@@ -436,18 +477,42 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
     Write-Host "$(Get-Date) ...finished hardening IIS"
 
     Write-Host "$(Get-Date) Configuring windows defender"
-    C:\programdata\checkmarx\aws-automation\scripts\configure\configure-windows-defender.ps1
+    # Add exclusions
+    Add-MpPreference -ExclusionPath "C:\Program Files\Checkmarx\*"
+    Add-MpPreference -ExclusionPath "C:\CxSrc\*"  
+    Add-MpPreference -ExclusionPath "C:\ExtSrc\*"  
     Write-Host "$(Get-Date) ...finished configuring windows defender"
 }
 
 ###############################################################################
 # Reverse proxy CxARM
 ###############################################################################
-if ($config.Checkmarx.ComponentType -eq "Manager") {
+if ($config.Checkmarx.ComponentType -eq "Manager" -and ($config.Checkmarx.Installer.Args.contains("BI=1"))) {
     Write-Host "$(Get-Date) Configuring IIS to reverse proxy CxARM"
-    C:\programdata\checkmarx\aws-automation\scripts\configure\configure-cxarm-iis-reverseproxy.ps1
+    $arm_server = "http://localhost:8080"
+    Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST'  -filter "system.webServer/proxy" -name "enabled" -value "True"
+    Write-Host "$(Get-Date) Adding rewrite-rule for /cxarm -> ${arm_server}"
+    $site = "iis:\sites\Default Web Site"
+    $filterRoot = "system.webServer/rewrite/rules/rule[@name='cxarm']"
+    Add-WebConfigurationProperty -pspath $site -filter "system.webServer/rewrite/rules" -name "." -value @{name='cxarm';patternSyntax='Regular Expressions';stopProcessing='False'}
+    Set-WebConfigurationProperty -pspath $site -filter "$filterRoot/match" -name "url" -value "^(cxarm/.*)"
+    Set-WebConfigurationProperty -pspath $site -filter "$filterRoot/action" -name "type" -value "Rewrite"
+    Set-WebConfigurationProperty -pspath $site -filter "$filterRoot/action" -name "url" -value "${arm_server}/{R:0}"
     Write-Host "$(Get-Date) finished configuring IIS to reverse proxy CxARM"
 }
+
+###############################################################################
+# Set ASP.Net Session Timeout for the Portal
+###############################################################################
+Write-Host "$(Get-Date) Configuring Timeout for CxSAST Web Portal to: $($config.Checkmarx.PortalSessionTimeout)"
+# Session timeout if you wish to change it. Default is 1440 minutes (1 day) 
+# Set-WebConfigurationProperty cmdlet is smart enough to convert it into minutes, which is what .net uses
+# See https://checkmarx.atlassian.net/wiki/spaces/PTS/pages/85229666/Configuring+session+timeout+in+Checkmarx
+# See https://blogs.iis.net/jeonghwan/iis-powershell-user-guide-comparing-representative-iis-ui-tasks for examples
+# $sessionTimeoutInMinutes = "01:20:00" # 1 hour 20 minutes - must use timespan format here (HH:MM:SS) and do NOT set any seconds as seconds are invalid options.
+# Prefer this over direct XML file access to support variety of session state providers
+Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST/Default Web Site/CxWebClient' -filter "system.web/sessionState" -name "timeout" -value "$($config.Checkmarx.PortalSessionTimeout)"
+Write-Host "$(Get-Date) ... finished configuring timeout"
 
 ###############################################################################
 # Open Firewall for Engine
@@ -475,18 +540,26 @@ if (Test-Path -Path "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config
     Write-Host "$(Get-Date) Finished initial ETL sync"
   }
 
-$is_engine_installed = (![String]::IsNullOrEmpty((Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Engine Server' -Name "Path")))
-if ($is_engine_installed ) {
-    Write-Host "$(Get-Date) Configuring max scans for the engine"
-    C:\programdata\checkmarx\aws-automation\scripts\configure\configure-max-scans-per-machine.ps1 -scans 1
-    Write-Host "$(Get-Date) ... finished configuring engine max scans"
-}
-
 if ($config.aws.UseCloudwatchLogs) {
     Write-Host "$(Get-Date) Configuring cloudwatch logs"
     C:\programdata\checkmarx\aws-automation\scripts\configure\configure-cloudwatch-logs.ps1
     Write-Host "$(Get-Date) ... finished configuring cloudwatch logs"
 }
+
+
+###############################################################################
+# Configure max scans on engine
+###############################################################################
+if ($config.Checkmarx.Installer.Args.Contains("ENGINE=1")) {
+    Write-Host "$(Get-Date) Configuring engine MAX_SCANS_PER_MACHINE to $($config.Checkmarx.MaxScansPerMachine)"
+    $config_file = "$(Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Engine Server' -Name 'Path')\CxSourceAnalyzerEngine.WinService.exe.config"
+    [Xml]$xml = Get-Content "$config_file"
+    $obj = $xml.configuration.appSettings.add | where {$_.Key -eq "MAX_SCANS_PER_MACHINE" }
+    $obj.value = "$($config.Checkmarx.MaxScansPerMachine)" 
+    $xml.Save("$config_file")     
+    Write-Host "$(Get-Date) ... finished configuring engine MAX_SCANS_PER_MACHINE" 
+}
+
 
 ###############################################################################
 # Activate Git trace logging
@@ -564,9 +637,25 @@ Write-Host "$(Get-Date) provisioning has completed"
 ###############################################################################
 #  Debug Info
 ###############################################################################
-Write-Host "$(Get-Date) Checking for installed hotfixes"
-Get-HotFix
-Write-Host "$(Get-Date) Checking systeminfo.exe"
-systeminfo.exe 
-Write-Host "$(Get-Date) Checking for all installed updates"
-Wmic qfe list
+@"
+###############################################################################
+# Checking for installed hotfixes
+################################################################################
+"@ | Write-Output
+Get-HotFix | Format-Table
+
+@"
+
+###############################################################################
+# Checking systeminfo.exe
+################################################################################
+"@ | Write-Output
+systeminfo.exe
+
+@"
+
+###############################################################################
+# Checking for all installed updates
+################################################################################
+"@ | Write-Output
+Wmic qfe list  | Format-Table
