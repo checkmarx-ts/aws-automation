@@ -81,7 +81,7 @@ $cloudwatch_config = @"
 log "Cloudwatch log config file generated is: "
 $cloudwatch_config
 
-md "C:\programdata\checkmarx\automation" -force 
+md "C:\programdata\checkmarx\automation\dependencies" -force 
 $ConfigFile = "C:\programdata\checkmarx\automation\checkmarx-cloudwatch.json"
 $cloudwatch_config | Set-Content $ConfigFile
 

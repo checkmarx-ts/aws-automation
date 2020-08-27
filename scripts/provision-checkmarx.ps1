@@ -309,10 +309,14 @@ if (($config.Checkmarx.ComponentType -eq "Manager") -and ($config.Sql.UseLocalSq
 # Install Checkmarx
 ###############################################################################
 $cxsetup = [Utility]::Find("CxSetup.exe")
-$config.Installer.Args = "$($config.Installer.Args) SQLSERVER=""$($config.Sql.Host),$($config.Sql.Port)"""
+$config.Installer.Args = "$($config.Installer.Args) SQLSERVER=""$($config.Sql.Host)"""
 if ($config.Sql.UseSqlAuth -eq "True") {
     $config.Installer.Args = "$($config.Installer.Args) SQLAUTH=1 SQLUSER=($config.Sql.Username) SQLPWD=""${sql_password}"""
+    if ($config.Installer.Args.Contains("BI=1")) {
+        $config.Installer.Args = "$($config.Installer.Args) CXARM_SQLAUTH=1 CXARM_DB_USER=($config.Sql.Username) CXARM_DB_PASSWORD=""${sql_password}"" CXARM_DB_HOST=""$($config.Sql.Host)"""
+    }
 }
+
 Start-Process -FilePath "$cxsetup" -ArgumentList "/uninstall /quiet" -Wait -NoNewWindow
 Write-Host "$(Get-Date) Installing CxSAST with $($config.Installer.Args)"
 Start-Process -FilePath "$cxsetup" -ArgumentList "$($config.Installer.Args)" -Wait -NoNewWindow -RedirectStandardError ".\cxinstaller.err" -RedirectStandardOutput ".\cxinstaller.out"
@@ -421,46 +425,48 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
 ###############################################################################
 # Install Package Managers if Configured (Required for OSA)
 ###############################################################################
-if ($config.PackageManagers.Python3 -ne $null) {
-    $python3 = [Utility]::Fetch($config.PackageManagers.Python3)
-    Write-Host "$(Get-Date) Installing Python3 from $python3"
-    Start-Process -FilePath $python3 -ArgumentList "/quiet InstallAllUsers=1 PrependPath=1 Include_dev=0 Include_test=0" -Wait -NoNewWindow
-    Write-Host "$(Get-Date) ...finished installing Python3"
-}
+if ($config.Checkmarx.ComponentType -eq "Manager") {
+    if ($config.PackageManagers.Python3 -ne $null) {
+        $python3 = [Utility]::Fetch($config.PackageManagers.Python3)
+        Write-Host "$(Get-Date) Installing Python3 from $python3"
+        Start-Process -FilePath $python3 -ArgumentList "/quiet InstallAllUsers=1 PrependPath=1 Include_dev=0 Include_test=0" -Wait -NoNewWindow
+        Write-Host "$(Get-Date) ...finished installing Python3"
+    }
 
-if ($config.PackageManagers.Nodejs -ne $null) {
-    $nodejs = [Utility]::Fetch($config.PackageManagers.Nodejs)
-    Write-Host "$(Get-Date) Installing Nodejs from $nodejs"
-    Start-Process -FilePath "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$nodejs`" /QN /L*V c:\nodejs.log" -Wait -NoNewWindow
-    Write-Host "$(Get-Date) ...finished installing nodejs"
-}
+    if ($config.PackageManagers.Nodejs -ne $null) {
+        $nodejs = [Utility]::Fetch($config.PackageManagers.Nodejs)
+        Write-Host "$(Get-Date) Installing Nodejs from $nodejs"
+        Start-Process -FilePath "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$nodejs`" /QN /L*V c:\nodejs.log" -Wait -NoNewWindow
+        Write-Host "$(Get-Date) ...finished installing nodejs"
+    }
 
-if ($config.PackageManagers.Nuget -ne $null) {
-    $nuget = [Utility]::Fetch($config.PackageManagers.Nuget)
-    Write-Host "$(Get-Date) Installing Nuget from $Nuget"
-    md -force "c:\programdata\nuget"
-    move $nuget c:\programdata\nuget\nuget.exe
-    [Utility]::Addpath("C:\programdata\nuget")
-    Write-Host "$(Get-Date) ...finished installing nodejs"
-}
+    if ($config.PackageManagers.Nuget -ne $null) {
+        $nuget = [Utility]::Fetch($config.PackageManagers.Nuget)
+        Write-Host "$(Get-Date) Installing Nuget from $Nuget"
+        md -force "c:\programdata\nuget"
+        move $nuget c:\programdata\nuget\nuget.exe
+        [Utility]::Addpath("C:\programdata\nuget")
+        Write-Host "$(Get-Date) ...finished installing nodejs"
+    }
 
-if ($config.PackageManagers.Maven -ne $null) {
-    $maven = [Utility]::Fetch($config.PackageManagers.Maven)
-    Write-Host "$(Get-Date) Installing Maven from $maven"
-    Expand-Archive $maven -DestinationPath 'C:\programdata\checkmarx\automation\installers' -Force
-    $mvnfolder = [Utility]::Basename($maven).Replace("-bin.zip", "")
-    [Utility]::Addpath("C:\programdata\checkmarx\automation\installers\${mvnfolder}\bin")
-    [Environment]::SetEnvironmentVariable('MAVEN_HOME', 'C:\programdata\checkmarx\automation\installers\apache-maven-3.6.3', 'Machine')
-    Write-Host "$(Get-Date) ...finished installing nodejs"
-}
+    if ($config.PackageManagers.Maven -ne $null) {
+        $maven = [Utility]::Fetch($config.PackageManagers.Maven)
+        Write-Host "$(Get-Date) Installing Maven from $maven"
+        Expand-Archive $maven -DestinationPath 'C:\programdata\checkmarx\automation\installers' -Force
+        $mvnfolder = [Utility]::Basename($maven).Replace("-bin.zip", "")
+        [Utility]::Addpath("C:\programdata\checkmarx\automation\installers\${mvnfolder}\bin")
+        [Environment]::SetEnvironmentVariable('MAVEN_HOME', 'C:\programdata\checkmarx\automation\installers\apache-maven-3.6.3', 'Machine')
+        Write-Host "$(Get-Date) ...finished installing nodejs"
+    }
 
-if ($config.PackageManagers.Gradle -ne $null) {
-    $gradle = [Utility]::Fetch($config.PackageManagers.Gradle)
-    Write-Host "$(Get-Date) Installing Gradle from $gradle"
-    Expand-Archive $gradle -DestinationPath 'C:\programdata\checkmarx\automation\installers' -Force
-    $gradlefolder = [Utility]::Basename($gradle).Replace("-bin.zip", "")
-    [Utility]::Addpath("C:\programdata\checkmarx\automation\installers\${gradlefolder}\bin")
-    Write-Host "$(Get-Date) ...finished installing nodejs"
+    if ($config.PackageManagers.Gradle -ne $null) {
+        $gradle = [Utility]::Fetch($config.PackageManagers.Gradle)
+        Write-Host "$(Get-Date) Installing Gradle from $gradle"
+        Expand-Archive $gradle -DestinationPath 'C:\programdata\checkmarx\automation\installers' -Force
+        $gradlefolder = [Utility]::Basename($gradle).Replace("-bin.zip", "")
+        [Utility]::Addpath("C:\programdata\checkmarx\automation\installers\${gradlefolder}\bin")
+        Write-Host "$(Get-Date) ...finished installing nodejs"
+    }
 }
 
 
