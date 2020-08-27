@@ -166,20 +166,26 @@ function ConfigureAccessControl() {
 
 $Secure_String_Pwd = ConvertTo-SecureString $pfxpassword -AsPlainText -Force
 
-if ([String]::IsNullOrEmpty($pfxfile) -and [String]::IsNullOrEmpty($domainname)) {
+if ([String]::IsNullOrEmpty($pfxfile) -and [String]::IsNullOrEmpty($domainname) -and [String]::IsNullOrEmpty($pfxpassword)) {
   log "No certificates provided, attempting to use Posh-ACME certs if available." 
-  $cert = Get-PACertificate
+  try {
+    $cert = Get-PACertificate
+  } catch {
+    log $_
+  }
   if ($cert -ne $null) {
     log "Posh-ACME cert found."
     $pfxfile = $cert.PfxFile
     $Secure_String_Pwd = $cert.PfxPass
     $domainname = $cert.AllSANs[0]
     $thumbprint = $cert.Thumbprint
-  } else {
-    log "Posh-ACME cert was not found. Searching for server.pfx file"
-    $pfxfile = $(Get-ChildItem C:\programdata\checkmarx -Recurse -Filter "server.pfx" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
   } 
-} 
+}
+
+if ([String]::IsNullOrEmpty($pfxfile) -and -not [string]::IsNullOrEmpty($pfxpassword)) {
+  log "Searching for server.pfx file"
+  $pfxfile = $(Get-ChildItem C:\programdata\checkmarx -Recurse -Filter "server.pfx" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
+}
 
 log "Validating arguments..."
 if ([String]::IsNullOrEmpty($pfxfile) -or [String]::IsNullOrEmpty($domainname)) {
@@ -191,11 +197,12 @@ if ([String]::IsNullOrEmpty($pfxfile) -or [String]::IsNullOrEmpty($domainname)) 
 log "Importing the certificate into LocalMachine\My"
 $cert = Import-PfxCertificate -FilePath $pfxfile -CertStoreLocation Cert:\LocalMachine\My -Password $Secure_String_Pwd
 
+
+ConfigureEngineTls $domainname $cert.Thumbprint
 ConfigureIIS $domainname $cert.Thumbprint
 ConfigureWSResolver $domainname
 UpdateHostsFile $domainname
 ConfigureManagerServicesTransportSecurity
-ConfigureEngineTls $domainname $cert.Thumbprint
 ConfigureAccessControl 
 
 try {
