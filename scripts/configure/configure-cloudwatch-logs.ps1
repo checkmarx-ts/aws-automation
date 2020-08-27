@@ -37,28 +37,28 @@ log "Environment: $log_env"
 $logfiles = [System.Collections.ArrayList]::new()
 
 # CxSAST Engine Logs
-$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/EngineAll.log" "C:\Program Files\Checkmarx\Checkmarx Engine Server\Logs\Trace\EngineAll.log"))
-$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/EngineScanLogs" "C:\Program Files\Checkmarx\Checkmarx Engine Server\Engine Server\logs\ScanLogs\*\*.log"))
+$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/EngineAll.log" "C:\Program Files\Checkmarx\Checkmarx Engine Server\Logs\Trace\EngineAll.log")) | Out-Null
+$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/EngineScanLogs" "C:\Program Files\Checkmarx\Checkmarx Engine Server\Engine Server\logs\ScanLogs\*\*.log")) | Out-Null
 
 # CxManager logs
-$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/CxJobsManagerAll.log" "C:\Program Files\Checkmarx\Logs\JobsManager\Trace\CxJobsManagerAll.log"))
-$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/CxScanManagerAll.log" "C:\Program Files\Checkmarx\Logs\ScansManager\Trace\CxScanManagerAll.log"))
-$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/CxSystemManagerAll.log" "C:\Program Files\Checkmarx\Logs\SystemManager\Trace\CxSystemManagerAll.log"))
-$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/WebAPIAll.log" "C:\Program Files\Checkmarx\Logs\WebAPI\Trace\WebAPIAll.log"))
-$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/ManagerWSAll.log" "C:\Program Files\Checkmarx\Logs\WebServices\Trace\ManagerWSAll.log"))
+$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/CxJobsManagerAll.log" "C:\Program Files\Checkmarx\Logs\JobsManager\Trace\CxJobsManagerAll.log")) | Out-Null
+$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/CxScanManagerAll.log" "C:\Program Files\Checkmarx\Logs\ScansManager\Trace\CxScanManagerAll.log")) | Out-Null
+$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/CxSystemManagerAll.log" "C:\Program Files\Checkmarx\Logs\SystemManager\Trace\CxSystemManagerAll.log")) | Out-Null
+$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/WebAPIAll.log" "C:\Program Files\Checkmarx\Logs\WebAPI\Trace\WebAPIAll.log")) | Out-Null
+$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/ManagerWSAll.log" "C:\Program Files\Checkmarx\Logs\WebServices\Trace\ManagerWSAll.log")) | Out-Null
 
 # CxWeb logs
-$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/PortalAll.log" "C:\Program Files\Checkmarx\Logs\WebClient\Trace\PortalAll.log"))
+$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/PortalAll.log" "C:\Program Files\Checkmarx\Logs\WebClient\Trace\PortalAll.log"))| Out-Null
 
 # CxArm
-$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/CxARM/Tomcat/cxarm.log" "C:\Program Files\Checkmarx\Logs\CxARM\Tomcat\cxarm.log"))
-$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/CxARM/Tomcat/eventsReport.log" "C:\Program Files\Checkmarx\Logs\CxARM\Tomcat\eventsReport.log"))
-$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/CxARM/ETL/SyncETL.log" "C:\Program Files\Checkmarx\Logs\CxARM\ETL\SyncETL.log"))
-$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/CxARM/ETL/IncrementalSyncETL.log" "C:\Program Files\Checkmarx\Logs\CxARM\ETL\IncrementalSyncETL.log"))
+$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/CxARM/Tomcat/cxarm.log" "C:\Program Files\Checkmarx\Logs\CxARM\Tomcat\cxarm.log")) | Out-Null
+$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/CxARM/Tomcat/eventsReport.log" "C:\Program Files\Checkmarx\Logs\CxARM\Tomcat\eventsReport.log")) | Out-Null
+$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/CxARM/ETL/SyncETL.log" "C:\Program Files\Checkmarx\Logs\CxARM\ETL\SyncETL.log")) | Out-Null
+$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/CxARM/ETL/IncrementalSyncETL.log" "C:\Program Files\Checkmarx\Logs\CxARM\ETL\IncrementalSyncETL.log")) | Out-Null
 # Todo: add activemq log
 
 # IIS Logs
-$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/iis/accesslogs" "C:\inetpub\logs\LogFiles\W3SVC1\u_ex*.log"))
+$logfiles.Add((CreateCollectListObject "/checkmarx/$log_env/iis/accesslogs" "C:\inetpub\logs\LogFiles\W3SVC1\u_ex*.log")) | Out-Null
 
 
 <###################################
