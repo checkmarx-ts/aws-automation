@@ -31,7 +31,8 @@ class Utility {
         Write-Host "Searching for any running msiexec processes:"
         get-process msiexe*
         Write-Host "---------------------------------------------------------------"
-        Write-Host "Searching for any running msiexec processes:"
+        Write-Host "---------------------------------------------------------------"
+        Write-Host "Searching for any running cxsetup processes:"
         get-process cxsetup*
         Write-Host "---------------------------------------------------------------"
         Write-Host "---------------------------------------------------------------"    
