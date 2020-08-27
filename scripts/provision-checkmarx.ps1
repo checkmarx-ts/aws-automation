@@ -467,8 +467,8 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
         Write-Host "$(Get-Date) Installing Maven from $maven"
         Expand-Archive $maven -DestinationPath 'C:\programdata\checkmarx\automation\installers' -Force
         $mvnfolder = [Utility]::Basename($maven).Replace("-bin.zip", "")
-        [Utility]::Addpath("C:\programdata\checkmarx\automation\installers\${mvnfolder}\bin")
-        [Environment]::SetEnvironmentVariable('MAVEN_HOME', 'C:\programdata\checkmarx\automation\installers\apache-maven-3.6.3', 'Machine')
+        [Utility]::Addpath("${mvnfolder}\bin")
+        [Environment]::SetEnvironmentVariable('MAVEN_HOME', $mvnfolder, 'Machine')
         Write-Host "$(Get-Date) ...finished installing nodejs"
     }
 
@@ -477,7 +477,7 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
         Write-Host "$(Get-Date) Installing Gradle from $gradle"
         Expand-Archive $gradle -DestinationPath 'C:\programdata\checkmarx\automation\installers' -Force
         $gradlefolder = [Utility]::Basename($gradle).Replace("-bin.zip", "")
-        [Utility]::Addpath("C:\programdata\checkmarx\automation\installers\${gradlefolder}\bin")
+        [Utility]::Addpath("${gradlefolder}\bin")
         Write-Host "$(Get-Date) ...finished installing nodejs"
     }
 }
