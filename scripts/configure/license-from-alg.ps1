@@ -11,13 +11,8 @@ Uses the ALG. Assumes that all ALG artifacts have been fetched to c:\programdata
   4. HID_CLI_9.0.zip obtained from https://www.checkmarx.com/cxutilities/
 #>
 
-# Self Elevate
-if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Start-Process PowerShell -Verb RunAs "-NoProfile -ExecutionPolicy Bypass -Command `"cd '$pwd'; & '$PSCommandPath';`"";
-    exit
-}
 function log([string] $msg) { Write-Host "$(Get-Date -Format G) [$PSCommandPath] $msg" }
-
+md -force c:\programdata\checkmarx\alg
 # Force TLS 1.2+ and hide progress bars to prevent slow downloads
 Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; 
 $ProgressPreference = "SilentlyContinue"
@@ -47,7 +42,7 @@ log "...found: $license"
 # Import the new license if Checkmarx is installed
 if (Test-Path "C:\Program Files\Checkmarx\Licenses") {
   Move-Item "C:\Program Files\Checkmarx\Licenses\license.cxl" "C:\Program Files\Checkmarx\Licenses\license.$(Get-Date -format "yyyy-MM-dd-HHmm").bak" -Force -ErrorAction SilentlyContinue
-  Copy-Item "${license}" 'C:\Program Files\Checkmarx\Licenses\license.cxl' -Verbose -Force
+  Copy-Item "${license}" 'C:\Program Files\Checkmarx\Licenses\license.cxl' -Force
   # Restart services to begin using the new license
   restart-service cx* 
   iisreset
@@ -55,7 +50,7 @@ if (Test-Path "C:\Program Files\Checkmarx\Licenses") {
 
 # Place a copy in the installer folder for automation purposes. By convention the automation scripts will look for a license file here
 log "Creating a copy for the automation scripts to find during install time"
-mkdir -Force "c:\programdata\checkmarx\automation\installers"
-Copy-Item "$license" "c:\programdata\checkmarx\automation\installers\" -Verbose -Force
+mkdir -Force "c:\programdata\checkmarx\artifacts"
+Copy-Item "$license" "c:\programdata\checkmarx\artifacts\" -Force
 
 log "finished"

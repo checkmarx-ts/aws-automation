@@ -420,6 +420,27 @@ if (($config.Checkmarx.ComponentType -eq "Manager") -and ($config.MsSql.UseLocal
     }
 }
 
+###############################################################################
+# Generate Checkmarx License
+###############################################################################
+if ($config.Checkmarx.License.Url -ne $null) {
+    if ($config.Checkmarx.License.Url.EndsWith(".cxl")) {
+        Write-Host "$(Get-Date) License file provided and will be downloaded."
+        [Utility]::Fetch($config.Checkmarx.License.Url)
+    } elseif ($config.Checkmarx.license.Url -eq "ALG") {
+        Write-Host "$(Get-Date) Running automatic license generator"
+        C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
+        Write-Host "$(Get-Date) ... finished running automatic license generator"
+    } else {
+        Write-Host "$(Get-Date) config.Checkmarx.License.Url value provided ($($config.Checkmarx.License.Url)) but not sure how to handle. Valid values are 'ALG' and 's3://bucket/keyprefix/somelicensefile.cxl' (must end in .cxl)"
+    }
+    $license_file = [Utility]::Find("*.cxl")
+    if ([Utility]::Exists($license_file)) {
+        Write-Host "$(Get-Date) Using $license_file"
+        $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) LIC=""$($license_file)"""
+    } 
+}
+
 
 ###############################################################################
 # Install Checkmarx
@@ -473,15 +494,6 @@ Start-Process -FilePath "$hotfixexe" -ArgumentList "-cmd ACCEPT_EULA=Y" -Wait -N
 [Utility]::Debug("post-cx-hotfix")  
 Write-Host "$(Get-Date) ...finished installing"    
 
-
-###############################################################################
-# Generate Checkmarx License
-###############################################################################
-if ($config.Checkmarx.ComponentType -eq "Manager") {
-    Write-Host "$(Get-Date) Running automatic license generator"
-    C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
-    Write-Host "$(Get-Date) ... finished running automatic license generator"
-}
 
 ###############################################################################
 # Post Install Windows Configuration
