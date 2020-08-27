@@ -318,13 +318,26 @@ if ($config.Sql.UseSqlAuth -eq "True") {
 }
 
 Start-Process -FilePath "$cxsetup" -ArgumentList "/uninstall /quiet" -Wait -NoNewWindow
+if ($config.Installer.Args.Contains("MANAGER=1")){
+    $temp_args = $config.Installer.Args
+    $temp_args = $temp_args.Replace("WEB=1", "WEB=0").Replace("ENGINE=1", "ENGINE=0").Replace("AUDIT=1", "AUDIT=0")
+    Write-Host "$(Get-Date) Installing CxSAST with $temp_args"
+    Start-Process -FilePath "$cxsetup" -ArgumentList "$temp_args" -Wait -NoNewWindow
+    Write-Host "$(Get-Date) ...finished installing"
+}
+
+if ($config.Installer.Args.Contains("WEB=1")){
+    $temp_args = $config.Installer.Args
+    $temp_args = $temp_args.Replace("ENGINE=1", "ENGINE=0").Replace("AUDIT=1", "AUDIT=0")
+    Write-Host "$(Get-Date) Installing CxSAST with $temp_args"
+    Start-Process -FilePath "$cxsetup" -ArgumentList "$temp_args" -Wait -NoNewWindow
+    Write-Host "$(Get-Date) ...finished installing"
+}
+
 Write-Host "$(Get-Date) Installing CxSAST with $($config.Installer.Args)"
-Start-Process -FilePath "$cxsetup" -ArgumentList "$($config.Installer.Args)" -Wait -NoNewWindow -RedirectStandardError ".\cxinstaller.err" -RedirectStandardOutput ".\cxinstaller.out"
+Start-Process -FilePath "$cxsetup" -ArgumentList "$($config.Installer.Args)" -Wait -NoNewWindow
 Write-Host "$(Get-Date) ...finished installing"
-Write-Host "$(Get-Date) installer StandardError:"
-cat .\cxinstaller.err
-Write-Host "$(Get-Date) installer StandardOutput:"
-cat .\cxinstaller.out
+
 
 ###############################################################################
 # Install Checkmarx Hotfix
