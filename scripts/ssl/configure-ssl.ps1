@@ -57,8 +57,7 @@ $cert = Import-PfxCertificate -FilePath $pfxfile -CertStoreLocation Cert:\LocalM
 $thumbprint = $cert.Thumbprint
 [CxSASTEngineTlsConfigurer]::New($thumbprint).Configure()
 [CxManagerIisTlsConfigurer]::New("Default Web Site", "443", $thumbprint).Configure()
-[CxWsResolverConfigurer]::New($domainname, "443").Configure()
-[CxManagerTlsConfigurer]::New("443", $True).Configure()
+[CxManagerTlsConfigurer]::New("443", $True, $domainname).Configure()
 [CheckmarxSystemInfo] $cx = [CheckmarxSystemInfo]::new()
 
 # Update hosts file

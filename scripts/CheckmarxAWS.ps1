@@ -312,19 +312,23 @@ Class CxSASTEngineTlsConfigurer : Base {
     return (Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -ne $null -and $_.NetAdapter.Status -ne "Disconnected"}).IPv4Address.Ipaddress
   }
 
-  hidden runCmd($cmd, $arguments) {
+  hidden runCmd($cmd, $arguments, $label) {
     $this.log.Info("running command: $cmd $arguments")
-    Start-Process "$cmd" -ArgumentList "$arguments" -Wait -NoNewWindow
+    Start-Process "$cmd" -ArgumentList "$arguments" -Wait -NoNewWindow -RedirectStandardError "c:\${label}.err" -RedirectStandardOutput "c:\${label}.out"
     $this.log.Info("finished running command: $cmd $arguments")
+    $this.log.Info("Standard output:")
+    cat "c:\${label}.out"
+    $this.log.Info("Standard error:")
+    "c:\${label}.err"
   }
 
   hidden ConfigureNetsh() {
     # Delete any cert, then register our own
     $appid = "{00112233-4455-6677-8899-AABBCCDDEEFF}"
     $ipport = "0.0.0.0:$($this.tlsPort)"
-    $this.runCmd(("netsh.exe", "http delete sslcert ipport={0}" -f $ipport))
-    $this.runCmd(("netsh.exe", "http add sslcert ipport={0} certhash={1} appid={2}" -f $ipport, $($this.certificates.thumbprint) , $appid))
-    $this.runCmd("netsh.exe", "http add urlacl url=https://+:$($this.tlsPort)/CxSourceAnalyzerEngineWCF/CxEngineWebServices.svc user=`"NT AUTHORITY\NETWORK SERVICE`"")
+    $this.runCmd("netsh.exe", ("http delete sslcert ipport={0}" -f $ipport), "netsh-delete")
+    $this.runCmd("netsh.exe", ("http add sslcert ipport={0} certhash={1} appid={2}" -f $ipport, $($this.thumbprint) , $appid), "netsh-add-sslcert")
+    $this.runCmd("netsh.exe", "http add urlacl url=https://+:$($this.tlsPort)/CxSourceAnalyzerEngineWCF/CxEngineWebServices.svc user=`"NT AUTHORITY\NETWORK SERVICE`"", "netsh-add-urlacl")
   }
 
   hidden ConfigureServiceConfigFile() {
@@ -455,37 +459,16 @@ Class CxManagerIisTlsConfigurer : Base {
   }
 }
 
-Class CxWsResolverConfigurer : Base {
-  hidden [String] $fqdn
-  hidden [String] $port
-  CxWsResolverConfigurer([String] $fqdn, [String] $port) {
-    $this.fqdn = $fqdn
-    $this.port = $port
-  }
-
-  Configure() {
-    [CheckmarxSystemInfo] $cx = [CheckmarxSystemInfo]::new()
-    if (!(Test-Path $cx.WebConfigFile)) {
-      $this.log.Warn("Checkmarx Web Portal web.config at $($cx.WebConfigFile) does not exist and cannot be updated.")
-      return
-    }
-  
-    $this.log.Info("Updating the Checkmarx Web Portal web.config $($cx.WebConfigFile) CxWSResolver.CxWSResolver key for ssl")
-    [Xml]$xml = Get-Content $cx.WebConfigFile
-    $obj = $xml.configuration.appSettings.add | where {$_.Key -eq "CxWSResolver.CxWSResolver" }
-    $obj.value = "https://$($this.fqdn):$($this.port)/Cxwebinterface/CxWSResolver.asmx"
-    $xml.Save($cx.WebConfigFile)
-    log "... Finished"
-  }
-}
 
 Class CxManagerTlsConfigurer : Base {
   [String] $tlsPort
   [bool] $ignoreTlsCertificateValidationErrors
+  [String] $domainName
 
-  CxManagerTlsConfigurer([String] $tlsPort, [bool] $ignoreTlsCertificateValidationErrors) {
+  CxManagerTlsConfigurer([String] $tlsPort, [bool] $ignoreTlsCertificateValidationErrors, [String] $domainName) {
     $this.tlsPort = $tlsPort
     $this.ignoreTlsCertificateValidationErrors = $ignoreTlsCertificateValidationErrors
+    $this.domainname = $domainName
   }
 
   Configure() {
@@ -516,7 +499,7 @@ Class CxManagerTlsConfigurer : Base {
     [Xml]$xml = Get-Content $configfile
     $obj = $xml.configuration.appSettings.add | where {$_.Key -eq "CxWSResolver.CxWSResolver" }
     $hostAddress = $obj.value
-    $hostAddress = $hostAddress.Replace("http:", "https:").Replace(":80", ":" + $($this.tlsPort)).Replace("localhost", $($this.names.ipaddress))
+    $hostAddress = $hostAddress.Replace("http:", "https:").Replace(":80", ":" + $($this.tlsPort)).Replace("localhost", $($this.domainName))
     $obj.value = $hostAddress
     $xml.Save($configfile)
 }

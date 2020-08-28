@@ -82,14 +82,14 @@ $cx_api_password = $(Get-SSMParameter -Name "$($config.Aws.SsmPath)/api/password
 $tomcat_password = $(Get-SSMParameter -Name "$($config.Aws.SsmPath)/tomcat/password" -WithDecryption $True).Value
 $pfx_password = $(Get-SSMParameter -Name "$($config.Aws.SsmPath)/pfx/password" -WithDecryption $True).Value
 
-Write-Host "$(Get-Date) env:CheckmarxBucket = $env:CheckmarxBucket"
-Write-Host "$(Get-Date) checkmarx-config.psd1 configuration:"
-cat C:\checkmarx-config.psd1
 
 ###############################################################################
 #  Debug Info
 ###############################################################################
 if (!([Utility]::Exists("C:\cx-init-debug.lock"))) {
+Write-Host "$(Get-Date) env:CheckmarxBucket = $env:CheckmarxBucket"
+Write-Host "$(Get-Date) checkmarx-config.psd1 configuration:"
+cat C:\checkmarx-config.psd1    
 @"
 
 @"
