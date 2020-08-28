@@ -806,26 +806,73 @@ Class DotnetCoreHostingInstaller : Base {
   }
 }
 
-
-###############################################################################
-# Install SQL Server Express
-###############################################################################
-if (($config.Checkmarx.ComponentType -eq "Manager") -and ($config.MsSql.UseLocalSqlExpress -eq "True")) {
-  # SQL Server install should come *after* the Checkmarx installation media is unzipped. The SQL Server
-  # installer is packaged in the third_party folder from the zip. 
-  if ((get-service sql*).length -eq 0) {
-      $sqlserverexe = [Utility]::Find("SQLEXPR*.exe")
-      Write-Host "$(Get-Date) Installing SQL Server from ${sqlserverexe}"
+Class MsSqlServerExpressInstaller : Base {
+  [String] $url
+  MsSqlServerExpressInstaller($url) {
+    $this.url = $url
+  }
+  Install() {  
+    # SQL Server install should come *after* the Checkmarx installation media is unzipped. The SQL Server
+    # installer is packaged in the third_party folder from the zip. 
+    if ((get-service sql*).length -eq 0) {
+      $sqlserverexe = [Utility]::Fetch($this.url)
+      $this.log.Info("Installing SQL Server from ${sqlserverexe}")
       [Utility]::Debug("pre-sql-server-express")  
       Start-Process -FilePath "$sqlserverexe" -ArgumentList "/IACCEPTSQLSERVERLICENSETERMS /Q /ACTION=install /INSTANCEID=SQLEXPRESS /INSTANCENAME=SQLEXPRESS /UPDATEENABLED=FALSE /BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1" -Wait -NoNewWindow
       [Utility]::Debug("post-sql-server-express")  
       $sqlserverlog = $(Get-ChildItem "C:\Program Files\Microsoft SQL Server\110\Setup Bootstrap\Log" -Recurse -Filter "Summary.txt" | Sort -Descending | Select -First 1 -ExpandProperty FullName) 
-      Write-Host "$(Get-Date) ...finished Installing SQL Server. Log is:"
+      $this.log.Info("...finished Installing SQL Server. Log is:")
       cat $sqlserverlog        
-  } else {
-      Write-Host "$(Get-Date) SQL Server Express is already installed - skipping installation"
+    } else {
+      $this.log.Info("SQL Server Express is already installed - skipping installation")
+    }
   }
 }
+
+Class CxSastInstaller : Base {
+  [String] $url
+  [String] $args
+  CxSastInstaller($url, $args) {
+    $this.url = $url
+    $this.args = $args
+  }
+  Install() {     
+    [Utility]::Debug("pre-cx-uninstall")  
+    Start-Process -FilePath "$($this.url)" -ArgumentList "/uninstall /quiet" -Wait -NoNewWindow
+    [Utility]::Debug("post-cx-uninstall")  
+    # Components should be installed in a certain order or else the install can hang. Order is manager, then web, then engine. 
+    # This is accomplished with temp_args and temporarily replacing component choices in order to install in order
+    if ($this.args.Contains("MANAGER=1")){
+        $temp_args = $this.args
+        $temp_args = $temp_args.Replace("WEB=1", "WEB=0").Replace("ENGINE=1", "ENGINE=0").Replace("AUDIT=1", "AUDIT=0")
+        $this.log.Info("Installing CxSAST with $temp_args")
+        [Utility]::Debug("pre-cx-installer-mgr")  
+        Start-Process -FilePath "$($this.url)" -ArgumentList "$temp_args" -Wait -NoNewWindow
+        [Utility]::Debug("post-cx-installer-mgr")  
+        $this.log.Info("...finished installing")
+    }
+
+    if ($this.args.Contains("WEB=1")){
+        $temp_args = $this.args
+        $temp_args = $temp_args.Replace("ENGINE=1", "ENGINE=0").Replace("AUDIT=1", "AUDIT=0")
+        $this.log.Info("Installing CxSAST with $temp_args")
+        [Utility]::Debug("pre-cx-installer-web")  
+        Start-Process -FilePath "$($this.url)" -ArgumentList "$temp_args" -Wait -NoNewWindow
+        [Utility]::Debug("post-cx-installer-web")  
+        $this.log.Info("...finished installing")
+    }
+
+    $this.log.Info("Installing CxSAST with $($this.args)")
+    [Utility]::Debug("pre-cx-installer-all")  
+    Start-Process -FilePath "$($this.url)" -ArgumentList "$($this.args)" -Wait -NoNewWindow
+    [Utility]::Debug("post-cx-installer-all")  
+    $this.log.Info("...finished installing")
+  }
+}
+
+
+
+
 
 
 

@@ -169,10 +169,15 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
     [IisInstaller]::new().Install()
     [IisUrlRewriteInstaller]::new($config.Dependencies.IisRewriteModule).Install()
     [IisApplicationRequestRoutingInstaller]::new($config.Dependencies.IisApplicationRequestRoutingModule).Install()
-    [DotnetCoreHostingInstaller]::new([Utility]::Find("dotnet-hosting-2.1.16-win.exe")).Install()    
+    [DotnetCoreHostingInstaller]::new([Utility]::Find("dotnet-hosting-2.1.16-win.exe")).Install() 
 }
-    
 
+###############################################################################
+# Install SQL Server Express
+###############################################################################
+if (($config.Checkmarx.ComponentType -eq "Manager") -and ($config.MsSql.UseLocalSqlExpress -eq "True")) {
+    [MsSqlServerExpressInstaller]::new([Utility]::Find("SQLEXPR*.exe")).Install()  
+}
 
 ###############################################################################
 # Generate Checkmarx License
@@ -212,36 +217,7 @@ if ($config.MsSql.UseSqlAuth -eq "True") {
     }
 }
 
-[Utility]::Debug("pre-cx-uninstall")  
-Start-Process -FilePath "$cxsetup" -ArgumentList "/uninstall /quiet" -Wait -NoNewWindow
-[Utility]::Debug("post-cx-uninstall")  
-# Components should be installed in a certain order or else the install can hang. Order is manager, then web, then engine. 
-# This is accomplished with temp_args and temporarily replacing component choices in order to install in order
-if ($config.Checkmarx.Installer.Args.Contains("MANAGER=1")){
-    $temp_args = $config.Checkmarx.Installer.Args
-    $temp_args = $temp_args.Replace("WEB=1", "WEB=0").Replace("ENGINE=1", "ENGINE=0").Replace("AUDIT=1", "AUDIT=0")
-    Write-Host "$(Get-Date) Installing CxSAST with $temp_args"
-    [Utility]::Debug("pre-cx-installer-mgr")  
-    Start-Process -FilePath "$cxsetup" -ArgumentList "$temp_args" -Wait -NoNewWindow
-    [Utility]::Debug("post-cx-installer-mgr")  
-    Write-Host "$(Get-Date) ...finished installing"
-}
-
-if ($config.Checkmarx.Installer.Args.Contains("WEB=1")){
-    $temp_args = $config.Checkmarx.Installer.Args
-    $temp_args = $temp_args.Replace("ENGINE=1", "ENGINE=0").Replace("AUDIT=1", "AUDIT=0")
-    Write-Host "$(Get-Date) Installing CxSAST with $temp_args"
-    [Utility]::Debug("pre-cx-installer-web")  
-    Start-Process -FilePath "$cxsetup" -ArgumentList "$temp_args" -Wait -NoNewWindow
-    [Utility]::Debug("post-cx-installer-web")  
-    Write-Host "$(Get-Date) ...finished installing"
-}
-
-Write-Host "$(Get-Date) Installing CxSAST with $($config.Checkmarx.Installer.Args)"
-[Utility]::Debug("pre-cx-installer-all")  
-Start-Process -FilePath "$cxsetup" -ArgumentList "$($config.Checkmarx.Installer.Args)" -Wait -NoNewWindow
-[Utility]::Debug("post-cx-installer-all")  
-Write-Host "$(Get-Date) ...finished installing"
+[CxSastInstaller]::new([Utility]::Find("CxSetup.exe"), $config.Checkmarx.Installer.Args).Install()
 
 
 ###############################################################################
