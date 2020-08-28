@@ -757,7 +757,7 @@ Class IisUrlRewriteInstaller : Base {
     if (Test-Path -Path "C:\Windows\System32\inetsrv\rewrite.dll") {
       $this.log.Info("IIS Rewrite Module is already installed - skipping installation")
     } else {
-      $rewriteinstaller = [Utility]::Fetch()
+      $rewriteinstaller = [Utility]::Fetch($this.url)
       [Utility]::Debug("pre-iis-urlrewrite")  
       $this.log.Info("Installing IIS rewrite Module from $rewriteinstaller")
       Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$rewriteinstaller`" /L*V `".\rewrite_install.log`" /QN" -Wait -NoNewWindow
@@ -831,10 +831,10 @@ Class MsSqlServerExpressInstaller : Base {
 
 Class CxSastInstaller : Base {
   [String] $url
-  [String] $args
-  CxSastInstaller($url, $args) {
+  [String] $installerArgs
+  CxSastInstaller($url, $installerArgs) {
     $this.url = $url
-    $this.args = $args
+    $this.installerArgs = $installerArgs
   }
   Install() {     
     [Utility]::Debug("pre-cx-uninstall")  
@@ -842,8 +842,8 @@ Class CxSastInstaller : Base {
     [Utility]::Debug("post-cx-uninstall")  
     # Components should be installed in a certain order or else the install can hang. Order is manager, then web, then engine. 
     # This is accomplished with temp_args and temporarily replacing component choices in order to install in order
-    if ($this.args.Contains("MANAGER=1")){
-        $temp_args = $this.args
+    if ($this.installerArgs.Contains("MANAGER=1")){
+        $temp_args = $this.installerArgs
         $temp_args = $temp_args.Replace("WEB=1", "WEB=0").Replace("ENGINE=1", "ENGINE=0").Replace("AUDIT=1", "AUDIT=0")
         $this.log.Info("Installing CxSAST with $temp_args")
         [Utility]::Debug("pre-cx-installer-mgr")  
@@ -852,8 +852,8 @@ Class CxSastInstaller : Base {
         $this.log.Info("...finished installing")
     }
 
-    if ($this.args.Contains("WEB=1")){
-        $temp_args = $this.args
+    if ($this.installerArgs.Contains("WEB=1")){
+        $temp_args = $this.installerArgs
         $temp_args = $temp_args.Replace("ENGINE=1", "ENGINE=0").Replace("AUDIT=1", "AUDIT=0")
         $this.log.Info("Installing CxSAST with $temp_args")
         [Utility]::Debug("pre-cx-installer-web")  
@@ -862,9 +862,9 @@ Class CxSastInstaller : Base {
         $this.log.Info("...finished installing")
     }
 
-    $this.log.Info("Installing CxSAST with $($this.args)")
+    $this.log.Info("Installing CxSAST with $($this.installerArgs)")
     [Utility]::Debug("pre-cx-installer-all")  
-    Start-Process -FilePath "$($this.url)" -ArgumentList "$($this.args)" -Wait -NoNewWindow
+    Start-Process -FilePath "$($this.url)" -ArgumentList "$($this.installerArgs)" -Wait -NoNewWindow
     [Utility]::Debug("post-cx-installer-all")  
     $this.log.Info("...finished installing")
   }
