@@ -167,80 +167,12 @@ if ([Utility]::Exists("c:\programdata\checkmarx\artifacts\${hotfix_zip}")) {
 if ($config.Checkmarx.ComponentType -eq "Manager") {
     [GitInstaller]::new($config.Dependencies.Git).Install()
     [IisInstaller]::new().Install()
+    [IisUrlRewriteInstaller]::new($config.Dependencies.IisRewriteModule).Install()
+    [IisApplicationRequestRoutingInstaller]::new($config.Dependencies.IisApplicationRequestRoutingModule).Install()
+    [DotnetCoreHostingInstaller]::new([Utility]::Find("dotnet-hosting-2.1.16-win.exe")).Install()    
 }
     
 
-###############################################################################
-# IIS Rewrite Module Install
-###############################################################################
-if ($config.Checkmarx.ComponentType -eq "Manager") {
-    if (Test-Path -Path "C:\Windows\System32\inetsrv\rewrite.dll") {
-        Write-Host "$(Get-Date) IIS Rewrite Module is already installed - skipping installation"
-    } else {
-        $rewriteinstaller = [Utility]::Fetch($config.Dependencies.IisRewriteModule)
-        [Utility]::Debug("pre-iis-urlrewrite")  
-        Write-Host "$(Get-Date) Installing IIS rewrite Module from $rewriteinstaller"
-        Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$rewriteinstaller`" /L*V `".\rewrite_install.log`" /QN" -Wait -NoNewWindow
-        [Utility]::Debug("post-iis-urlrewrite")  
-    }
-}
-
-
-###############################################################################
-# IIS Application Request Routing Install
-###############################################################################
-if ($config.Checkmarx.ComponentType -eq "Manager") {
-    if (($(C:\Windows\System32\inetsrv\appcmd.exe list modules) | Where  { $_ -match "ApplicationRequestRouting" } | ForEach-Object { echo $_ }).length -gt 1) {
-        Write-Host "$(Get-Date) IIS Application Request Routing Module is already installed - skipping installation"
-    } else {        
-        $requestroutinginstaller = [Utility]::Fetch($config.Dependencies.IisApplicationRequestRoutingModule)
-        [Utility]::Debug("pre-iis-apprequestrouting")  
-        Write-Host "$(Get-Date) Installing IIS Application Request Routing Module from $requestroutinginstaller"
-        Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$requestroutinginstaller`" /L*V `".\arr_install.log`" /QN" -Wait -NoNewWindow        
-        [Utility]::Debug("post-iis-apprequestrouting")  
-        Write-Host "$(Get-Date) ... finished Installing IIS Application Request Routing Module"
-    }
-}
-
-
-###############################################################################
-# Dotnet Core Hosting 2.1.16
-###############################################################################
-if ($config.Checkmarx.ComponentType -eq "Manager") {
-    if (Test-Path -Path "C:\Program Files\dotnet") {
-        Write-Host "$(Get-Date) Microsoft .NET Core 2.1.16 Windows Server Hosting is already installed - skipping installation"
-    } else {
-        # Only required for 9.0+ so make sure it exists
-        $dotnetcore_installer = [Utility]::Find("dotnet-hosting-2.1.16-win.exe")
-        if ([Utility]::Exists($dotnetcore_installer)) {
-            Write-Host "$(Get-Date) Installing Microsoft .NET Core 2.1.16 Windows Server Hosting from $dotnetcore_installer"
-            [Utility]::Debug("pre-dotnetcore")  
-            Start-Process -FilePath "$dotnetcore_installer" -ArgumentList "/quiet /install /norestart" -Wait -NoNewWindow
-            [Utility]::Debug("post-dotnetcore")  
-        }
-    }    
-}
-
-
-###############################################################################
-# Install SQL Server Express
-###############################################################################
-if (($config.Checkmarx.ComponentType -eq "Manager") -and ($config.MsSql.UseLocalSqlExpress -eq "True")) {
-    # SQL Server install should come *after* the Checkmarx installation media is unzipped. The SQL Server
-    # installer is packaged in the third_party folder from the zip. 
-    if ((get-service sql*).length -eq 0) {
-        $sqlserverexe = [Utility]::Find("SQLEXPR*.exe")
-        Write-Host "$(Get-Date) Installing SQL Server from ${sqlserverexe}"
-        [Utility]::Debug("pre-sql-server-express")  
-        Start-Process -FilePath "$sqlserverexe" -ArgumentList "/IACCEPTSQLSERVERLICENSETERMS /Q /ACTION=install /INSTANCEID=SQLEXPRESS /INSTANCENAME=SQLEXPRESS /UPDATEENABLED=FALSE /BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1" -Wait -NoNewWindow
-        [Utility]::Debug("post-sql-server-express")  
-        $sqlserverlog = $(Get-ChildItem "C:\Program Files\Microsoft SQL Server\110\Setup Bootstrap\Log" -Recurse -Filter "Summary.txt" | Sort -Descending | Select -First 1 -ExpandProperty FullName) 
-        Write-Host "$(Get-Date) ...finished Installing SQL Server. Log is:"
-        cat $sqlserverlog        
-    } else {
-        Write-Host "$(Get-Date) SQL Server Express is already installed - skipping installation"
-    }
-}
 
 ###############################################################################
 # Generate Checkmarx License

@@ -748,6 +748,84 @@ Class IisInstaller : Base {
   }
 }
 
+Class IisUrlRewriteInstaller : Base {
+  [String] $url
+  IisUrlRewriteInstaller($url) {
+    $this.url = $url
+  }
+  Install() {  
+    if (Test-Path -Path "C:\Windows\System32\inetsrv\rewrite.dll") {
+      $this.log.Info("IIS Rewrite Module is already installed - skipping installation")
+    } else {
+      $rewriteinstaller = [Utility]::Fetch()
+      [Utility]::Debug("pre-iis-urlrewrite")  
+      $this.log.Info("Installing IIS rewrite Module from $rewriteinstaller")
+      Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$rewriteinstaller`" /L*V `".\rewrite_install.log`" /QN" -Wait -NoNewWindow
+      [Utility]::Debug("post-iis-urlrewrite")  
+    }
+  }
+}
+
+Class IisApplicationRequestRoutingInstaller : Base {
+  [String] $url
+  IisApplicationRequestRoutingInstaller($url) {
+    $this.url = $url
+  }
+  Install() {  
+    if (($(C:\Windows\System32\inetsrv\appcmd.exe list modules) | Where  { $_ -match "ApplicationRequestRouting" } | ForEach-Object { echo $_ }).length -gt 1) {
+     $this.log.Info("IIS Application Request Routing Module is already installed - skipping installation")
+    } else {        
+        $requestroutinginstaller = [Utility]::Fetch($this.url)
+        [Utility]::Debug("pre-iis-apprequestrouting")  
+        $this.log.Info("Installing IIS Application Request Routing Module from $requestroutinginstaller")
+        Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$requestroutinginstaller`" /L*V `".\arr_install.log`" /QN" -Wait -NoNewWindow        
+        [Utility]::Debug("post-iis-apprequestrouting")  
+        $this.log.Info("... finished Installing IIS Application Request Routing Module")
+    }
+  }
+}
+
+Class DotnetCoreHostingInstaller : Base {
+  [String] $url
+  DotnetCoreHostingInstaller($url) {
+    $this.url = $url
+  }
+  Install() {  
+    if (Test-Path -Path "C:\Program Files\dotnet") {
+      $this.log.Info("Microsoft .NET Core 2.1.16 Windows Server Hosting is already installed - skipping installation")
+    } else {
+      # Only required for 9.0+ so make sure it exists
+      $dotnetcore_installer = [Utility]::Fetch($this.url)
+      if ([Utility]::Exists($dotnetcore_installer)) {
+          $this.log.Info("Installing Microsoft .NET Core 2.1.16 Windows Server Hosting from $dotnetcore_installer")
+          [Utility]::Debug("pre-dotnetcore")  
+          Start-Process -FilePath "$dotnetcore_installer" -ArgumentList "/quiet /install /norestart" -Wait -NoNewWindow
+          [Utility]::Debug("post-dotnetcore")  
+      }
+    }
+  }
+}
+
+
+###############################################################################
+# Install SQL Server Express
+###############################################################################
+if (($config.Checkmarx.ComponentType -eq "Manager") -and ($config.MsSql.UseLocalSqlExpress -eq "True")) {
+  # SQL Server install should come *after* the Checkmarx installation media is unzipped. The SQL Server
+  # installer is packaged in the third_party folder from the zip. 
+  if ((get-service sql*).length -eq 0) {
+      $sqlserverexe = [Utility]::Find("SQLEXPR*.exe")
+      Write-Host "$(Get-Date) Installing SQL Server from ${sqlserverexe}"
+      [Utility]::Debug("pre-sql-server-express")  
+      Start-Process -FilePath "$sqlserverexe" -ArgumentList "/IACCEPTSQLSERVERLICENSETERMS /Q /ACTION=install /INSTANCEID=SQLEXPRESS /INSTANCENAME=SQLEXPRESS /UPDATEENABLED=FALSE /BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1" -Wait -NoNewWindow
+      [Utility]::Debug("post-sql-server-express")  
+      $sqlserverlog = $(Get-ChildItem "C:\Program Files\Microsoft SQL Server\110\Setup Bootstrap\Log" -Recurse -Filter "Summary.txt" | Sort -Descending | Select -First 1 -ExpandProperty FullName) 
+      Write-Host "$(Get-Date) ...finished Installing SQL Server. Log is:"
+      cat $sqlserverlog        
+  } else {
+      Write-Host "$(Get-Date) SQL Server Express is already installed - skipping installation"
+  }
+}
 
 
 
