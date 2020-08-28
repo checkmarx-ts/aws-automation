@@ -541,3 +541,223 @@ Class CxManagerTlsConfigurer : Base {
     $xml.Save($configfile)
   }
 }
+
+class Utility {
+  [bool] static Exists([String] $fpath) {
+      return ((![String]::IsNullOrEmpty($fpath)) -and (Test-Path -Path "${fpath}"))
+  }
+  [String] static Addpath([String] $fpath){
+      [Environment]::SetEnvironmentVariable('Path',[Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::Machine) + ";$fpath",[EnvironmentVariableTarget]::Machine)
+      return [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::Machine)
+  }
+  [String] static Basename([String] $fullname) {
+      return $fullname.Substring($fullname.Replace("\","/").LastIndexOf("/") + 1)
+  }
+  [String] static Find([String] $filename) {
+      return $(Get-ChildItem C:\programdata\checkmarx -Recurse -Filter $filename | Sort -Descending | Select -First 1 -ExpandProperty FullName)
+  }
+  [String] static Find([String] $fpath, [String] $filename) {
+      return $(Get-ChildItem "$fpath" -Recurse -Filter $filename | Sort -Descending | Select -First 1 -ExpandProperty FullName)
+  }
+  [Void] static Debug([String] $stage) {
+      sleep 2
+      $msiexecs = Get-Process msiexe*
+      $cxprocs = Get-Process cx*
+      if ($msiexecs.count -gt 0 -or $cxprocs.count -gt 0) {
+          Write-Host "#########################################"
+          Write-Host "# Debugging ${stage} - found running processes"
+          Write-Host "#########################################"
+      }
+      if ($msiexecs.count -gt 0){ 
+          Write-Host "$(Get-Date) Found these running msiexec.exe process:"
+          $msiexecs | Format-Table | Out-File -FilePath C:\cx.debug; cat c:\cx.debug
+          $msiexecs | % { Get-WmiObject Win32_Process -Filter "ProcessId = $($_.Id)" }#| Select-Object ProcessId, Name, ExecutablePath, CommandLine | FL }
+      }
+      if ($cxprocs.count -gt 0) {
+          Write-Host "$(Get-Date) Found these running cx* processes:"
+          $cxprocs | Format-Table | Out-File -FilePath C:\cx.debug; cat c:\cx.debug
+          $cxprocs | % { Get-WmiObject Win32_Process -Filter "ProcessId = $($_.Id)" } #| Select-Object ProcessId, Name, ExecutablePath, CommandLine | FL }
+          Write-Host "#########################################"
+      }
+  }
+  [String] static Fetch([String] $source) {
+      $filename = [Utility]::Basename($source)
+      if ($source.StartsWith("https://")) {
+          Write-Host "$(Get-Date) Downloading $source"
+          (New-Object System.Net.WebClient).DownloadFile("$source", "c:\programdata\checkmarx\artifacts\${filename}")
+      } elseif ($source.StartsWith("s3://")) {        
+          $bucket = $source.Replace("s3://", "").Split("/")[0]
+          $key = $source.Replace("s3://${bucket}", "")
+          Write-Host "$(Get-Date) Downloading $source from bucket $bucket with key $key"
+          Read-S3Object -BucketName $bucket -Key $key -File "C:\programdata\checkmarx\artifacts\$filename"
+      }
+      $fullname = [Utility]::Find($filename)
+      Write-Host "$(Get-Date) ... found $fullname"
+      return $fullname
+  }
+}
+
+
+Class SevenZipInstaller : Base {
+  [String] $url
+  SevenZipInstaller([String] $url) {
+    $this.url = $url
+  }
+  Install() {
+    $7zip_path = $(Get-ChildItem 'HKLM:\SOFTWARE\7*Zip\' | Get-ItemPropertyValue -Name Path)
+    if ([Utility]::Exists($7zip_path)) {
+      $this.log.Info("7-Zip is already installed at ${7zip_path} - skipping installation")
+    } else {
+      $sevenzipinstaller = [Utility]::Fetch($this.url)
+      $this.log.Info("Installing 7zip from $sevenzipinstaller")
+      Start-Process -FilePath "$sevenzipinstaller" -ArgumentList "/S" -Wait -NoNewWindow
+      $newpath = [Utility]::Addpath($(Get-ChildItem 'HKLM:\SOFTWARE\7*Zip\' | Get-ItemPropertyValue -Name Path))
+      [Utility]::Debug("post-7zip")
+    }
+  }
+}
+
+Class Cpp2010RedistInstaller : Base {
+  [String] $url
+  Cpp2010RedistInstaller($url) {
+    $this.url = $url
+  }
+  Install() {
+    $version = $(Get-ChildItem 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\VisualStudio\10*0\VC\VCRedist\x64' -ErrorAction SilentlyContinue | Get-ItemPropertyValue -Name Installed -ErrorAction SilentlyContinue)
+    if (![String]::IsNullOrEmpty($version)) {
+      $this.log.Info("C++ 2010 Redistributable is already installed - skipping installation")
+    } else {
+        [Utility]::Debug("pre-cpp2010")
+        $installer = [Utility]::Fetch($this.url)
+        $this.log.Info("Installing C++ 2010 Redistributable from $installer")
+        Start-Process -FilePath "$installer" -ArgumentList "/passive /norestart" -Wait -NoNewWindow
+        [Utility]::Debug("post-cpp2010")
+    }
+  }
+}
+
+Class Cpp2015RedistInstaller : Base {
+  [String] $url
+  Cpp2015RedistInstaller($url) {
+    $this.url = $url
+  }
+  Install() {
+    $version = $(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\VisualStudio\14*0\VC\Runtimes\x64' -ErrorAction SilentlyContinue | Get-ItemPropertyValue -Name Installed -ErrorAction SilentlyContinue)
+    if (![String]::IsNullOrEmpty($version)) {
+      $this.log.Info("C++ 2015 Redistributable is already installed - skipping installation")
+    } else {
+        [Utility]::Debug("pre-cpp2015")
+        $installer = [Utility]::Fetch($this.url)
+        $this.log.Info("Installing C++ 2015 Redistributable from $installer")
+        Start-Process -FilePath "$installer" -ArgumentList "/passive /norestart" -Wait -NoNewWindow
+        [Utility]::Debug("post-cpp2015")
+    }
+  }
+}
+
+Class AdoptOpenJdkInstaller : Base {
+  [String] $url
+  AdoptOpenJdkInstaller($url) {
+    $this.url = $url
+  }
+  Install() {    
+    if ([Utility]::Exists("C:\Program Files\AdoptOpenJDK\bin\java.exe")) {
+      $this.log.Info("Java is already installed - skipping installation")
+    } else {
+      $javainstaller = [Utility]::Fetch($this.url)
+      [Utility]::Debug("pre-java")
+      $this.log.Info("Installing Java from $javainstaller")
+      Start-Process -FilePath "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$javainstaller`" ADDLOCAL=FeatureMain,FeatureEnvironment,FeatureJarFileRunWith,FeatureJavaHome INSTALLDIR=`"c:\Program Files\AdoptOpenJDK\`" /quiet /L*V `"$javainstaller.log`"" -Wait -NoNewWindow
+      $this.log.Info("Finished installing java")
+      [Utility]::Debug("post-java")
+      Start-Process "C:\Program Files\AdoptOpenJDK\bin\java.exe" -ArgumentList "-version" -RedirectStandardError ".\java-version.log" -Wait -NoNewWindow
+      cat ".\java-version.log"
+    }
+  }
+}
+
+Class DotnetFrameworkInstaller : Base {
+  [String] $url
+  DotnetFrameworkInstaller($url) {
+    $this.url = $url
+  }
+  Install() {  
+    # https://docs.microsoft.com/en-us/dotnet/framework/migration-guide/how-to-determine-which-versions-are-installed#to-check-for-a-minimum-required-net-framework-version-by-querying-the-registry-in-powershell-net-framework-45-and-later
+    $dotnet_release = $(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full\' | Get-ItemPropertyValue -Name Release)
+    $dotnet_version = $(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full\' | Get-ItemPropertyValue -Name Version)
+    $this.log.Info("Found .net version ${dotnet_version}; release string: $dotnet_release")
+    if ($dotnet_release -gt 461308 ) {
+        $this.log.Info("Dotnet 4.7.1 (release string: 461308 ) or higher already installed - skipping installation")
+    } else {
+        $dotnetinstaller = [Utility]::Fetch($this.url)
+        [Utility]::Debug("pre-dotnetframework")
+        $this.log.Info("Installing dotnet framework from $dotnetinstaller - a reboot will be required")
+        Start-Process -FilePath "$dotnetinstaller" -ArgumentList "/passive /norestart" -Wait -NoNewWindow
+        [Utility]::Debug("post-dotnetframework")
+        $this.log.Info("Finished dotnet framework install. Rebooting.")  
+        Restart-Computer -Force; 
+        sleep 30 # force in case anyone is logged in
+    }  
+  }
+}
+
+
+Class GitInstaller : Base {
+  [String] $url
+  GitInstaller($url) {
+    $this.url = $url
+  }
+  Install() {  
+    if (Test-Path -Path "C:\Program Files\Git\bin\git.exe") {
+      $this.log.Info("Git is already installed - skipping installation")
+    } else {
+      $gitinstaller = [Utility]::Fetch($this.url)
+      [Utility]::Debug("pre-git")
+      $this.log.Info("Installing Git from $gitinstaller")
+      Start-Process -FilePath "$gitinstaller" -ArgumentList "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS" -Wait -NoNewWindow
+      $this.log.Info("finished installing Git")
+      [Utility]::Debug("post-git")
+      Start-Process "C:\Program Files\Git\bin\git.exe" -ArgumentList "--version" -RedirectStandardOutput ".\git-version.log" -Wait -NoNewWindow
+      cat ".\git-version.log"
+    } 
+  }
+}
+
+Class IisInstaller : Base {
+  IisInstaller() {
+  }
+  Install() { 
+    if ([Utility]::Exists("c:\iis.lock")) {
+      $this.log.Info("IIS is already installed - skipping installation")
+    } else {
+      $this.log.Info("Installing IIS")
+      [Utility]::Debug("pre-iis")    
+      Install-WindowsFeature -name Web-Server -IncludeManagementTools
+      Add-WindowsFeature Web-Http-Redirect  
+      Install-WindowsFeature -Name  Web-Health -IncludeAllSubFeature
+      Install-WindowsFeature -Name  Web-Performance -IncludeAllSubFeature
+      Install-WindowsFeature -Name Web-Security -IncludeAllSubFeature
+      Install-WindowsFeature -Name  Web-Scripting-Tools -IncludeAllSubFeature
+      [Utility]::Debug("post-iis")    
+      $this.log.Info("... finished Installing IIS. Rebooting.")
+      # the iis.lock file is used to track state and prevent reinstallation and reboots on subsequent script execution
+      "IIS completed" | Set-Content c:\iis.lock
+      Restart-Computer -Force
+      Sleep 30
+    } 
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+

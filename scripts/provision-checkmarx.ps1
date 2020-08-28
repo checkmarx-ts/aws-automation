@@ -8,60 +8,7 @@ Write-Host "$(Get-Date) --------------------------------------------------------
 Write-Host "$(Get-Date) -------------------------------------------------------------------------"
 Write-Host "$(Get-Date) provision-checkmarx.ps1 script execution beginning"
 
-class Utility {
-    [bool] static Exists([String] $fpath) {
-        return ((![String]::IsNullOrEmpty($fpath)) -and (Test-Path -Path "${fpath}"))
-    }
-    [String] static Addpath([String] $fpath){
-        [Environment]::SetEnvironmentVariable('Path',[Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::Machine) + ";$fpath",[EnvironmentVariableTarget]::Machine)
-        return [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::Machine)
-    }
-    [String] static Basename([String] $fullname) {
-        return $fullname.Substring($fullname.LastIndexOf("/") + 1)
-    }
-    [String] static Find([String] $filename) {
-        return $(Get-ChildItem C:\programdata\checkmarx -Recurse -Filter $filename | Sort -Descending | Select -First 1 -ExpandProperty FullName)
-    }
-    [String] static Find([String] $fpath, [String] $filename) {
-        return $(Get-ChildItem "$fpath" -Recurse -Filter $filename | Sort -Descending | Select -First 1 -ExpandProperty FullName)
-    }
-    [Void] static Debug([String] $stage) {
-        sleep 2
-        $msiexecs = Get-Process msiexe*
-        $cxprocs = Get-Process cx*
-        if ($msiexecs.count -gt 0 -or $cxprocs.count -gt 0) {
-            Write-Host "#########################################"
-            Write-Host "# Debugging ${stage} - found running processes"
-            Write-Host "#########################################"
-        }
-        if ($msiexecs.count -gt 0){ 
-            Write-Host "$(Get-Date) Found these running msiexec.exe process:"
-            $msiexecs | Format-Table | Out-File -FilePath C:\cx.debug; cat c:\cx.debug
-            $msiexecs | % { Get-WmiObject Win32_Process -Filter "ProcessId = $($_.Id)" }#| Select-Object ProcessId, Name, ExecutablePath, CommandLine | FL }
-        }
-        if ($cxprocs.count -gt 0) {
-            Write-Host "$(Get-Date) Found these running cx* processes:"
-            $cxprocs | Format-Table | Out-File -FilePath C:\cx.debug; cat c:\cx.debug
-            $cxprocs | % { Get-WmiObject Win32_Process -Filter "ProcessId = $($_.Id)" } #| Select-Object ProcessId, Name, ExecutablePath, CommandLine | FL }
-            Write-Host "#########################################"
-        }
-    }
-    [String] static Fetch([String] $source) {
-        $filename = [Utility]::Basename($source)
-        if ($source.StartsWith("https://")) {
-            Write-Host "$(Get-Date) Downloading $source"
-            (New-Object System.Net.WebClient).DownloadFile("$source", "c:\programdata\checkmarx\artifacts\${filename}")
-        } elseif ($source.StartsWith("s3://")) {        
-            $bucket = $source.Replace("s3://", "").Split("/")[0]
-            $key = $source.Replace("s3://${bucket}", "")
-            Write-Host "$(Get-Date) Downloading $source from bucket $bucket with key $key"
-            Read-S3Object -BucketName $bucket -Key $key -File "C:\programdata\checkmarx\artifacts\$filename"
-        }
-        $fullname = [Utility]::Find($filename)
-        Write-Host "$(Get-Date) ... found $fullname"
-        return $fullname
-    }
-}
+. $PSScriptRoot\CheckmarxAWS.ps1
 
 $config = Import-PowerShellDataFile -Path C:\checkmarx-config.psd1
 
@@ -173,21 +120,11 @@ if ($config.Checkmarx.ComponentType -eq "Manager")  {
 }
 
 
+
 ###############################################################################
 #  7-zip Install
 ###############################################################################
-$7zip_path = $(Get-ChildItem 'HKLM:\SOFTWARE\7*Zip\' | Get-ItemPropertyValue -Name Path)
-if ([Utility]::Exists($7zip_path)) {
-    Write-Host "$(Get-Date) 7-Zip is already installed at ${7zip_path} - skipping installation"
-} else {
-    [Utility]::Debug("pre-7zip")
-    $sevenzipinstaller = [Utility]::Fetch($config.Dependencies.Sevenzip)
-    Write-Host "$(Get-Date) Installing 7zip from $sevenzipinstaller"
-    Start-Process -FilePath "$sevenzipinstaller" -ArgumentList "/S" -Wait -NoNewWindow
-    $newpath = [Utility]::Addpath($(Get-ChildItem 'HKLM:\SOFTWARE\7*Zip\' | Get-ItemPropertyValue -Name Path))
-    [Utility]::Debug("post-7zip")
-}
-
+[SevenZipInstaller]::new($config.Dependencies.Sevenzip).Install()
 
 ###############################################################################
 #  Download Checkmarx Installers
@@ -221,118 +158,17 @@ if ([Utility]::Exists("c:\programdata\checkmarx\artifacts\${hotfix_zip}")) {
 
 
 ###############################################################################
-#  Microsoft Visual C++ 2010 Redistributable Package (x64) Install
+#  Dependencies
 ###############################################################################
-$cpp2010_version = $(Get-ChildItem 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\VisualStudio\10*0\VC\VCRedist\x64' -ErrorAction SilentlyContinue | Get-ItemPropertyValue -Name Installed -ErrorAction SilentlyContinue)
-if (![String]::IsNullOrEmpty($cpp2010_version)) {
-    Write-Host "$(Get-Date) C++ 2010 Redistributable is already installed - skipping installation"    
-} else {
-    [Utility]::Debug("pre-cpp2010")
-    $cpp2010_installer = [Utility]::Find("vcredist_x64.exe")
-    Write-Host "$(Get-Date) Installing C++ 2010 Redistributable from $cpp2010_installer"
-    Start-Process -FilePath "$cpp2010_installer" -ArgumentList "/passive /norestart" -Wait -NoNewWindow
-    [Utility]::Debug("post-cpp2010")
-}
-
-
-###############################################################################
-#  Microsoft Visual C++ 2015 Redistributable Update 3 RC Install
-###############################################################################
-$cpp2015_version = $(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\VisualStudio\14*0\VC\Runtimes\x64' -ErrorAction SilentlyContinue | Get-ItemPropertyValue -Name Installed -ErrorAction SilentlyContinue)
-$cpp2015_installer = [Utility]::Find("vc_redist2015.x64.exe")
-if (![String]::IsNullOrEmpty($cpp2015_version)) {
-    Write-Host "$(Get-Date) Microsoft Visual C++ 2015 Redistributable Update 3 RC is already installed - skipping installation"
-} else {
-    # This only applies for CxSAST 9.0+ so make sure it exists.
-    if ([Utility]::Exists($cpp2015_installer)) {
-        [Utility]::Debug("pre-cpp2015")
-        Write-Host "$(Get-Date) Installing Microsoft Visual C++ 2015 Redistributable Update 3 RC from $cpp2015_installer"
-        Start-Process -FilePath "$cpp2015_installer" -ArgumentList "/passive /norestart" -Wait -NoNewWindow
-        [Utility]::Debug("post-cpp2015")
-    } 
-}
-
-
-###############################################################################
-# AdoptOpenJDK Install
-###############################################################################
-# Java should be installed before the dotnet framework because it can piggy back
-# on the required reboot which will put java on the path and refresh env vars
-# which may come in useful later.
-if ([Utility]::Exists("C:\Program Files\AdoptOpenJDK\bin\java.exe")) {
-    Write-Host "$(Get-Date) Java is already installed - skipping installation"
-} else {
-    $javainstaller = [Utility]::Fetch($config.Dependencies.AdoptOpenJdk)
-    [Utility]::Debug("pre-java")
-    Write-Host "$(Get-Date) Installing Java from $javainstaller"
-    Start-Process -FilePath "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$javainstaller`" ADDLOCAL=FeatureMain,FeatureEnvironment,FeatureJarFileRunWith,FeatureJavaHome INSTALLDIR=`"c:\Program Files\AdoptOpenJDK\`" /quiet /L*V `"$javainstaller.log`"" -Wait -NoNewWindow
-    [Utility]::Debug("post-java")
-    Start-Process "C:\Program Files\AdoptOpenJDK\bin\java.exe" -ArgumentList "-version" -RedirectStandardError ".\java-version.log" -Wait -NoNewWindow
-    cat ".\java-version.log"
-}
-
-###############################################################################
-#  .NET Framework 4.7.1 Install
-###############################################################################
-# https://docs.microsoft.com/en-us/dotnet/framework/migration-guide/how-to-determine-which-versions-are-installed#to-check-for-a-minimum-required-net-framework-version-by-querying-the-registry-in-powershell-net-framework-45-and-later
-$dotnet_release = $(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full\' | Get-ItemPropertyValue -Name Release)
-$dotnet_version = $(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full\' | Get-ItemPropertyValue -Name Version)
-Write-Host "$(Get-Date) Found .net version ${dotnet_version}; release string: $dotnet_release"
-if ($dotnet_release -gt 461308 ) {
-    Write-Host "$(Get-Date) Dotnet 4.7.1 (release string: 461308 ) or higher already installed - skipping installation"
-} else {
-    $dotnetinstaller = [Utility]::Fetch($config.Dependencies.DotnetFramework)
-    [Utility]::Debug("pre-dotnetframework")
-    Write-Host "$(Get-Date) Installing dotnet framework from $dotnetinstaller - a reboot will be required"
-    Start-Process -FilePath "$dotnetinstaller" -ArgumentList "/passive /norestart" -Wait -NoNewWindow
-    [Utility]::Debug("post-dotnetframework")
-    Write-Host "$(Get-Date) Finished dotnet framework install. Rebooting."   
-    Restart-Computer -Force; 
-    sleep 30 # force in case anyone is logged in
-}
-
-
-###############################################################################
-# Git Install
-###############################################################################
+[Cpp2010RedistInstaller]::new([Utility]::Find("vcredist_x64.exe")).Install()
+[Cpp2015RedistInstaller]::new([Utility]::Find("vc_redist2015.x64.exe")).Install()
+[AdoptOpenJdkInstaller]::new($config.Dependencies.AdoptOpenJdk).Install()
+[DotnetFrameworkInstaller]::new($config.Dependencies.DotnetFramework).Install()
 if ($config.Checkmarx.ComponentType -eq "Manager") {
-    if (Test-Path -Path "C:\Program Files\Git\bin\git.exe") {
-        Write-Host "$(Get-Date) Git is already installed - skipping installation"
-    } else {
-        $gitinstaller = [Utility]::Fetch($config.Dependencies.Git)
-        [Utility]::Debug("pre-git")
-        Write-Host "$(Get-Date) Installing Git from $gitinstaller"
-        Start-Process -FilePath "$gitinstaller" -ArgumentList "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS" -Wait -NoNewWindow
-        [Utility]::Debug("post-git")
-        Start-Process "C:\Program Files\Git\bin\git.exe" -ArgumentList "--version" -RedirectStandardOutput ".\git-version.log" -Wait -NoNewWindow
-        cat ".\git-version.log"
-    }
+    [GitInstaller]::new($config.Dependencies.Git).Install()
+    [IisInstaller]::new().Install()
 }
-
     
-###############################################################################
-# IIS Install
-###############################################################################
-if ($config.Checkmarx.ComponentType -eq "Manager") {
-    if ([Utility]::Exists("c:\iis.lock")) {
-        Write-Host "$(Get-Date) IIS is already installed - skipping installation"
-    } else {
-        Write-Host "$(Get-Date) Installing IIS"
-        [Utility]::Debug("pre-iis")    
-        Install-WindowsFeature -name Web-Server -IncludeManagementTools
-        Add-WindowsFeature Web-Http-Redirect  
-        Install-WindowsFeature -Name  Web-Health -IncludeAllSubFeature
-        Install-WindowsFeature -Name  Web-Performance -IncludeAllSubFeature
-        Install-WindowsFeature -Name Web-Security -IncludeAllSubFeature
-        Install-WindowsFeature -Name  Web-Scripting-Tools -IncludeAllSubFeature
-        [Utility]::Debug("post-iis")    
-        Write-Host "$(Get-Date) ... finished Installing IIS. Rebooting."
-        # the iis.lock file is used to track state and prevent reinstallation and reboots on subsequent script execution
-        "IIS completed" | Set-Content c:\iis.lock
-        Restart-Computer -Force
-        Sleep 30
-    }
-}
 
 ###############################################################################
 # IIS Rewrite Module Install
