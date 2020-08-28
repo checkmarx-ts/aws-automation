@@ -91,11 +91,6 @@ cat C:\checkmarx-config.psd1
 ###############################################################################
 if (!([Utility]::Exists("C:\cx-init-debug.lock"))) {
 @"
-###############################################################################
-# Checking for installed hotfixes
-################################################################################
-"@ | Write-Output
-Get-HotFix | Format-Table
 
 @"
 ###############################################################################
@@ -658,7 +653,7 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
 Write-Host "$(Get-Date) Configuring SSL"
 $hostname = ([System.Net.Dns]::GetHostByName(($env:computerName))).HostName
 $ssl_file = ""
-if ($config.Ssl.Url -ne $null) {
+if (!([String]::IsNullOrEmpty($config.Ssl.Url))) {
     $ssl_file = [Utility]::Fetch($config.Ssl.Url)
     if ([Utility]::Basename($ssl_file).EndsWith(".ps1")) {
         Write-Host "$(Get-Date) SSL URL identified as a powershell script. Executing $ssl_file"
