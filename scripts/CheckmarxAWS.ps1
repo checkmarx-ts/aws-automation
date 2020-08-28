@@ -551,6 +551,7 @@ class Utility {
       return [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::Machine)
   }
   [String] static Basename([String] $fullname) {
+      $fullname = "/${fullname}" #ensure there is at least 1 / character before substringing to prevent errors when there is not a path provided
       return $fullname.Substring($fullname.Replace("\","/").LastIndexOf("/") + 1)
   }
   [String] static Find([String] $filename) {
@@ -602,6 +603,7 @@ Class SevenZipInstaller : Base {
   [String] $url
   SevenZipInstaller([String] $url) {
     $this.url = $url
+    $this.log.Info("Instance created. url = $($this.url)")    
   }
   Install() {
     $7zip_path = $(Get-ChildItem 'HKLM:\SOFTWARE\7*Zip\' | Get-ItemPropertyValue -Name Path)
@@ -621,6 +623,7 @@ Class Cpp2010RedistInstaller : Base {
   [String] $url
   Cpp2010RedistInstaller($url) {
     $this.url = $url
+    $this.log.Info("Instance created. url = $($this.url)")    
   }
   Install() {
     $version = $(Get-ChildItem 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\VisualStudio\10*0\VC\VCRedist\x64' -ErrorAction SilentlyContinue | Get-ItemPropertyValue -Name Installed -ErrorAction SilentlyContinue)
@@ -640,6 +643,7 @@ Class Cpp2015RedistInstaller : Base {
   [String] $url
   Cpp2015RedistInstaller($url) {
     $this.url = $url
+    $this.log.Info("Instance created. url = $($this.url)")    
   }
   Install() {
     $version = $(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\VisualStudio\14*0\VC\Runtimes\x64' -ErrorAction SilentlyContinue | Get-ItemPropertyValue -Name Installed -ErrorAction SilentlyContinue)
@@ -659,6 +663,7 @@ Class AdoptOpenJdkInstaller : Base {
   [String] $url
   AdoptOpenJdkInstaller($url) {
     $this.url = $url
+    $this.log.Info("Instance created. url = $($this.url)")    
   }
   Install() {    
     if ([Utility]::Exists("C:\Program Files\AdoptOpenJDK\bin\java.exe")) {
@@ -706,6 +711,7 @@ Class GitInstaller : Base {
   [String] $url
   GitInstaller($url) {
     $this.url = $url
+    $this.log.Info("Instance created. url = $($this.url)")    
   }
   Install() {  
     if (Test-Path -Path "C:\Program Files\Git\bin\git.exe") {
@@ -752,6 +758,7 @@ Class IisUrlRewriteInstaller : Base {
   [String] $url
   IisUrlRewriteInstaller($url) {
     $this.url = $url
+    $this.log.Info("Instance created. url = $($this.url)")    
   }
   Install() {  
     if (Test-Path -Path "C:\Windows\System32\inetsrv\rewrite.dll") {
@@ -770,6 +777,7 @@ Class IisApplicationRequestRoutingInstaller : Base {
   [String] $url
   IisApplicationRequestRoutingInstaller($url) {
     $this.url = $url
+    $this.log.Info("Instance created. url = $($this.url)")
   }
   Install() {  
     if (($(C:\Windows\System32\inetsrv\appcmd.exe list modules) | Where  { $_ -match "ApplicationRequestRouting" } | ForEach-Object { echo $_ }).length -gt 1) {
@@ -789,6 +797,7 @@ Class DotnetCoreHostingInstaller : Base {
   [String] $url
   DotnetCoreHostingInstaller($url) {
     $this.url = $url
+    $this.log.Info("Instance created. url = $($this.url)")
   }
   Install() {  
     if (Test-Path -Path "C:\Program Files\dotnet") {
@@ -810,6 +819,7 @@ Class MsSqlServerExpressInstaller : Base {
   [String] $url
   MsSqlServerExpressInstaller($url) {
     $this.url = $url
+    $this.log.Info("Instance created. url = $($this.url)")
   }
   Install() {  
     # SQL Server install should come *after* the Checkmarx installation media is unzipped. The SQL Server

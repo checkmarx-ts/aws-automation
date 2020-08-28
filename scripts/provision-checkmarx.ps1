@@ -160,8 +160,8 @@ if ([Utility]::Exists("c:\programdata\checkmarx\artifacts\${hotfix_zip}")) {
 ###############################################################################
 #  Dependencies
 ###############################################################################
-[Cpp2010RedistInstaller]::new([Utility]::Find("vcredist_x64.exe")).Install()
-[Cpp2015RedistInstaller]::new([Utility]::Find("vc_redist2015.x64.exe")).Install()
+[Cpp2010RedistInstaller]::new("vcredist_x64.exe").Install()
+[Cpp2015RedistInstaller]::new("vc_redist2015.x64.exe").Install()
 [AdoptOpenJdkInstaller]::new($config.Dependencies.AdoptOpenJdk).Install()
 [DotnetFrameworkInstaller]::new($config.Dependencies.DotnetFramework).Install()
 if ($config.Checkmarx.ComponentType -eq "Manager") {
@@ -169,7 +169,7 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
     [IisInstaller]::new().Install()
     [IisUrlRewriteInstaller]::new($config.Dependencies.IisRewriteModule).Install()
     [IisApplicationRequestRoutingInstaller]::new($config.Dependencies.IisApplicationRequestRoutingModule).Install()
-    [DotnetCoreHostingInstaller]::new([Utility]::Find("dotnet-hosting-2.1.16-win.exe")).Install() 
+    [DotnetCoreHostingInstaller]::new("dotnet-hosting-2.1.16-win.exe").Install() 
 }
 
 ###############################################################################
@@ -388,19 +388,12 @@ if (!([String]::IsNullOrEmpty($config.Ssl.Url))) {
     $ssl_file = [Utility]::Fetch($config.Ssl.Url)
     if ([Utility]::Basename($ssl_file).EndsWith(".ps1")) {
         Write-Host "$(Get-Date) SSL URL identified as a powershell script. Executing $ssl_file"
-        powershell.exe "& $ssl_file"
+        powershell.exe "& $ssl_file -domainName $hostname -pfxpassword $pfx_password"
         Write-Host "$(Get-Date) ... finished executing $ssl_file"
     } elseif ([Utility]::Basename($ssl_File).EndsWith(".pfx")) {
         Write-Host "$(Get-Date) SSL URL is a .pfx file that has been downloaded"        
     }
-} else {
-    Write-Host "$(Get-Date) No SSL URL provided. Defaulting to self signed certificate"   
-    Write-Host "$(Get-Date) Creating self signed cert for $hostname"
-    $ssc = New-SelfSignedCertificate -DnsName $hostname -FriendlyName "$hostname" -Subject "cn=$hostname" -CertStoreLocation cert:\LocalMachine\My
-    md -force "C:\programdata\checkmarx\ssl"
-    $ssc | Export-PfxCertificate -FilePath "C:\programdata\checkmarx\ssl\server.pfx" -Password (ConvertTo-SecureString $pfx_password -AsPlainText -Force)
-    $ssc | Remove-Item 
-}
+} 
 
 Write-Host "$(Get-Date) configuring ssl"
 C:\programdata\checkmarx\aws-automation\scripts\ssl\configure-ssl.ps1 -domainName $hostname -pfxpassword $pfx_password
