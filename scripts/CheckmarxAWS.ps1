@@ -871,18 +871,18 @@ Class CxSastInstaller : Base {
 }
 
 
+Class CxSastHotfixInstaller : Base {
+  [String] $url
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  CxSastHotfixInstaller($url) {
+    $this.url = $url
+  }
+  Install() { 
+    $hotfixexe = [Utility]::Fetch($this.url)#
+    $this.log.Info("Installing hotfix ${hotfixexe}")
+    [Utility]::Debug("pre-cx-hotfix")  
+    Start-Process -FilePath "$hotfixexe" -ArgumentList "-cmd ACCEPT_EULA=Y" -Wait -NoNewWindow
+    [Utility]::Debug("post-cx-hotfix")  
+    $this.log.Info("...finished installing")
+  }
+}

@@ -206,8 +206,6 @@ if ([Utility]::Exists($license_file)) {
 ###############################################################################
 # Install Checkmarx
 ###############################################################################
-$cxsetup = [Utility]::Find("CxSetup.exe")
-
 # Augment the installer augments with known configuration
 $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) SQLSERVER=""$($config.MsSql.Host)"" CXARM_DB_HOST=""$($config.MsSql.Host)"""
 if ($config.MsSql.UseSqlAuth -eq "True") {
@@ -218,18 +216,7 @@ if ($config.MsSql.UseSqlAuth -eq "True") {
 }
 
 [CxSastInstaller]::new([Utility]::Find("CxSetup.exe"), $config.Checkmarx.Installer.Args).Install()
-
-
-###############################################################################
-# Install Checkmarx Hotfix
-###############################################################################
-$hotfixexe = [Utility]::Find("*HF*.exe")
-Write-Host "$(Get-Date) Installing hotfix ${hotfix_name}"
-[Utility]::Debug("pre-cx-hotfix")  
-Start-Process -FilePath "$hotfixexe" -ArgumentList "-cmd ACCEPT_EULA=Y" -Wait -NoNewWindow
-[Utility]::Debug("post-cx-hotfix")  
-Write-Host "$(Get-Date) ...finished installing"    
-
+[CxSastHotfixInstaller]::new([Utility]::Find("*HF*.exe")).Install()
 
 ###############################################################################
 # Post Install Windows Configuration
