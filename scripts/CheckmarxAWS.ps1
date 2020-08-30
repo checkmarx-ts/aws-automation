@@ -965,3 +965,112 @@ Class CxSastHotfixInstaller : Base {
     $this.log.Info("...finished installing")
   }
 }
+
+
+
+Class CxEnginesApiClient {
+  [string] $username 
+  [string] $password 
+  [string] $url
+  [string] $token 
+  [string] $apiscope = "sast_rest_api cxarm_api"
+  [string] $clientid = "resource_owner_client"
+  [string] $clientsecret = "014DF517-39D1-4453-B7B3-9930C563627C"
+
+  CxEnginesApiClient([string] $username, [string] $password, [string] $url) {
+    $this.username = $username
+    $this.password = $password
+    $this.url = $url
+  }
+
+  Login() {
+    $body = @{
+        username = $this.username
+        password = $this.password
+        grant_type = "password"
+        scope = $this.apiscope
+        client_id = $this.clientid
+        client_secret = $this.clientsecret
+    }
+    try {
+        $response = Invoke-RestMethod -uri "$($this.url)/cxrestapi/auth/identity/connect/token" -method post -body $body -contenttype 'application/x-www-form-urlencoded' -UseBasicParsing
+    } catch {
+        Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
+        Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
+        throw "Cannot Get OAuth2 Token"
+    }
+
+    $this.token = "$($response.token_type) $($response.access_token)"
+  }
+
+  [PSObject] GET([string] $url) {
+    $headers = @{
+        Authorization = $this.token
+        Accept = "application/json;v=1.0"
+    }
+    try {
+        $response = Invoke-RestMethod -uri "$($this.url)${url}" -method get -headers $headers -UseBasicParsing
+        return $response
+    } catch {
+        Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
+        Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
+        throw "An error has occured on GET $url"
+    }
+  }
+
+  [PSObject] POST([string] $url, $body) {
+    $body_json = ($body | ConvertTo-Json -Depth 10)
+    $headers = @{
+        Authorization = $this.token       
+    }
+    try {
+        $response = Invoke-RestMethod -uri "$($this.url)${url}" -method post -headers $headers -UseBasicParsing -Body $body_json -ContentType "application/json;v=1.0"
+        return $response
+    } catch {
+        Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
+        Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
+        throw "An error has occured on POST $url with $body_json"
+    }
+  }
+
+  [PSObject] DELETE([string] $url) {
+    $headers = @{
+        Authorization = $this.token
+        Accept = "application/json;v=1.0"
+    }
+    try {
+        $response = Invoke-RestMethod -uri "$($this.url)${url}" -method Delete -headers $headers -UseBasicParsing
+        return $response
+    } catch {
+        Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
+        Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
+        throw "An error has occured on GET $url"
+    }
+  }
+  
+  <######################
+  #  Engines
+  #######################>
+
+  [PSObject] GetEngines() {
+    return $this.GET("/cxrestapi/sast/engineServers")
+  }
+
+  [PSObject] GetEnginesById($id) {
+    return $this.GET("/cxrestapi/sast/engineServers/${id}")
+  }
+
+  [PSObject] FindEngineIdByName([string] $name) {
+    $engines = $this.GetEngines()
+    $engineId = $engines | where { $_.name -eq $name } | select -ExpandProperty id
+    return $engineId
+  }
+
+  [PSObject] RegisterEngine($engine) {
+    return $this.POST("/cxrestapi/sast/engineServers", $engine)
+  }
+
+  [PSObject] UnregisterEngine($id) {
+    return $this.DELETE("/cxrestapi/sast/engineServers/${id}")
+  }  
+}
