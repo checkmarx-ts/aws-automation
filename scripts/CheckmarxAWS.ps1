@@ -330,23 +330,6 @@ Class CxManagerIisTlsConfigurer : Base {
     } else {
       $this.CreateWebBinding()
     }
-
-    $this.log.Info("Restarting website...")
-    try {
-      Stop-Website -Name $($this.IISWebSite)
-    } catch {
-      $this.log.Error("Error stopping $($this.IISWebSite)")
-      $this.log.Error("Error message: $($_.Exception.Message)")
-      $this.log.Error("Error information: $($_)")
-    }
-
-    try {
-      Start-Website -Name $($this.IISWebSite)
-    } catch {
-      $this.log.Error("Error starting $($this.IISWebSite)")
-      $this.log.Error("Error message: $($_.Exception.Message)")
-      $this.log.Error("Error information: $($_)")
-    }
   }
 
   hidden UpdateWebBinding() {
@@ -827,7 +810,7 @@ Class MsSqlServerExpressInstaller : BasicInstaller {
         $this.installer = $installer       
     }
     hidden [bool] IsAlreadyInstalled() {
-        return ((get-service sql*).length -eq 0)
+        return ((get-service sql*).length -gt 0)
     }
     Install() {
         if ($this.IsAlreadyInstalled()) {

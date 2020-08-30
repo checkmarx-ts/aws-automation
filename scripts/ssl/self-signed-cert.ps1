@@ -22,7 +22,7 @@ $ssc = New-SelfSignedCertificate -DnsName $domainname -FriendlyName "$domainname
 log "Certificate created:"
 $ssc 
 log "ensuring c:\programdata\checkmarx\ssl folder exists"
-md -force "C:\programdata\checkmarx\ssl"
+md -force "C:\programdata\checkmarx\ssl" 
 log "exporting certificate to C:\programdata\checkmarx\ssl\server.pfx"
 $ssc | Export-PfxCertificate -FilePath "C:\programdata\checkmarx\ssl\server.pfx" -Password (ConvertTo-SecureString $pfxpassword -AsPlainText -Force)
 log "removing the certificate from the windows cert store"

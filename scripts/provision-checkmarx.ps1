@@ -24,6 +24,7 @@ md -Force "$($env:CheckmarxHome)" | Out-Null
 # Get secrets
 ###############################################################################
 $secrets = ""
+$begin = (Get-Date)
 if ($config.Secrets.Source.ToUpper() -eq "SSM") { 
     $secrets = [AwsSsmSecrets]::new($config)
 } elseif ($config.Secrets.Source.ToUpper() -eq "SECRETSMANAGER") {
@@ -31,6 +32,7 @@ if ($config.Secrets.Source.ToUpper() -eq "SSM") {
 } else {
     log.Warn("Secrets source $($config.Secrets.Source) is unknown. Expect exceptions later if secrets are needed")
 }
+$log.Info("Secrets resolution time taken: $(New-TimeSpan -Start $begin -end (Get-Date))")
 
 ###############################################################################
 #  Debug Info
@@ -62,16 +64,9 @@ if (!([Utility]::Exists("$($env:CheckmarxHome)\systeminfo.lock"))) {
     Write-Host "################################"
     Get-WmiObject Win32_OperatingSystem | Select PSComputerName, Caption, OSArchitecture, Version, BuildNumber | Format-Table
 
-    Write-Host "################################"
-    Write-Host " whoami "
-    Write-Host "################################"
-    whoami
-    
-    Write-Host "################################"
-    Write-Host " env:TEMP "
-    Write-Host "################################"
-    Write-Host "$env:TEMP"
-
+    $log.info([Environment]::NewLine)
+    $log.info([Environment]::NewLine)
+    $log.Info("env:TEMP = $env:TEMP")
     $log.Info("env:CheckmarxBucket = $env:CheckmarxBucket")
     $log.Info("checkmarx-config.psd1 configuration:")
     cat C:\checkmarx-config.psd1    
@@ -349,7 +344,7 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
         md -force "c:\programdata\nuget"
         move $nuget c:\programdata\nuget\nuget.exe
         [Utility]::Addpath("C:\programdata\nuget")
-        $log.Info("...finished installing nodejs")
+        $log.Info("...finished installing Nuget")
     }
 
     if ($config.PackageManagers.Maven -ne $null) {
@@ -359,7 +354,7 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
         $mvnfolder = [Utility]::Basename($maven).Replace("-bin.zip", "")
         [Utility]::Addpath("${mvnfolder}\bin")
         [Environment]::SetEnvironmentVariable('MAVEN_HOME', $mvnfolder, 'Machine')
-        $log.Info("...finished installing nodejs")
+        $log.Info("...finished installing Maven")
     }
 
     if ($config.PackageManagers.Gradle -ne $null) {
@@ -368,7 +363,7 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
         Expand-Archive $gradle -DestinationPath 'C:\programdata\checkmarx\artifacts' -Force
         $gradlefolder = [Utility]::Basename($gradle).Replace("-bin.zip", "")
         [Utility]::Addpath("${gradlefolder}\bin")
-        $log.Info("...finished installing nodejs")
+        $log.Info("...finished installing Gradle")
     }
 }
 
