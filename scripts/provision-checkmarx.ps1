@@ -135,7 +135,7 @@ cat .\hotfix7z.out
 ###############################################################################
 # Only install if it was unzipped from the installation package
 $cpp2010 = $(Get-ChildItem "$($env:CheckmarxHome)" -Recurse -Filter "vcredist_x64.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)  
-if (!([String]::IsNullOrEmpty($cpp2015))) {
+if (!([String]::IsNullOrEmpty($cpp2010))) {
     [Cpp2010RedistInstaller]::new([DependencyFetcher]::new($cpp2010).Fetch()).Install()
 }  
 
@@ -157,7 +157,7 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
 
     # Only install if it was unzipped from the installation package
     $dotnetcore = $(Get-ChildItem "$($env:CheckmarxHome)" -Recurse -Filter "dotnet-hosting-2.1.16-win.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)  
-    if (!([String]::IsNullOrEmpty($cpp2015))) {
+    if (!([String]::IsNullOrEmpty($dotnetcore))) {
         [DotnetCoreHostingInstaller]::new([DependencyFetcher]::new($dotnetcore).Fetch()).Install()
     } 
 
@@ -165,8 +165,6 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
         [MsSqlServerExpressInstaller]::new([DependencyFetcher]::new("SQLEXPR*.exe").Fetch()).Install()
     }
 }
-
-
 
 
 ###############################################################################
