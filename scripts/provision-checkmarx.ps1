@@ -17,8 +17,8 @@ $log.Info("provision-checkmarx.ps1 script execution beginning")
 #  Create Folders
 ###############################################################################
 $log.Info("Creating Checkmarx folders")
-$cx_home = if ($env:CheckmarxHome -eq $null) { "C:\programdata\checkmarx" } Else { $env:CheckmarxHome }
-md -Force "$cx_home"
+$env:CheckmarxHome = if ($env:CheckmarxHome -eq $null) { "C:\programdata\checkmarx" } Else { $env:CheckmarxHome }
+md -Force "$($env:CheckmarxHome)"
 
 ###############################################################################
 # Get secrets
@@ -29,7 +29,7 @@ if ($config.Secrets.Source.ToUpper() -eq "SSM") {
 } elseif ($config.Secrets.Source.ToUpper() -eq "SECRETSMANAGER") {
    $secrets = [AwsSecretManagerSecrets]::new($config) 
 } else {
-    $this.log.Warn("Secrets source $($config.Secrets.Source) is unknown. Expect exceptions later if secrets are needed")
+    log.Warn("Secrets source $($config.Secrets.Source) is unknown. Expect exceptions later if secrets are needed")
 }
 
 ###############################################################################
@@ -97,13 +97,13 @@ cat .\hotfix7z.out
 #  Dependencies
 ###############################################################################
 # Only install if it was unzipped from the installation package
-$cpp2010 = $(Get-ChildItem $this.home -Recurse -Filter "vcredist_x64.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)  
+$cpp2010 = $(Get-ChildItem "$($env:CheckmarxHome)" -Recurse -Filter "vcredist_x64.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)  
 if (!([String]::IsNullOrEmpty($cpp2015))) {
     [Cpp2010RedistInstaller]::new([DependencyFetcher]::new($cpp2010).Fetch()).Install()
 }  
 
 # Only install if it was unzipped from the installation package
-$cpp2015 = $(Get-ChildItem $this.home -Recurse -Filter "vc_redist2015.x64.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)  
+$cpp2015 = $(Get-ChildItem "$($env:CheckmarxHome)" -Recurse -Filter "vc_redist2015.x64.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)  
 if (!([String]::IsNullOrEmpty($cpp2015))) {
     [Cpp2015RedistInstaller]::new([DependencyFetcher]::new($cpp2015).Fetch()).Install()
 }
@@ -119,7 +119,7 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
     [IisApplicationRequestRoutingInstaller]::new([DependencyFetcher]::new($config.Dependencies.IisApplicationRequestRoutingModule).Fetch()).Install()
 
     # Only install if it was unzipped from the installation package
-    $dotnetcore = $(Get-ChildItem $this.home -Recurse -Filter "dotnet-hosting-2.1.16-win.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)  
+    $dotnetcore = $(Get-ChildItem "$($env:CheckmarxHome)" -Recurse -Filter "dotnet-hosting-2.1.16-win.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)  
     if (!([String]::IsNullOrEmpty($cpp2015))) {
         [DotnetCoreHostingInstaller]::new([DependencyFetcher]::new($dotnetcore).Fetch()).Install()
     } 
