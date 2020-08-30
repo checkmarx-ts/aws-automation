@@ -45,6 +45,12 @@ if ([String]::IsNullOrEmpty($pfxfile) -and -not [string]::IsNullOrEmpty($pfxpass
   $pfxfile = $(Get-ChildItem C:\programdata\checkmarx -Recurse -Filter "server.pfx" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
 }
 
+if ([String]::IsNullOrEmpty($domainname)) {
+  # Get the private ec2 dns name
+  log "Domain not specified. Defaulting to private ec2 dns name"
+  $domainname = get-ec2instancemetadata -Category LocalHostname
+}
+
 log "Validating arguments..."
 if ([String]::IsNullOrEmpty($pfxfile) -or [String]::IsNullOrEmpty($domainname)) {
   log "ERROR: All or one of pfxfile, domainname, or thumbprint is empty."
@@ -91,7 +97,9 @@ try {
 }
 
 try {
-  iisreset
+  if ($cx.IsWebPortal -or $cx.IsSystemManager) {
+    iisreset
+  }
 } catch {
   log "An error occured restarting iis"
 }

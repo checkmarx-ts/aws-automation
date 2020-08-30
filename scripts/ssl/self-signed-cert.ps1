@@ -17,6 +17,13 @@ function log([string] $msg) { Write-Host "$(Get-Date) [$PSCommandPath] $msg" }
 log "Script is running with arguments:"
 log "pfxpassword = $pfxpassword"
 log "domainname = $domainname"
+
+if ([String]::IsNullOrEmpty($domainname)) {
+    # Get the private ec2 dns name
+    log "domainname parameter is empty. defaulting to use ec2 private dns"
+    $domainname = get-ec2instancemetadata -Category LocalHostname
+}
+
 log "Creating a self signed certificate for $domainname"
 $ssc = New-SelfSignedCertificate -DnsName $domainname -FriendlyName "$domainname" -Subject "cn=$domainname" -CertStoreLocation cert:\LocalMachine\My
 log "Certificate created:"

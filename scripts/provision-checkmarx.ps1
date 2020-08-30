@@ -5,7 +5,8 @@ $InformationPreference = "continue"
 Start-Transcript -Path "C:\provision-checkmarx.log" -Append
 . $PSScriptRoot\CheckmarxAWS.ps1
 $config = Import-PowerShellDataFile -Path C:\checkmarx-config.psd1
-
+$isManager = ($config.Checkmarx.ComponentType.ToUpper() -eq "MANAGER")
+$isEngine = ($config.Checkmarx.ComponentType.ToUpper() -eq "ENGINE")
 [Logger] $log = [Logger]::new("provision-checkmarx.ps1")
 
 $log.Info("-------------------------------------------------------------------------")
@@ -78,7 +79,7 @@ if (!([Utility]::Exists("$($env:CheckmarxHome)\systeminfo.lock"))) {
 ###############################################################################
 #  Domain Join
 ###############################################################################
-if ($config.Checkmarx.ComponentType -eq "Manager")  {
+if ($isManager)  {
     if ((Get-WmiObject -Class Win32_ComputerSystem | Select -ExpandProperty PartOfDomain) -eq $True) {
         $log.Info("The computer is joined to a domain")
     } else {
@@ -145,7 +146,7 @@ if (!([String]::IsNullOrEmpty($cpp2015))) {
 [DotnetFrameworkInstaller]::new([DependencyFetcher]::new($config.Dependencies.DotnetFramework).Fetch()).Install()
 
 
-if ($config.Checkmarx.ComponentType -eq "Manager") {
+if ($isManager) {
     [GitInstaller]::new([DependencyFetcher]::new($config.Dependencies.Git).Fetch()).Install()
     [IisInstaller]::new().Install()
     [IisUrlRewriteInstaller]::new([DependencyFetcher]::new($config.Dependencies.IisRewriteModule).Fetch()).Install()
@@ -178,7 +179,12 @@ if ($config.Checkmarx.License.Url -eq $null) {
 } elseif (!([String]::IsNullOrEmpty($config.Checkmarx.License.Url))) {
     $log.Warn("config.Checkmarx.License.Url value provided ($($config.Checkmarx.License.Url)) but not sure how to handle. Valid values are 'ALG' and 's3://bucket/keyprefix/somelicensefile.cxl' (must end in .cxl)")
 } else {
-    $log.Info("No license url provided for config.Checkmarx.License.Url")
+    if ($isManager) {
+        # A manager w/o a license should generate a warning, otherwise it is informational
+        $log.Warn("No license url provided for config.Checkmarx.License.Url")
+    } else {
+        $log.Info("No license url provided for config.Checkmarx.License.Url")        
+    }
 }
 
 # Update the installation command line arguments to specify the license file
@@ -215,7 +221,7 @@ if ($config.MsSql.UseSqlAuth -eq "True") {
 # After Checkmarx is installed there are a number of things to configure. 
 #
 ###############################################################################
-if ($config.Checkmarx.ComponentType -eq "Manager") {
+if ($isManager) {
     $log.Info("Hardening IIS")
     C:\programdata\checkmarx\aws-automation\scripts\configure\configure-iis-hardening.ps1
     $log.Info("...finished hardening IIS")
@@ -231,7 +237,7 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
 ###############################################################################
 # Reverse proxy CxARM
 ###############################################################################
-if ($config.Checkmarx.ComponentType -eq "Manager" -and ($config.Checkmarx.Installer.Args.contains("BI=1"))) {
+if ($isManager -and ($config.Checkmarx.Installer.Args.contains("BI=1"))) {
     $log.Info("Configuring IIS to reverse proxy CxARM")
     $arm_server = "http://localhost:8080"
     Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST'  -filter "system.webServer/proxy" -name "enabled" -value "True"
@@ -264,7 +270,7 @@ if ($config.Checkmarx.Installer.Args.Contains("WEB=1")) {
 ###############################################################################
 # Open Firewall for Engine
 ###############################################################################
-if ($config.Checkmarx.ComponentType -eq "Engine") {
+if ($isEngine) {
   # When the engine is installed by itself it can't piggy back on the opening of 80,443 by IIS install, so we need to explicitly open the port
   $log.Info("Adding host firewall rule for for the Engine Server")
   New-NetFirewallRule -DisplayName "CxScanEngine HTTP Port 80" -Direction Inbound -LocalPort 80 -Protocol TCP -Action Allow
@@ -311,7 +317,7 @@ if ($config.Checkmarx.Installer.Args.Contains("ENGINE=1")) {
 ###############################################################################
 # Activate Git trace logging
 ###############################################################################
-if ($config.Checkmarx.ComponentType -eq "Manager") {
+if ($isManager) {
     $log.Info("Enabling Git Trace Logging")
     md -force "c:\program files\checkmarx\logs\git"
     [System.Environment]::SetEnvironmentVariable('GIT_TRACE', 'c:\program files\checkmarx\logs\git\GIT_TRACE.txt', [System.EnvironmentVariableTarget]::Machine)
@@ -328,7 +334,7 @@ if ($config.Checkmarx.ComponentType -eq "Manager") {
 ###############################################################################
 # Install Package Managers if Configured (Required for OSA)
 ###############################################################################
-if ($config.Checkmarx.ComponentType -eq "Manager") {
+if ($isManager) {
     if ($config.PackageManagers.Python3 -ne $null) {
        [BasicInstaller]::new([DependencyFetcher]::new($config.PackageManagers.Python3).Fetch(),
                       "/quiet InstallAllUsers=1 PrependPath=1 Include_dev=0 Include_test=0").BaseInstall()
