@@ -217,6 +217,7 @@ Class CxSASTEngineTlsConfigurer : Base {
 
   CxSASTEngineTlsConfigurer([String] $thumbprint) {
     $this.tlsPort = "443"
+    $this.thumbprint = $thumbprint
   }
   Configure() {
      [CheckmarxSystemInfo] $cx = [CheckmarxSystemInfo]::new()

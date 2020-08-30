@@ -382,7 +382,7 @@ if (!([String]::IsNullOrEmpty($config.Ssl.Url))) {
     $ssl_file = [Utility]::Fetch($config.Ssl.Url)
     if ([Utility]::Basename($ssl_file).EndsWith(".ps1")) {
         $log.Info("SSL URL identified as a powershell script. Executing $ssl_file")
-        powershell.exe -Command "$ssl_file -domainName ""$hostname"" -pfxpassword ""$($secrets.sql_password)"""
+        iex "$ssl_file -domainName ""$hostname"" -pfxpassword ""$($secrets.sql_password)"""
         $log.Info("... finished executing $ssl_file")
     } elseif ([Utility]::Basename($ssl_File).EndsWith(".pfx")) {
         $log.Info("SSL URL is a .pfx file that has been downloaded"    )    
@@ -390,7 +390,7 @@ if (!([String]::IsNullOrEmpty($config.Ssl.Url))) {
 } 
 
 $log.Info("configuring ssl")
-C:\programdata\checkmarx\aws-automation\scripts\ssl\configure-ssl.ps1 -domainName $hostname -pfxpassword $pfx_password
+C:\programdata\checkmarx\aws-automation\scripts\ssl\configure-ssl.ps1 -domainName $hostname -pfxpassword "$($secrets.sql_password)"
 $log.Info("... finished configuring ssl")
 
 ###############################################################################
