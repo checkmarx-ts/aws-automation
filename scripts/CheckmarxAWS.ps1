@@ -1,8 +1,72 @@
+Class DateTimeUtil {
+  # Gets timestamp in UTC
+  [DateTime] NowUTC() {
+      return (Get-Date).ToUniversalTime()
+  }
+  static [String] GetFileNameTime() {
+    $timestamp = Get-Date -Format o | foreach { $_ -replace ":", "" }
+    $timestamp = $timestamp.Replace("-", "")
+    return $timestamp
+  }
+}
 
-function log([string] $msg) { Write-Host "$(Get-Date -Format G) [$PSCommandPath] $msg" }
+Class Logger {
+  hidden [String] $componentName
+  hidden [DateTimeUtil] $dateUtil = [DateTimeUtil]::new()
+  hidden [string] $outfile = "C:\CheckmarxSetup.log"
+
+  Logger([String] $componentName) {
+    $this.componentName = $componentName
+    if (!(test-path $this.outfile)) {New-Item -ItemType "file" -Path $this.outfile}
+  }
+
+  AppendName([String] $name) {
+    $this.componentName = "$($this.componentName)-$name"
+  }
+
+  Info([String] $message) {
+    $this.Log("INFO", $message)
+  }
+
+  Warn([String] $message) {
+    $this.Log("WARN", $message)
+  }
+
+  Error ([String] $message) {
+    $this.Log("ERROR", $message)
+  }
+
+  hidden Log([String] $level, [String] $message) {
+    [String] $enhancedMessage = $this.FormatLogMessage($level, $message)
+
+    [String] $color = "White"
+    if ($level -eq "WARN"){
+      $color = "Yellow"
+    } elseif ($level -eq "ERROR") {
+      $color = "Red"
+    }
+
+    $this.Console($enhancedMessage, $color)
+  }
+
+  hidden [String] FormatLogMessage ([String] $level, [String] $message) {
+    return $this.dateUtil.NowUTC().ToString("yyyy-MM-ddTHH:mm:ss.fff") + " " + $level.PadLeft(5, " ") + " [" + $this.componentName + "] : " + $message
+  }
+
+  hidden Console ([String] $message, $color) {
+    Write-Host $message -ForegroundColor $color
+    # Add-Content -Path $this.outfile -Value $message
+    $message | Out-File $this.outfile -Append -Width 1000
+  }
+}
+
+Class Base {
+  [Logger] $log = [Logger]::new($this.GetType().Fullname)
+  [String] $home = "C:\programdata\checkmarx"
+  [String] $artifactspath = "C:\programdata\checkmarx\artifacts"
+}
 
 
-# We need to access the database for these settings so we build a client for the access.
 Class DbClient {
     hidden [String] $connectionString
     [Int] $sqlTimeout = 60
@@ -50,7 +114,6 @@ Class DbClient {
     } 
   }
 
-
 function  TryGetSSMParameter([String] $parameter) {
     if(!$parameter) { return $null }
 
@@ -72,120 +135,45 @@ function  TryGetSSMParameter([String] $parameter) {
     }
 }
 
-Class InstallerLocator {
-  [String] $pattern
-  [String] $s3pattern
-  [String] $expectedpath
-  [String] $s3prefix
-  [String] $sourceUrl
-  [String] $filename
-  [String] $installer
-  [bool] $isInstallerAvailable
-  
-  InstallerLocator([String] $pattern, [String] $expectedpath, [String] $s3prefix, [String] $sourceUrl) {
-      $this.pattern = $pattern
-      # remove anything after the first wild card for the s3 search pattern
-      $this.s3pattern = $pattern.Substring(0, $pattern.IndexOf("*")) 
-      # Defend against trailing paths that will cause errors
-      $this.expectedpath = $expectedpath.TrimEnd("/\")
-      $this.s3prefix = $s3prefix.TrimEnd("/")
-      $this.sourceUrl = $sourceUrl.TrimEnd("/")
-      $this.filename = $this.sourceUrl.Substring($sourceUrl.LastIndexOf("/") + 1)     
-  }
+Class WindowsInfo : Base {
+    static [void] Show() {
+        Write-Host "################################"
+        Write-Host "  System Info"
+        Write-Host "################################"
+        systeminfo.exe > c:\systeminfo.log
+        cat c:\systeminfo.log
 
-  InstallerLocator([String] $pattern, [String] $expectedpath, [String] $s3prefix) {
-    $this.pattern = $pattern
-    # remove anything after the first wild card for the s3 search pattern
-    $this.s3pattern = $pattern.Substring(0, $pattern.IndexOf("*")) 
-    # Defend against trailing paths that will cause errors
-    $this.expectedpath = $expectedpath.TrimEnd("/\")
-    $this.s3prefix = $s3prefix.TrimEnd("/")
-    $this.sourceUrl = ""
-}
+        Write-Host "################################"
+        Write-Host " Checking for all installed updates"
+        Write-Host "################################"
+        Wmic qfe list  | Format-Table
 
-  [bool] IsValidInstaller() {
-    if (![String]::IsNullOrEmpty($this.installer) -and (Test-Path -Path "$($this.installer)" -PathType Leaf)) {
-        return $True
+        Write-Host "################################"
+        Write-Host " Host Info "
+        Write-Host "################################"
+        Get-Host | Format-Table
+        
+        Write-Host "################################"
+        Write-Host " Powershell Info "
+        Write-Host "################################"
+        (Get-Host).Version  | Format-Table
+
+        Write-Host "################################"
+        Write-Host " OS Info "
+        Write-Host "################################"
+        Get-WmiObject Win32_OperatingSystem | Select PSComputerName, Caption, OSArchitecture, Version, BuildNumber | Format-Table
+
+        Write-Host "################################"
+        Write-Host " whoami "
+        Write-Host "################################"
+        whoami
+
+        
+        Write-Host "################################"
+        Write-Host " env:TEMP "
+        Write-Host "################################"
+        Write-Host "$env:TEMP"
     }
-    return $False
-  }
-
-  Locate() {
-    $this.EnsureLocalPathExists()
-
-    # Search for the installer on the filesystem already in case something out of band placed it there
-    $this.installer = $this.TryFindLocal()
-    if ($this.IsValidInstaller()) {
-      $this.isInstallerAvailable = $True
-      return
-    }
-
-    # If no installer found yet then try download from s3 and find the downloaded file
-    $this.TryDownloadFromS3()
-    $this.installer = $this.TryFindLocal()
-    if ($this.IsValidInstaller()) {
-      $this.isInstallerAvailable = $True
-      return
-    }
-
-    # If no installer found yet then try download from source and find the downloaded file
-    $this.TryDownloadFromSource()
-    $this.installer = $this.TryFindLocal()
-    if ($this.IsValidInstaller()) {
-      $this.isInstallerAvailable = $True
-      return
-    }
-
-    # If we've reached this point then nothing can be installed
-    Throw "Could not find an installer"
-  }
-
-  EnsureLocalPathExists() {
-    md -force "$($this.expectedpath)" | Out-Null
-  }
-
-  [string] TryFindLocal() {
-    return $(Get-ChildItem $this.expectedpath -Recurse -Filter $this.pattern | Sort -Descending | Select -First 1 -ExpandProperty FullName)
-  }
-
-  TryDownloadFromS3() {
-     if (!(Test-Path env:CheckmarxBucket)) {
-       Write-Host "Skipping s3 search, CheckmarxBucket environment variable has not been set"
-       return
-     }
-
-     Write-Host "Searching s3://$env:CheckmarxBucket/$($this.s3prefix)/$($this.s3pattern)"
-     try {
-        $s3object = (Get-S3Object -BucketName $env:CheckmarxBucket -Prefix "$($this.s3prefix)/$($this.s3pattern)" | Select -ExpandProperty Key | Sort -Descending | Select -First 1)
-     } catch {
-        Write-Host "ERROR: An exception occured calling Get-S3Object cmdlet. Check IAM Policies and if AWS Powershell is installed"
-        exit 1
-     }
-     if ([String]::IsNullOrEmpty($s3object)) {
-        Write-Host "No suitable file found in s3"
-        return
-     }
-
-     Write-Host "Found s3://$env:CheckmarxBucket/$s3object"
-     $this.filename = $s3object.Substring($s3object.LastIndexOf("/") + 1)
-     try {
-        Write-Host "Downloading from s3://$env:CheckmarxBucket/$s3object"
-        Read-S3Object -BucketName $env:CheckmarxBucket -Key $s3object -File "$($this.expectedpath)\$($this.filename)"
-        Write-Host "Finished downloading $($this.filename)"
-     } catch {
-        Write-Host "ERROR: An exception occured calling Read-S3Object cmdlet. Check IAM Policies and if AWS Powershell is installed"
-        exit 1
-     }
-  }  
-
-  TryDownloadFromSource() {
-    if ([string]::IsNullOrEmpty($this.sourceUrl)) {
-        return
-    }
-    Write-Host "Downloading from $($this.sourceUrl)"
-    Invoke-WebRequest -UseBasicParsing -Uri $this.sourceUrl -OutFile (Join-Path $this.expectedpath $this.filename)
-    Write-Host "Finished downloading $($this.filename)"
-  }
 }
 
 
@@ -222,67 +210,48 @@ Class CheckmarxSystemInfo {
 }
 
 
-Class DateTimeUtil {
-  # Gets timestamp in UTC
-  [DateTime] NowUTC() {
-      return (Get-Date).ToUniversalTime()
-  }
-  static [String] GetFileNameTime() {
-    $timestamp = Get-Date -Format o | foreach { $_ -replace ":", "" }
-    $timestamp = $timestamp.Replace("-", "")
-    return $timestamp
-  }
-}
-
-Class Logger {
-  hidden [String] $componentName
-  hidden [DateTimeUtil] $dateUtil = [DateTimeUtil]::new()
-  hidden [string] $outfile = "C:\CheckmarxSetup.log"
-
-  Logger([String] $componentName) {
-    $this.componentName = $componentName
-    if (!(test-path $this.outfile)) {New-Item -ItemType "file" -Path $this.outfile}
-  }
-
-  Info([String] $message) {
-    $this.Log("INFO", $message)
-  }
-
-  Warn([String] $message) {
-    $this.Log("WARN", $message)
-  }
-
-  Error ([String] $message) {
-    $this.Log("ERROR", $message)
-  }
-
-  hidden Log([String] $level, [String] $message) {
-    [String] $enhancedMessage = $this.FormatLogMessage($level, $message)
-
-    [String] $color = "White"
-    if ($level -eq "WARN"){
-      $color = "Yellow"
-    } elseif ($level -eq "ERROR") {
-      $color = "Red"
+Class AwsSsmSecrets : Base {
+    [String] $sql_password
+    [String] $cxapi_password
+    [String] $tomcat_password
+    [String] $pfx_password
+    AwsSsmSecrets($config) {
+        $this.log.Info("Resolvig secrets from AWS SSM Parameter Store")
+        try {
+            $this.sql_password = $(Get-SSMParameter -Name "$($config.Aws.SsmPath)/sql/password" -WithDecryption $True).Value
+            $this.cxapi_password = $(Get-SSMParameter -Name "$($config.Aws.SsmPath)/api/password" -WithDecryption $True).Value
+            $this.tomcat_password = $(Get-SSMParameter -Name "$($config.Aws.SsmPath)/tomcat/password" -WithDecryption $True).Value
+            $this.pfx_password = $(Get-SSMParameter -Name "$($config.Aws.SsmPath)/pfx/password" -WithDecryption $True).Value
+       } catch {
+            $this.log.Error("An exception occured while resolving secrets from AWS SSM Parameter Store")
+            Throw $_
+       }
+        $this.log.Info("finished fetching secrets")
     }
-
-    $this.Console($enhancedMessage, $color)
-  }
-
-  hidden [String] FormatLogMessage ([String] $level, [String] $message) {
-    return $this.dateUtil.NowUTC().ToString("yyyy-MM-ddTHH:mm:ss.fff") + " " + $level.PadLeft(5, " ") + " [" + $this.componentName + "] : " + $message
-  }
-
-  hidden Console ([String] $message, $color) {
-    Write-Host $message -ForegroundColor $color
-    # Add-Content -Path $this.outfile -Value $message
-    $message | Out-File $this.outfile -Append -Width 1000
-  }
 }
 
-Class Base {
-  [Logger] $log = [Logger]::new($this.GetType().Fullname)
+Class AwsSecretManagerSecrets : Base {
+    [String] $sql_password
+    [String] $cxapi_password
+    [String] $tomcat_password
+    [String] $pfx_password
+    AwsSecretManagerSecrets($config) {
+        $this.log.Info("Resolvig secrets from AWS Secrets Manager")
+        try {
+            $this.sql_password  = (Get-SECSecretValue -SecretId "$config.Aws.SsmPath)/sql" | ConvertFrom-Json).password
+            $this.cx_api_password  = (Get-SECSecretValue -SecretId "$config.Aws.SsmPath)/api" | ConvertFrom-Json).password
+            $this.tomcat_password  = (Get-SECSecretValue -SecretId "$config.Aws.SsmPath)/tomcat" | ConvertFrom-Json).password
+            $this.pfx_password  = (Get-SECSecretValue -SecretId "$config.Aws.SsmPath)/pfx" | ConvertFrom-Json).password
+        } catch {
+            $this.log.Error("An exception occured while resolving secrets from AWS Secrets Manager")
+            Throw $_
+        }
+        $this.log.Info("finished fetching secrets")
+    }
 }
+
+
+
 
 Class CxSASTEngineTlsConfigurer : Base {
   hidden [String] $tlsPort
@@ -459,7 +428,6 @@ Class CxManagerIisTlsConfigurer : Base {
   }
 }
 
-
 Class CxManagerTlsConfigurer : Base {
   [String] $tlsPort
   [bool] $ignoreTlsCertificateValidationErrors
@@ -598,246 +566,402 @@ class Utility {
   }
 }
 
+Class DependencyFetcher : Base {
+    [String] $url
+    [String] $filename 
+    [String] $localfilepath
+    DependencyFetcher([String] $url) {   
+        $this.log.AppendName("/$($url)".Replace("\", "/").Split("/")[-1])     
+        $this.log.Info("Instance created with url = $url")        
+        
+        $this.url = $url
+        if ([String]::IsNullOrEmpty($this.url)) {
+            $this.log.Warn("The URL is null or empty!")
+            throw "The URL is null or empty"
+        }
 
-Class SevenZipInstaller : Base {
-  [String] $url
-  SevenZipInstaller([String] $url) {
-    $this.url = $url
-    $this.log.Info("Instance created. url = $($this.url)")    
-  }
-  Install() {
-    $7zip_path = $(Get-ChildItem 'HKLM:\SOFTWARE\7*Zip\' | Get-ItemPropertyValue -Name Path)
-    if ([Utility]::Exists($7zip_path)) {
-      $this.log.Info("7-Zip is already installed at ${7zip_path} - skipping installation")
-    } else {
-      $sevenzipinstaller = [Utility]::Fetch($this.url)
-      $this.log.Info("Installing 7zip from $sevenzipinstaller")
-      Start-Process -FilePath "$sevenzipinstaller" -ArgumentList "/S" -Wait -NoNewWindow
-      $newpath = [Utility]::Addpath($(Get-ChildItem 'HKLM:\SOFTWARE\7*Zip\' | Get-ItemPropertyValue -Name Path))
-      [Utility]::Debug("post-7zip")
+        if ($this.url.ToLower().StartsWith("http://")) {
+            $this.log.Warn("http protocol detected - did you mean https?")
+        }
+        
+        # Ensure at least 1 path separator and that they are all / when looking for the base filename
+        $this.filename = "/${url}".Replace("\", "/").Split("/")[-1] 
     }
-  }
+
+    [String] Fetch() { 
+        [bool]$isInitialDownload = $False
+        if ($this.IsFilePresent()) {
+            $this.log.Info("The file was found locally and will not be downloaded again")                   
+        } else {
+            $isInitialDownload = $True # do the file hash upon first download only otherwise its wasting time
+            if (!(Test-Path -Path $this.artifactspath -PathType Container)) {
+                $this.log.Info("$($this.artifactspath) does not exist. It will be created")
+                md -Force $this.artifactspath
+            }
+
+            # The file was NOT found locally, so try to download it
+            $begin = (Get-Date)
+            if ($this.url.ToLower().StartsWith("http")) {
+                $this.DownloadHttp()
+            } elseif ($this.url.ToLower().StartsWith("s3://")) {
+                $this.DownloadS3()
+            } elseif (Test-Path -Path $this.url -PathType Leaf) {
+                $this.CopyToArtifacts()
+            }
+            $this.log.Info("Fetch time taken: $(New-TimeSpan -Start $begin -end (Get-Date))")
+
+        }
+
+        if ($this.IsFilePresent() -eq $false) {        
+            $this.log.Error("$($this.filename) was not found in $($this.home)")
+            Throw "$($this.filename) was not found in $($this.home)"
+        }
+
+        $this.localfilepath = $this.FindFile()
+        $this.log.Info("File is at $($this.localfilepath)")
+
+        if ($isInitialDownload) {
+            $this.log.Info("sha256 of $($this.filename) = $((Get-FileHash $this.localfilepath).Hash)")
+        }
+        return $this.localfilepath
+    }
+
+    hidden [String] FindFile() {
+        return $(Get-ChildItem $this.home -Recurse -Filter $this.filename | Sort -Descending | Select -First 1 -ExpandProperty FullName)      
+    }
+
+    hidden [bool] IsFilePresent() {
+        $localfile = $this.FindFile()
+        if (!([String]::IsNullOrEmpty($localfile)) -and (Test-Path -Path $localfile -PathType Leaf)) {
+            return $True
+        }       
+        return $False
+    }
+
+    hidden DownloadHttp() {
+        $this.log.Info("Downloading (http) $($this.url)")
+        try {
+            (New-Object System.Net.WebClient).DownloadFile($($this.url), "$(Join-Path -Path $this.artifactspath -ChildPath $this.filename)")
+        } catch {
+            $this.log.Error("An exception occured downloading $($this.url)")
+            Throw $_    
+        }
+        $this.log.Info("Finished downloading file via http")
+    }
+    hidden DownloadS3() {
+        $bucket = $this.url.Replace("s3://", "").Split("/")[0]
+        $key = $this.url.Replace("s3://${bucket}", "")
+        $this.log.Info("Downloading from bucket $bucket with key $key")
+        try {
+            Read-S3Object -BucketName $bucket -Key $key -File "$(Join-Path -Path $this.artifactspath -ChildPath $this.filename)"
+        } catch {
+            $this.log.Error("An exception occured calling Read-S3Object cmdlet. Check IAM Policies and if AWS Powershell is installed")
+            Throw $_            
+        }
+        $this.log.Info("finished downloading from s3")
+         
+    }
+    hidden CopyToArtifacts() {
+        # Copy it to our artifacts folder if it somehow exists outside of artifacts
+        $this.log.Info("Copyng local file to artifacts location")
+        try {
+            Copy-Item -Path $this.url -Destination $this.artifactspath -Force
+        } catch {
+            $this.log.Error("An exception occured copying the file from $($this.url)")
+            throw $_
+        }
+        $this.log.Info("finished copying file to artifacts location")
+    }
 }
 
-Class Cpp2010RedistInstaller : Base {
-  [String] $url
-  Cpp2010RedistInstaller($url) {
-    $this.url = $url
-    $this.log.Info("Instance created. url = $($this.url)")    
-  }
-  Install() {
-    $version = $(Get-ChildItem 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\VisualStudio\10*0\VC\VCRedist\x64' -ErrorAction SilentlyContinue | Get-ItemPropertyValue -Name Installed -ErrorAction SilentlyContinue)
-    if (![String]::IsNullOrEmpty($version)) {
-      $this.log.Info("C++ 2010 Redistributable is already installed - skipping installation")
-    } else {
-        [Utility]::Debug("pre-cpp2010")
-        $installer = [Utility]::Fetch($this.url)
-        $this.log.Info("Installing C++ 2010 Redistributable from $installer")
-        Start-Process -FilePath "$installer" -ArgumentList "/passive /norestart" -Wait -NoNewWindow
-        [Utility]::Debug("post-cpp2010")
+Class BasicInstaller : Base {
+    hidden [String] $installer
+    hidden [String] $silentInstallArgs
+    hidden [String] $logprefix
+
+    BasicInstaller([String] $installer, [String] $silentInstallArgs) {
+        $this.installer = $installer
+        $this.silentInstallArgs = $silentInstallArgs                
+        $this.log.AppendName("/$($installer)".Replace("\", "/").Split("/")[-1])
+        $this.log.Info("Instance created with installer = $installer")
+        
     }
-  }
+
+    BasicInstaller() {
+
+    }
+    
+    BaseInstall() {
+        $this.logprefix = $this.installer.Replace("/", "\").Split("\")[-1]
+        $this.log.Info("Attempting silent install")
+        $this.IsValidated()
+        if ($this.installer.ToLower().EndsWith(".msi")) {
+            $this.AdaptForMsi()
+        }
+        $this.StartProcess()
+    }
+    hidden [bool] IsValidated() {
+        if ([String]::IsNullOrEmpty($this.installer)) {
+            $this.log.Error("The installer is null or empty value")
+            Throw "The installer is null or empty value"
+        }
+        if (!(Test-Path -Path $this.installer -PathType Leaf)) {
+            $this.log.Error("The installer is not an existing file")
+            Throw "The installer is not an existing file"
+        }
+        $this.log.Info("Validated installer exists")
+        return $True
+    }
+    hidden AdaptForMsi() {
+        # MSI files should be passed as an argument to msiexec.exe rather than called directly. 
+        $this.log.Info("Adapting for MSI install")
+        $msi_args = "/i ""$($this.installer)"" $($this.silentInstallArgs) /L*V ""$($this.installer).log"" /quiet"
+        $this.silentInstallArgs = $msi_args
+        $this.installer = "$($env:SystemRoot)\system32\msiexec.exe"
+    }
+    hidden StartProcess() {
+        $this.log.Info("Runing installer with args: $($this.silentInstallArgs)")
+        $stdout = "$($this.artifactspath)\$($this.logprefix).out.log"
+        $stderr = "$($this.artifactspath)\$($this.logprefix).err.log"
+        $begin = (Get-Date)
+        $process = Start-Process -FilePath $this.installer -ArgumentList "$($this.silentInstallArgs)" -Wait -NoNewWindow -RedirectStandardError "${stderr}" -RedirectStandardOutput "${stdout}" -PassThru
+        $this.log.Info("Installation process finished in $(New-TimeSpan -Start $begin -end (Get-Date)) time with exit code: $($process.ExitCode)")
+        $this.log.Info("Installer standard output: ")
+        cat "$stdout"
+        $this.log.Info("Installer standard error: ")
+        cat "$stderr"
+    }
+    [void] AddToPath([String] $pathToAdd) {
+        $this.log.Info("Adding $pathToAdd to PATH environment variable")
+        [Environment]::SetEnvironmentVariable('Path',[Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::Machine) + ";$pathToAdd",[EnvironmentVariableTarget]::Machine)
+    }
+
+    [void] CreateEnvironmentVariable([String] $name, [String] $value) {
+        $this.log.Info("Setting environment variable $name to $value")
+        [Environment]::SetEnvironmentVariable($name, $value, 'Machine')
+    }
 }
 
-Class Cpp2015RedistInstaller : Base {
-  [String] $url
-  Cpp2015RedistInstaller($url) {
-    $this.url = $url
-    $this.log.Info("Instance created. url = $($this.url)")    
-  }
-  Install() {
-    $version = $(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\VisualStudio\14*0\VC\Runtimes\x64' -ErrorAction SilentlyContinue | Get-ItemPropertyValue -Name Installed -ErrorAction SilentlyContinue)
-    if (![String]::IsNullOrEmpty($version)) {
-      $this.log.Info("C++ 2015 Redistributable is already installed - skipping installation")
-    } else {
-        [Utility]::Debug("pre-cpp2015")
-        $installer = [Utility]::Fetch($this.url)
-        $this.log.Info("Installing C++ 2015 Redistributable from $installer")
-        Start-Process -FilePath "$installer" -ArgumentList "/passive /norestart" -Wait -NoNewWindow
-        [Utility]::Debug("post-cpp2015")
+Class SevenZipInstaller : BasicInstaller {
+    hidden [String] $silentInstallArgs = "/S"
+    SevenZipInstaller([String] $installer) {
+        $this.log.Info("instance created with installer = $installer")
+        $this.installer = $installer       
     }
-  }
+    hidden [bool] IsAlreadyInstalled() {
+        return (![String]::IsNullOrEmpty($(Get-ChildItem 'HKLM:\SOFTWARE\7*Zip\' | Get-ItemPropertyValue -Name Path)))
+    }
+    Install() {
+        if ($this.IsAlreadyInstalled()) {
+            $this.log.Info("The package is already installed. Skipping installation.")
+            return
+        }
+        $this.BaseInstall()
+        $this.AddToPath($(Get-ChildItem 'HKLM:\SOFTWARE\7*Zip\' | Get-ItemPropertyValue -Name Path))
+    }
 }
 
-Class AdoptOpenJdkInstaller : Base {
-  [String] $url
-  AdoptOpenJdkInstaller($url) {
-    $this.url = $url
-    $this.log.Info("Instance created. url = $($this.url)")    
-  }
-  Install() {    
-    if ([Utility]::Exists("C:\Program Files\AdoptOpenJDK\bin\java.exe")) {
-      $this.log.Info("Java is already installed - skipping installation")
-    } else {
-      $javainstaller = [Utility]::Fetch($this.url)
-      [Utility]::Debug("pre-java")
-      $this.log.Info("Installing Java from $javainstaller")
-      Start-Process -FilePath "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$javainstaller`" ADDLOCAL=FeatureMain,FeatureEnvironment,FeatureJarFileRunWith,FeatureJavaHome INSTALLDIR=`"c:\Program Files\AdoptOpenJDK\`" /quiet /L*V `"$javainstaller.log`"" -Wait -NoNewWindow
-      $this.log.Info("Finished installing java")
-      [Utility]::Debug("post-java")
-      Start-Process "C:\Program Files\AdoptOpenJDK\bin\java.exe" -ArgumentList "-version" -RedirectStandardError ".\java-version.log" -Wait -NoNewWindow
-      cat ".\java-version.log"
+Class Cpp2010RedistInstaller : BasicInstaller {
+    hidden [String] $silentInstallArgs = "/passive /norestart"
+    Cpp2010RedistInstaller([String] $installer) {
+        $this.log.Info("instance created with installer = $installer")
+        $this.installer = $installer       
     }
-  }
+    hidden [bool] IsAlreadyInstalled() {
+        return (![String]::IsNullOrEmpty($(Get-ChildItem 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\VisualStudio\10*0\VC\VCRedist\x64' -ErrorAction SilentlyContinue | Get-ItemPropertyValue -Name Installed -ErrorAction SilentlyContinue)))
+    }
+    Install() {
+        if ($this.IsAlreadyInstalled()) {
+            $this.log.Info("The package is already installed. Skipping installation.")
+            return
+        }
+        $this.BaseInstall()
+    }
 }
 
-Class DotnetFrameworkInstaller : Base {
-  [String] $url
-  DotnetFrameworkInstaller($url) {
-    $this.url = $url
-  }
-  Install() {  
-    # https://docs.microsoft.com/en-us/dotnet/framework/migration-guide/how-to-determine-which-versions-are-installed#to-check-for-a-minimum-required-net-framework-version-by-querying-the-registry-in-powershell-net-framework-45-and-later
-    $dotnet_release = $(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full\' | Get-ItemPropertyValue -Name Release)
-    $dotnet_version = $(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full\' | Get-ItemPropertyValue -Name Version)
-    $this.log.Info("Found .net version ${dotnet_version}; release string: $dotnet_release")
-    if ($dotnet_release -gt 461308 ) {
-        $this.log.Info("Dotnet 4.7.1 (release string: 461308 ) or higher already installed - skipping installation")
-    } else {
-        $dotnetinstaller = [Utility]::Fetch($this.url)
-        [Utility]::Debug("pre-dotnetframework")
-        $this.log.Info("Installing dotnet framework from $dotnetinstaller - a reboot will be required")
-        Start-Process -FilePath "$dotnetinstaller" -ArgumentList "/passive /norestart" -Wait -NoNewWindow
-        [Utility]::Debug("post-dotnetframework")
-        $this.log.Info("Finished dotnet framework install. Rebooting.")  
+Class Cpp2015RedistInstaller : BasicInstaller {
+    hidden [String] $silentInstallArgs = "/passive /norestart"
+    Cpp2015RedistInstaller([String] $installer) {
+        $this.log.Info("instance created with installer = $installer")
+        $this.installer = $installer       
+    }
+    hidden [bool] IsAlreadyInstalled() {
+        return (![String]::IsNullOrEmpty($(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\VisualStudio\14*0\VC\Runtimes\x64' -ErrorAction SilentlyContinue | Get-ItemPropertyValue -Name Installed -ErrorAction SilentlyContinue)))
+    }
+    Install() {
+        if ($this.IsAlreadyInstalled()) {
+            $this.log.Info("The package is already installed. Skipping installation.")
+            return
+        }
+        $this.BaseInstall()
+    }
+}
+
+Class DotnetFrameworkInstaller : BasicInstaller {
+    hidden [String] $silentInstallArgs = "/passive /norestart"
+    DotnetFrameworkInstaller([String] $installer) {
+        $this.log.Info("instance created with installer = $installer")
+        $this.installer = $installer       
+    }
+    hidden [bool] IsAlreadyInstalled() {
+        $dotnet_release = $(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full\' | Get-ItemPropertyValue -Name Release)
+        $dotnet_version = $(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full\' | Get-ItemPropertyValue -Name Version)
+        $this.log.Info("Found .net version ${dotnet_version}; release string: $dotnet_release")
+        # https://docs.microsoft.com/en-us/dotnet/framework/migration-guide/how-to-determine-which-versions-are-installed#to-check-for-a-minimum-required-net-framework-version-by-querying-the-registry-in-powershell-net-framework-45-and-later
+        return ($dotnet_release -gt 461308)
+    }
+    Install() {
+        if ($this.IsAlreadyInstalled()) {
+            $this.log.Info("The package is already installed. Skipping installation.")
+            return
+        }
+        $this.BaseInstall()
+        $this.log.Info("Finished dotnet framework install. Rebooting.")
         Restart-Computer -Force; 
         sleep 30 # force in case anyone is logged in
-    }  
-  }
+    }
+}
+
+Class GitInstaller : BasicInstaller {
+    hidden [String] $silentInstallArgs = "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS"
+    GitInstaller([String] $installer) {
+        $this.log.Info("instance created with installer = $installer")
+        $this.installer = $installer       
+    }
+    hidden [bool] IsAlreadyInstalled() {
+        return (Test-Path -Path "C:\Program Files\Git\bin\git.exe")
+    }
+    Install() {
+        if ($this.IsAlreadyInstalled()) {
+            $this.log.Info("The package is already installed. Skipping installation.")
+            return
+        }
+        $this.BaseInstall()
+    }
+}
+
+Class DotnetCoreHostingInstaller : BasicInstaller {
+    hidden [String] $silentInstallArgs = "/quiet /install /norestart"
+    DotnetCoreHostingInstaller([String] $installer) {
+        $this.log.Info("instance created with installer = $installer")
+        $this.installer = $installer       
+    }
+    hidden [bool] IsAlreadyInstalled() {
+        return (Test-Path -Path "C:\Program Files\dotnet")
+    }
+    Install() {
+        if ($this.IsAlreadyInstalled()) {
+            $this.log.Info("The package is already installed. Skipping installation.")
+            return
+        }
+        $this.BaseInstall()
+    }
+}
+
+Class MsSqlServerExpressInstaller : BasicInstaller {
+    hidden [String] $silentInstallArgs = "/IACCEPTSQLSERVERLICENSETERMS /Q /ACTION=install /INSTANCEID=SQLEXPRESS /INSTANCENAME=SQLEXPRESS /UPDATEENABLED=FALSE /BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1"
+    MsSqlServerExpressInstaller([String] $installer) {
+        $this.log.Info("instance created with installer = $installer")
+        $this.installer = $installer       
+    }
+    hidden [bool] IsAlreadyInstalled() {
+        return ((get-service sql*).length -eq 0)
+    }
+    Install() {
+        if ($this.IsAlreadyInstalled()) {
+            $this.log.Info("The package is already installed. Skipping installation.")
+            return
+        }
+        $this.BaseInstall()
+
+        $sqlserverlog = $(Get-ChildItem "C:\Program Files\Microsoft SQL Server\110\Setup Bootstrap\Log" -Recurse -Filter "Summary.txt" | Sort -Descending | Select -First 1 -ExpandProperty FullName) 
+        $this.log.Info("finished Installing SQL Server. Summary log is:")
+        cat $sqlserverlog    
+    }
 }
 
 
-Class GitInstaller : Base {
-  [String] $url
-  GitInstaller($url) {
-    $this.url = $url
-    $this.log.Info("Instance created. url = $($this.url)")    
-  }
-  Install() {  
-    if (Test-Path -Path "C:\Program Files\Git\bin\git.exe") {
-      $this.log.Info("Git is already installed - skipping installation")
-    } else {
-      $gitinstaller = [Utility]::Fetch($this.url)
-      [Utility]::Debug("pre-git")
-      $this.log.Info("Installing Git from $gitinstaller")
-      Start-Process -FilePath "$gitinstaller" -ArgumentList "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS" -Wait -NoNewWindow
-      $this.log.Info("finished installing Git")
-      [Utility]::Debug("post-git")
-      Start-Process "C:\Program Files\Git\bin\git.exe" -ArgumentList "--version" -RedirectStandardOutput ".\git-version.log" -Wait -NoNewWindow
-      cat ".\git-version.log"
-    } 
-  }
+Class AdoptOpenJdkInstaller : BasicInstaller {
+    hidden [String] $silentInstallArgs = "ADDLOCAL=FeatureMain,FeatureEnvironment,FeatureJarFileRunWith,FeatureJavaHome INSTALLDIR=`"c:\Program Files\AdoptOpenJDK\`""
+    AdoptOpenJdkInstaller([String] $installer) {
+        $this.log.Info("instance created with installer = $installer")
+        $this.installer = $installer       
+    }
+    hidden [bool] IsAlreadyInstalled() {
+        return (Test-Path -Path "C:\Program Files\AdoptOpenJDK\bin\java.exe")
+    }
+    Install() {
+        if ($this.IsAlreadyInstalled()) {
+            $this.log.Info("The package is already installed. Skipping installation.")
+            return
+        }
+        $this.BaseInstall()
+    }
+}
+
+Class IisUrlRewriteInstaller : BasicInstaller {
+    hidden [String] $silentInstallArgs = "/QN"
+    IisUrlRewriteInstaller([String] $installer) {
+        $this.log.Info("instance created with installer = $installer")
+        $this.installer = $installer       
+    }
+    hidden [bool] IsAlreadyInstalled() {
+        return (Test-Path -Path "C:\Windows\System32\inetsrv\rewrite.dll")
+    }
+    Install() {
+        if ($this.IsAlreadyInstalled()) {
+            $this.log.Info("The package is already installed. Skipping installation.")
+            return
+        }
+        $this.BaseInstall()
+    }
+}
+
+Class IisApplicationRequestRoutingInstaller : BasicInstaller {
+    hidden [String] $silentInstallArgs = "/QN"
+    IisApplicationRequestRoutingInstaller([String] $installer) {
+        $this.log.Info("instance created with installer = $installer")
+        $this.installer = $installer       
+    }
+    hidden [bool] IsAlreadyInstalled() {
+        return (($(C:\Windows\System32\inetsrv\appcmd.exe list modules) | Where  { $_ -match "ApplicationRequestRouting" } | ForEach-Object { echo $_ }).length -gt 1)
+    }
+    Install() {
+        if ($this.IsAlreadyInstalled()) {
+            $this.log.Info("The package is already installed. Skipping installation.")
+            return
+        }
+        $this.BaseInstall()
+    }
 }
 
 Class IisInstaller : Base {
-  IisInstaller() {
-  }
-  Install() { 
-    if ([Utility]::Exists("c:\iis.lock")) {
-      $this.log.Info("IIS is already installed - skipping installation")
-    } else {
-      $this.log.Info("Installing IIS")
-      [Utility]::Debug("pre-iis")    
-      Install-WindowsFeature -name Web-Server -IncludeManagementTools
-      Add-WindowsFeature Web-Http-Redirect  
-      Install-WindowsFeature -Name  Web-Health -IncludeAllSubFeature
-      Install-WindowsFeature -Name  Web-Performance -IncludeAllSubFeature
-      Install-WindowsFeature -Name Web-Security -IncludeAllSubFeature
-      Install-WindowsFeature -Name  Web-Scripting-Tools -IncludeAllSubFeature
-      [Utility]::Debug("post-iis")    
-      $this.log.Info("... finished Installing IIS. Rebooting.")
-      # the iis.lock file is used to track state and prevent reinstallation and reboots on subsequent script execution
-      "IIS completed" | Set-Content c:\iis.lock
-      Restart-Computer -Force
-      Sleep 30
-    } 
-  }
+    IisInstaller() {
+    }
+    hidden [bool] IsAlreadyInstalled() {
+        return (Test-Path -Path "$($this.home)\iis.lock")
+    }
+
+    Install() {
+        if ($this.IsAlreadyInstalled()) {
+            $this.log.Info("The package is already installed. Skipping installation.")
+            return
+        }
+
+        $this.log.Info("Installing IIS")
+        Add-WindowsFeature Web-Http-Redirect  
+        Install-WindowsFeature -Name  Web-Health -IncludeAllSubFeature
+        Install-WindowsFeature -Name  Web-Performance -IncludeAllSubFeature
+        Install-WindowsFeature -Name Web-Security -IncludeAllSubFeature
+        Install-WindowsFeature -Name  Web-Scripting-Tools -IncludeAllSubFeature
+        $this.log.Info("... finished Installing IIS. Rebooting.")
+        # the iis.lock file is used to track state and prevent reinstallation and reboots on subsequent script execution
+        "IIS completed" | Set-Content "$($this.home)\iis.lock"
+        Restart-Computer -Force
+        Sleep 30
+    }
 }
 
-Class IisUrlRewriteInstaller : Base {
-  [String] $url
-  IisUrlRewriteInstaller($url) {
-    $this.url = $url
-    $this.log.Info("Instance created. url = $($this.url)")    
-  }
-  Install() {  
-    if (Test-Path -Path "C:\Windows\System32\inetsrv\rewrite.dll") {
-      $this.log.Info("IIS Rewrite Module is already installed - skipping installation")
-    } else {
-      $rewriteinstaller = [Utility]::Fetch($this.url)
-      [Utility]::Debug("pre-iis-urlrewrite")  
-      $this.log.Info("Installing IIS rewrite Module from $rewriteinstaller")
-      Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$rewriteinstaller`" /L*V `".\rewrite_install.log`" /QN" -Wait -NoNewWindow
-      [Utility]::Debug("post-iis-urlrewrite")  
-    }
-  }
-}
-
-Class IisApplicationRequestRoutingInstaller : Base {
-  [String] $url
-  IisApplicationRequestRoutingInstaller($url) {
-    $this.url = $url
-    $this.log.Info("Instance created. url = $($this.url)")
-  }
-  Install() {  
-    if (($(C:\Windows\System32\inetsrv\appcmd.exe list modules) | Where  { $_ -match "ApplicationRequestRouting" } | ForEach-Object { echo $_ }).length -gt 1) {
-     $this.log.Info("IIS Application Request Routing Module is already installed - skipping installation")
-    } else {        
-        $requestroutinginstaller = [Utility]::Fetch($this.url)
-        [Utility]::Debug("pre-iis-apprequestrouting")  
-        $this.log.Info("Installing IIS Application Request Routing Module from $requestroutinginstaller")
-        Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$requestroutinginstaller`" /L*V `".\arr_install.log`" /QN" -Wait -NoNewWindow        
-        [Utility]::Debug("post-iis-apprequestrouting")  
-        $this.log.Info("... finished Installing IIS Application Request Routing Module")
-    }
-  }
-}
-
-Class DotnetCoreHostingInstaller : Base {
-  [String] $url
-  DotnetCoreHostingInstaller($url) {
-    $this.url = $url
-    $this.log.Info("Instance created. url = $($this.url)")
-  }
-  Install() {  
-    if (Test-Path -Path "C:\Program Files\dotnet") {
-      $this.log.Info("Microsoft .NET Core 2.1.16 Windows Server Hosting is already installed - skipping installation")
-    } else {
-      # Only required for 9.0+ so make sure it exists
-      $dotnetcore_installer = [Utility]::Fetch($this.url)
-      if ([Utility]::Exists($dotnetcore_installer)) {
-          $this.log.Info("Installing Microsoft .NET Core 2.1.16 Windows Server Hosting from $dotnetcore_installer")
-          [Utility]::Debug("pre-dotnetcore")  
-          Start-Process -FilePath "$dotnetcore_installer" -ArgumentList "/quiet /install /norestart" -Wait -NoNewWindow
-          [Utility]::Debug("post-dotnetcore")  
-      }
-    }
-  }
-}
-
-Class MsSqlServerExpressInstaller : Base {
-  [String] $url
-  MsSqlServerExpressInstaller($url) {
-    $this.url = $url
-    $this.log.Info("Instance created. url = $($this.url)")
-  }
-  Install() {  
-    # SQL Server install should come *after* the Checkmarx installation media is unzipped. The SQL Server
-    # installer is packaged in the third_party folder from the zip. 
-    if ((get-service sql*).length -eq 0) {
-      $sqlserverexe = [Utility]::Fetch($this.url)
-      $this.log.Info("Installing SQL Server from ${sqlserverexe}")
-      [Utility]::Debug("pre-sql-server-express")  
-      Start-Process -FilePath "$sqlserverexe" -ArgumentList "/IACCEPTSQLSERVERLICENSETERMS /Q /ACTION=install /INSTANCEID=SQLEXPRESS /INSTANCENAME=SQLEXPRESS /UPDATEENABLED=FALSE /BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1" -Wait -NoNewWindow
-      [Utility]::Debug("post-sql-server-express")  
-      $sqlserverlog = $(Get-ChildItem "C:\Program Files\Microsoft SQL Server\110\Setup Bootstrap\Log" -Recurse -Filter "Summary.txt" | Sort -Descending | Select -First 1 -ExpandProperty FullName) 
-      $this.log.Info("...finished Installing SQL Server. Log is:")
-      cat $sqlserverlog        
-    } else {
-      $this.log.Info("SQL Server Express is already installed - skipping installation")
-    }
-  }
-}
 
 Class CxSastInstaller : Base {
   [String] $url
