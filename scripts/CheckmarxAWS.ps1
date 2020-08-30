@@ -197,7 +197,7 @@ Class AwsSecretManagerSecrets : Base {
         $this.log.Info("Resolving secrets from AWS Secrets Manager")
         try {
             $this.sql_password  = (Get-SECSecretValue -SecretId "$config.Aws.SsmPath)/sql" | ConvertFrom-Json).password
-            $this.cx_api_password  = (Get-SECSecretValue -SecretId "$config.Aws.SsmPath)/api" | ConvertFrom-Json).password
+            $this.cxapi_password  = (Get-SECSecretValue -SecretId "$config.Aws.SsmPath)/api" | ConvertFrom-Json).password
             $this.tomcat_password  = (Get-SECSecretValue -SecretId "$config.Aws.SsmPath)/tomcat" | ConvertFrom-Json).password
             $this.pfx_password  = (Get-SECSecretValue -SecretId "$config.Aws.SsmPath)/pfx" | ConvertFrom-Json).password
         } catch {

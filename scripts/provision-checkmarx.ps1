@@ -378,7 +378,7 @@ if ($isManager) {
 # SSL Configuration
 ###############################################################################
 $log.Info("Configuring SSL")
-$hostname = ([System.Net.Dns]::GetHostByName(($env:computerName))).HostName
+$hostname = get-ec2instancemetadata -Category LocalHostname
 $ssl_file = ""
 if (!([String]::IsNullOrEmpty($config.Ssl.Url))) {
     $ssl_file = [Utility]::Fetch($config.Ssl.Url)
