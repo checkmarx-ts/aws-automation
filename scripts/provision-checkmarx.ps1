@@ -18,7 +18,7 @@ $log.Info("provision-checkmarx.ps1 script execution beginning")
 ###############################################################################
 $log.Info("Creating Checkmarx folders")
 $env:CheckmarxHome = if ($env:CheckmarxHome -eq $null) { "C:\programdata\checkmarx" } Else { $env:CheckmarxHome }
-md -Force "$($env:CheckmarxHome)"
+md -Force "$($env:CheckmarxHome)" | Out-Null
 
 ###############################################################################
 # Get secrets
@@ -35,11 +35,48 @@ if ($config.Secrets.Source.ToUpper() -eq "SSM") {
 ###############################################################################
 #  Debug Info
 ###############################################################################
-if (!([Utility]::Exists("C:\cx-init-debug.lock"))) {
-    [WindowsInfo]::Show()
+if (!([Utility]::Exists("$($env:CheckmarxHome)\systeminfo.lock"))) {
+    Write-Host "################################"
+    Write-Host "  System Info"
+    Write-Host "################################"
+    systeminfo.exe > c:\systeminfo.log
+    cat c:\systeminfo.log
+
+    Write-Host "################################"
+    Write-Host " Checking for all installed updates"
+    Write-Host "################################"
+    Wmic qfe list  | Format-Table
+
+    Write-Host "################################"
+    Write-Host " Host Info "
+    Write-Host "################################"
+    Get-Host | Format-Table
+    
+    Write-Host "################################"
+    Write-Host " Powershell Info "
+    Write-Host "################################"
+    (Get-Host).Version  | Format-Table
+
+    Write-Host "################################"
+    Write-Host " OS Info "
+    Write-Host "################################"
+    Get-WmiObject Win32_OperatingSystem | Select PSComputerName, Caption, OSArchitecture, Version, BuildNumber | Format-Table
+
+    Write-Host "################################"
+    Write-Host " whoami "
+    Write-Host "################################"
+    whoami
+    
+    Write-Host "################################"
+    Write-Host " env:TEMP "
+    Write-Host "################################"
+    Write-Host "$env:TEMP"
+
     $log.Info("env:CheckmarxBucket = $env:CheckmarxBucket")
     $log.Info("checkmarx-config.psd1 configuration:")
     cat C:\checkmarx-config.psd1    
+
+    "completed" | Set-Content "$($env:CheckmarxHome)\systeminfo.lock"
 }
 
 
@@ -144,8 +181,10 @@ if ($config.Checkmarx.License.Url -eq $null) {
     $log.Info("Running automatic license generator")
     C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
     $log.Info("... finished running automatic license generator")
+} elseif (!([String]::IsNullOrEmpty($config.Checkmarx.License.Url))) {
+    $log.Warn("config.Checkmarx.License.Url value provided ($($config.Checkmarx.License.Url)) but not sure how to handle. Valid values are 'ALG' and 's3://bucket/keyprefix/somelicensefile.cxl' (must end in .cxl)")
 } else {
-    $log.Info("config.Checkmarx.License.Url value provided ($($config.Checkmarx.License.Url)) but not sure how to handle. Valid values are 'ALG' and 's3://bucket/keyprefix/somelicensefile.cxl' (must end in .cxl)")
+    $log.Info("No license url provided for config.Checkmarx.License.Url")
 }
 
 # Update the installation command line arguments to specify the license file
@@ -167,8 +206,8 @@ $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) SQLSERVE
 # Add sql server authentication to the install arguments
 if ($config.MsSql.UseSqlAuth -eq "True") {
     #Add the sql server authentication
-    $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) SQLAUTH=1 SQLUSER=($config.MsSql.Username) SQLPWD=""${sql_password}"""
-    $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) CXARM_SQLAUTH=1 CXARM_DB_USER=($config.MsSql.Username) CXARM_DB_PASSWORD=""${sql_password}"""
+    $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) SQLAUTH=1 SQLUSER=($config.MsSql.Username) SQLPWD=""$($secrets.sql_password)"""
+    $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) CXARM_SQLAUTH=1 CXARM_DB_USER=($config.MsSql.Username) CXARM_DB_PASSWORD=""$($secrets.sql_password)"""
 }
 
 # Install Checkmarx and the Hotfix
@@ -345,7 +384,7 @@ if (!([String]::IsNullOrEmpty($config.Ssl.Url))) {
     $ssl_file = [Utility]::Fetch($config.Ssl.Url)
     if ([Utility]::Basename($ssl_file).EndsWith(".ps1")) {
         $log.Info("SSL URL identified as a powershell script. Executing $ssl_file")
-        powershell.exe "& $ssl_file -domainName $hostname -pfxpassword $pfx_password"
+        powershell.exe -Command "$ssl_file -domainName ""$hostname"" -pfxpassword ""$($secrets.sql_password)"""
         $log.Info("... finished executing $ssl_file")
     } elseif ([Utility]::Basename($ssl_File).EndsWith(".pfx")) {
         $log.Info("SSL URL is a .pfx file that has been downloaded"    )    

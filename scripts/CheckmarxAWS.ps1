@@ -135,48 +135,6 @@ function  TryGetSSMParameter([String] $parameter) {
     }
 }
 
-Class WindowsInfo : Base {
-    static [void] Show() {
-        Write-Host "################################"
-        Write-Host "  System Info"
-        Write-Host "################################"
-        systeminfo.exe > c:\systeminfo.log
-        cat c:\systeminfo.log
-
-        Write-Host "################################"
-        Write-Host " Checking for all installed updates"
-        Write-Host "################################"
-        Wmic qfe list  | Format-Table
-
-        Write-Host "################################"
-        Write-Host " Host Info "
-        Write-Host "################################"
-        Get-Host | Format-Table
-        
-        Write-Host "################################"
-        Write-Host " Powershell Info "
-        Write-Host "################################"
-        (Get-Host).Version  | Format-Table
-
-        Write-Host "################################"
-        Write-Host " OS Info "
-        Write-Host "################################"
-        Get-WmiObject Win32_OperatingSystem | Select PSComputerName, Caption, OSArchitecture, Version, BuildNumber | Format-Table
-
-        Write-Host "################################"
-        Write-Host " whoami "
-        Write-Host "################################"
-        whoami
-
-        
-        Write-Host "################################"
-        Write-Host " env:TEMP "
-        Write-Host "################################"
-        Write-Host "$env:TEMP"
-    }
-}
-
-
 Class CheckmarxSystemInfo {
   [String] $SystemManagerConfigFile
   [String] $JobsManagerConfigFile
@@ -730,6 +688,9 @@ Class BasicInstaller : Base {
         cat "$stdout"
         $this.log.Info("Installer standard error: ")
         cat "$stderr"
+        if ($process.ExitCode -eq 3010) {
+            $this.log.Warn("A reboot is required")        
+        }
     }
     [void] AddToPath([String] $pathToAdd) {
         $this.log.Info("Adding $pathToAdd to PATH environment variable")
