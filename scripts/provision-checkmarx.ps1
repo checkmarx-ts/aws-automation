@@ -108,6 +108,7 @@ if ($config.Checkmarx.ComponentType -eq "Manager")  {
 
 # Download/Unzip the Checkmarx installer. 
 # Many dependencies (cpp redists, dotnet core, sql server express) comes from this zip so it must be unzipped early in the process. 
+# The 7zip unzip process is not guarded and instead we use -aos option to skip existing files so there is not a material time penalty for the unguarded command
 $installer_zip = [DependencyFetcher]::new($config.Checkmarx.Installer.Url).Fetch()  
 $installer_name = $($installer_zip.Replace(".zip", "")).Split("\")[-1]
 $log.Info("Unzipping c:\programdata\checkmarx\artifacts\${installer_zip}")
@@ -263,7 +264,7 @@ if ($config.Checkmarx.Installer.Args.Contains("WEB=1")) {
 ###############################################################################
 # Open Firewall for Engine
 ###############################################################################
-if ($env:CheckmarxComponentType -eq "Engine") {
+if ($config.Checkmarx.ComponentType -eq "Engine") {
   # When the engine is installed by itself it can't piggy back on the opening of 80,443 by IIS install, so we need to explicitly open the port
   $log.Info("Adding host firewall rule for for the Engine Server")
   New-NetFirewallRule -DisplayName "CxScanEngine HTTP Port 80" -Direction Inbound -LocalPort 80 -Protocol TCP -Action Allow

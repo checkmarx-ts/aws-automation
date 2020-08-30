@@ -55,6 +55,16 @@ if ([String]::IsNullOrEmpty($pfxfile) -or [String]::IsNullOrEmpty($domainname)) 
 log "Importing the certificate into LocalMachine\My"
 $cert = Import-PfxCertificate -FilePath $pfxfile -CertStoreLocation Cert:\LocalMachine\My -Password $Secure_String_Pwd
 $thumbprint = $cert.Thumbprint
+
+log "Configuring this cert to be trusted locally"
+log "Exporting the certificate to c:\cxserver.cer"
+Export-Certificate -Cert Cert:\LocalMachine\My\$thumbprint -FilePath c:\cxserver.cer | Out-Null
+log "Importing the certificate to Cert:\LocalMachine\Root"
+Import-Certificate -FilePath c:\cxserver.cer -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
+log "Importing the certificate to Cert:\LocalMachine\TrustedPublisher"
+Import-Certificate -FilePath c:\cxserver.cer -CertStoreLocation Cert:\LocalMachine\TrustedPublisher | Out-Null
+log "Finished configuring this cert to be trusted locally"
+
 [CxSASTEngineTlsConfigurer]::New($thumbprint).Configure()
 [CxManagerIisTlsConfigurer]::New("Default Web Site", "443", $thumbprint).Configure()
 [CxManagerTlsConfigurer]::New("443", $True, $domainname).Configure()
@@ -69,11 +79,21 @@ if ($cx.IsSystemManager) {
 }
 
 try {
-    restart-service cx*
-    iisreset
     ipconfig /flushdns
 } catch {
-    log "An error occured restarting services"
+    log "An error occured flushing dns"
+}
+
+try {
+  restart-service cx*    
+} catch {
+  log "An error occured restarting cx* services"
+}
+
+try {
+  iisreset
+} catch {
+  log "An error occured restarting iis"
 }
 
 log "finished"
