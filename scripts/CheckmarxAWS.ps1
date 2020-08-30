@@ -216,7 +216,7 @@ Class AwsSsmSecrets : Base {
     [String] $tomcat_password
     [String] $pfx_password
     AwsSsmSecrets($config) {
-        $this.log.Info("Resolvig secrets from AWS SSM Parameter Store")
+        $this.log.Info("Resolving secrets from AWS SSM Parameter Store")
         try {
             $this.sql_password = $(Get-SSMParameter -Name "$($config.Aws.SsmPath)/sql/password" -WithDecryption $True).Value
             $this.cxapi_password = $(Get-SSMParameter -Name "$($config.Aws.SsmPath)/api/password" -WithDecryption $True).Value
@@ -236,7 +236,7 @@ Class AwsSecretManagerSecrets : Base {
     [String] $tomcat_password
     [String] $pfx_password
     AwsSecretManagerSecrets($config) {
-        $this.log.Info("Resolvig secrets from AWS Secrets Manager")
+        $this.log.Info("Resolving secrets from AWS Secrets Manager")
         try {
             $this.sql_password  = (Get-SECSecretValue -SecretId "$config.Aws.SsmPath)/sql" | ConvertFrom-Json).password
             $this.cx_api_password  = (Get-SECSecretValue -SecretId "$config.Aws.SsmPath)/api" | ConvertFrom-Json).password
