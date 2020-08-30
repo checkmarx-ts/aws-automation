@@ -403,6 +403,20 @@ Disable-ScheduledTask -TaskName "provision-checkmarx"
 $log.Info("provisioning has completed")
 
 
+
+if ($isManager) {
+    Write-Output "$(get-date) Creating scheduled task for engine registration updates"
+    $action = New-ScheduledTaskAction -Execute 'C:\Windows\System32\cmd.exe' -Argument "/C powershell.exe -NoProfile -NonInteractive -NoLogo -ExecutionPolicy Unrestricted -File `"C:\programdata\checkmarx\aws-automation\scripts\configure\register-asg-engines.ps1`"" 
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew -DontStopOnIdleEnd -ExecutionTimeLimit 0
+    $restartInterval = new-timespan -minute 3
+    $triggers = @($(New-ScheduledTaskTrigger -AtStartup),$(New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval $restartInterval))
+    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
+    Register-ScheduledTask -Action $action -Principal $principal -Trigger $triggers -Settings $settings -TaskName "checkmarx-update-engine-registration" -Description "Looks for EC2 servers that are Checkmarx Engine Servers and updates the engine registration"
+    Write-Output "$(get-date) engine registration task has been created"
+}
+
+
+
 ###############################################################################
 #  Debug Info
 ###############################################################################
