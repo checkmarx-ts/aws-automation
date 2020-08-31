@@ -8,11 +8,46 @@ $config = Import-PowerShellDataFile -Path C:\checkmarx-config.psd1
 $isManager = ($config.Checkmarx.ComponentType.ToUpper() -eq "MANAGER")
 $isEngine = ($config.Checkmarx.ComponentType.ToUpper() -eq "ENGINE")
 [Logger] $log = [Logger]::new("provision-checkmarx.ps1")
-
 $log.Info("-------------------------------------------------------------------------")
 $log.Info("-------------------------------------------------------------------------")
 $log.Info("-------------------------------------------------------------------------")
 $log.Info("provision-checkmarx.ps1 script execution beginning")
+
+if ($config.Tomcat.Username.StartsWith("/")) {
+    try {
+        log.info("config.Tomcat.Username appears to be a SSM parameter. Trying to resolve.")
+        $config.Tomcat.Username = (Get-SSMParameter -Name $config.Tomcat.Username -WithDecryption $True).Value
+        log.info("config.Tomcat.Username is now $($config.Tomcat.Username)")
+    } catch {
+        log.Warn("An error occured trying to fetch the ssm parameter")
+        log.info("config.Tomcat.Username is now $($config.Tomcat.Username)")
+    }
+}
+
+if ($config.MsSql.Username.StartsWith("/")) {
+    try {
+        log.info("config.MsSql.Username appears to be a SSM parameter. Trying to resolve.")
+        $config.MsSql.Username = (Get-SSMParameter -Name $config.MsSql.Username -WithDecryption $True).Value
+        log.info("config.MsSql.Username is now $($config.MsSql.Username)")
+    } catch {
+        log.Warn("An error occured trying to fetch the ssm parameter")
+        log.info("config.MsSql.Username is now $($config.MsSql.Username)")
+    }    
+}
+
+if ($config.Checkmarx.Username.StartsWith("/")) {
+    try {
+        log.info("config.Checkmarx.Username appears to be a SSM parameter. Trying to resolve.")
+        $config.Checkmarx.Username = (Get-SSMParameter -Name $config.Checkmarx.Username -WithDecryption $True).Value
+        log.info("config.Checkmarx.Username is now $($config.Checkmarx.Username)")
+    } catch {
+        log.Warn("An error occured trying to fetch the ssm parameter")
+        log.info("config.Checkmarx.Username is now $($config.Checkmarx.Username)")
+    }     
+}
+
+
+
 
 ###############################################################################
 #  Create Folders
