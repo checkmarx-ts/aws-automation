@@ -15,34 +15,34 @@ $log.Info("provision-checkmarx.ps1 script execution beginning")
 
 if ($config.Tomcat.Username.StartsWith("/")) {
     try {
-        log.info("config.Tomcat.Username appears to be a SSM parameter. Trying to resolve.")
+        $log.info("config.Tomcat.Username appears to be a SSM parameter. Trying to resolve.")
         $config.Tomcat.Username = (Get-SSMParameter -Name $config.Tomcat.Username -WithDecryption $True).Value
-        log.info("config.Tomcat.Username is now $($config.Tomcat.Username)")
+        $log.info("config.Tomcat.Username is now $($config.Tomcat.Username)")
     } catch {
-        log.Warn("An error occured trying to fetch the ssm parameter")
-        log.info("config.Tomcat.Username is now $($config.Tomcat.Username)")
+        $log.Warn("An error occured trying to fetch the ssm parameter")
+        $log.info("config.Tomcat.Username is now $($config.Tomcat.Username)")
     }
 }
 
 if ($config.MsSql.Username.StartsWith("/")) {
     try {
-        log.info("config.MsSql.Username appears to be a SSM parameter. Trying to resolve.")
+        $log.info("config.MsSql.Username appears to be a SSM parameter. Trying to resolve.")
         $config.MsSql.Username = (Get-SSMParameter -Name $config.MsSql.Username -WithDecryption $True).Value
-        log.info("config.MsSql.Username is now $($config.MsSql.Username)")
+        $log.info("config.MsSql.Username is now $($config.MsSql.Username)")
     } catch {
-        log.Warn("An error occured trying to fetch the ssm parameter")
-        log.info("config.MsSql.Username is now $($config.MsSql.Username)")
+        $log.Warn("An error occured trying to fetch the ssm parameter")
+        $log.info("config.MsSql.Username is now $($config.MsSql.Username)")
     }    
 }
 
 if ($config.Checkmarx.Username.StartsWith("/")) {
     try {
-        log.info("config.Checkmarx.Username appears to be a SSM parameter. Trying to resolve.")
+        $log.info("config.Checkmarx.Username appears to be a SSM parameter. Trying to resolve.")
         $config.Checkmarx.Username = (Get-SSMParameter -Name $config.Checkmarx.Username -WithDecryption $True).Value
-        log.info("config.Checkmarx.Username is now $($config.Checkmarx.Username)")
+        $log.info("config.Checkmarx.Username is now $($config.Checkmarx.Username)")
     } catch {
-        log.Warn("An error occured trying to fetch the ssm parameter")
-        log.info("config.Checkmarx.Username is now $($config.Checkmarx.Username)")
+        $log.Warn("An error occured trying to fetch the ssm parameter")
+        $log.info("config.Checkmarx.Username is now $($config.Checkmarx.Username)")
     }     
 }
 
@@ -66,7 +66,7 @@ if ($config.Secrets.Source.ToUpper() -eq "SSM") {
 } elseif ($config.Secrets.Source.ToUpper() -eq "SECRETSMANAGER") {
    $secrets = [AwsSecretManagerSecrets]::new($config) 
 } else {
-    log.Warn("Secrets source $($config.Secrets.Source) is unknown. Expect exceptions later if secrets are needed")
+    $log.Warn("Secrets source $($config.Secrets.Source) is unknown. Expect exceptions later if secrets are needed")
 }
 $log.Info("Secrets resolution time taken: $(New-TimeSpan -Start $begin -end (Get-Date))")
 
