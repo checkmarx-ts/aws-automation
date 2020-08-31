@@ -241,8 +241,8 @@ $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) SQLSERVE
 # Add sql server authentication to the install arguments
 if ($config.MsSql.UseSqlAuth -eq "True") {
     #Add the sql server authentication
-    $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) SQLAUTH=1 SQLUSER=($config.MsSql.Username) SQLPWD=""$($secrets.sql_password)"""
-    $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) CXARM_SQLAUTH=1 CXARM_DB_USER=($config.MsSql.Username) CXARM_DB_PASSWORD=""$($secrets.sql_password)"""
+    $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) SQLAUTH=1 SQLUSER=$($config.MsSql.Username) SQLPWD=""$($secrets.sql_password)"""
+    $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) CXARM_SQLAUTH=1 CXARM_DB_USER=$($config.MsSql.Username) CXARM_DB_PASSWORD=""$($secrets.sql_password)"""
 }
 
 # Install Checkmarx and the Hotfix
