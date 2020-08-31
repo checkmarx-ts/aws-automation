@@ -125,7 +125,7 @@ if ($isManager)  {
                 & C:\programdata\checkmarx\aws-automation\scripts\configure\domain-join.ps1 -domainJoinUserName "$config.ActiveDirectory.Username" -domainJoinUserPassword "$($config.aws.SsmPath)/domain/admin/password" -primaryDns $config.ActiveDirectory.PrimaryDns -secondaryDns $config.ActiveDirectory.SecondaryDns -domainName $config.ActiveDirectory.DomainName
                 # In case the implicit restart does not occur or is overridden
                 Restart-Computer -Force
-                Sleep 30
+                Sleep 900
             }    
         } catch {
             $log.Info("An error occured while joining to domain. Is the ${ssmprefix}/domain/name ssm parameter set? Assuming that no domain join was intended.")

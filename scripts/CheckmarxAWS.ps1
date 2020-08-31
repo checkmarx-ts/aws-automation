@@ -471,7 +471,7 @@ class Utility {
       return $(Get-ChildItem "$fpath" -Recurse -Filter $filename | Sort -Descending | Select -First 1 -ExpandProperty FullName)
   }
   [Void] static Debug([String] $stage) {
-      sleep 2
+      sleep 10
       $msiexecs = Get-Process msiexe*
       $cxprocs = Get-Process cx*
       if ($msiexecs.count -gt 0 -or $cxprocs.count -gt 0) {
@@ -763,7 +763,7 @@ Class DotnetFrameworkInstaller : BasicInstaller {
         $this.BaseInstall()
         $this.log.Info("Finished dotnet framework install. Rebooting.")
         Restart-Computer -Force; 
-        sleep 30 # force in case anyone is logged in
+        sleep 900 # force in case anyone is logged in
     }
 }
 
@@ -903,7 +903,7 @@ Class IisInstaller : Base {
         # the iis.lock file is used to track state and prevent reinstallation and reboots on subsequent script execution
         "IIS completed" | Set-Content "$($this.home)\iis.lock"
         Restart-Computer -Force
-        Sleep 30
+        Sleep 900
     }
 }
 
