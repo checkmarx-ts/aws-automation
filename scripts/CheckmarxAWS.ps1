@@ -438,16 +438,16 @@ class Utility {
       try {
           $ssmParam = Get-SSMParameter -Name $parameter -WithDecryption $True    
           if($ssmParam) {
-            log "Using the value found for $parameter"
+            Write-Host "Using the value found for $parameter"
             return $ssmParam.value
           } else {
-            log "Using argument as provided"
+            Write-Host "Using argument as provided"
             return $parameter
           }
       } catch {
           $_
-          log "An error occured while fetching SSM parameter key"
-          log "Using argument as provided"
+          Write-Host "An error occured while fetching SSM parameter key"
+          Write-Host "Using argument as provided"
           return $parameter
       }
   }
