@@ -114,26 +114,6 @@ Class DbClient {
     } 
   }
 
-function  TryGetSSMParameter([String] $parameter) {
-    if(!$parameter) { return $null }
-
-    try {
-        $ssmParam = Get-SSMParameter -Name $parameter -WithDecryption $True
-    
-        if($ssmParam) {
-        log "Using the value found for $parameter"
-        return $ssmParam.value
-        } else {
-        log "Using argument as provided"
-        return $parameter
-    }
-    } catch {
-        $_
-        log "An error occured while fetching SSM parameter key"
-        log "Using argument as provided"
-        return $parameter
-    }
-}
 
 Class CheckmarxSystemInfo {
   [String] $SystemManagerConfigFile
@@ -453,6 +433,25 @@ Class CxManagerTlsConfigurer : Base {
 }
 
 class Utility {
+  [String] static  TryGetSSMParameter([String] $parameter) {
+      if(!$parameter) { return $null }
+      try {
+          $ssmParam = Get-SSMParameter -Name $parameter -WithDecryption $True    
+          if($ssmParam) {
+            log "Using the value found for $parameter"
+            return $ssmParam.value
+          } else {
+            log "Using argument as provided"
+            return $parameter
+          }
+      } catch {
+          $_
+          log "An error occured while fetching SSM parameter key"
+          log "Using argument as provided"
+          return $parameter
+      }
+  }
+
   [bool] static Exists([String] $fpath) {
       return ((![String]::IsNullOrEmpty($fpath)) -and (Test-Path -Path "${fpath}"))
   }

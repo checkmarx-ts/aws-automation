@@ -13,41 +13,14 @@ $log.Info("---------------------------------------------------------------------
 $log.Info("-------------------------------------------------------------------------")
 $log.Info("provision-checkmarx.ps1 script execution beginning")
 
-if ($config.Tomcat.Username.StartsWith("/")) {
-    try {
-        $log.info("config.Tomcat.Username appears to be a SSM parameter. Trying to resolve.")
-        $config.Tomcat.Username = (Get-SSMParameter -Name $config.Tomcat.Username -WithDecryption $True).Value
-        $log.info("config.Tomcat.Username is now $($config.Tomcat.Username)")
-    } catch {
-        $log.Warn("An error occured trying to fetch the ssm parameter")
-        $log.info("config.Tomcat.Username is now $($config.Tomcat.Username)")
-    }
-}
 
-if ($config.MsSql.Username.StartsWith("/")) {
-    try {
-        $log.info("config.MsSql.Username appears to be a SSM parameter. Trying to resolve.")
-        $config.MsSql.Username = (Get-SSMParameter -Name $config.MsSql.Username -WithDecryption $True).Value
-        $log.info("config.MsSql.Username is now $($config.MsSql.Username)")
-    } catch {
-        $log.Warn("An error occured trying to fetch the ssm parameter")
-        $log.info("config.MsSql.Username is now $($config.MsSql.Username)")
-    }    
-}
-
-if ($config.Checkmarx.Username.StartsWith("/")) {
-    try {
-        $log.info("config.Checkmarx.Username appears to be a SSM parameter. Trying to resolve.")
-        $config.Checkmarx.Username = (Get-SSMParameter -Name $config.Checkmarx.Username -WithDecryption $True).Value
-        $log.info("config.Checkmarx.Username is now $($config.Checkmarx.Username)")
-    } catch {
-        $log.Warn("An error occured trying to fetch the ssm parameter")
-        $log.info("config.Checkmarx.Username is now $($config.Checkmarx.Username)")
-    }     
-}
-
-
-
+$config.Tomcat.Username = [Utility]::TryGetSSMParameter($config.Tomcat.Username)
+$config.Tomcat.Password = [Utility]::TryGetSSMParameter($config.Tomcat.Password)
+$config.MsSql.Username = [Utility]::TryGetSSMParameter($config.MsSql.Username)
+$config.MsSql.Password = [Utility]::TryGetSSMParameter($config.MsSql.Password)
+$config.Checkmarx.Username = [Utility]::TryGetSSMParameter($config.Checkmarx.Username)
+$config.Checkmarx.Password = [Utility]::TryGetSSMParameter($config.Checkmarx.Password)
+$config.Ssl.PfxPassword = [Utility]::TryGetSSMParameter($config.Ssl.PfxPassword)
 
 ###############################################################################
 #  Create Folders
@@ -56,19 +29,25 @@ $log.Info("Creating Checkmarx folders")
 $env:CheckmarxHome = if ($env:CheckmarxHome -eq $null) { "C:\programdata\checkmarx" } Else { $env:CheckmarxHome }
 md -Force "$($env:CheckmarxHome)" | Out-Null
 
+# Some cert chains require this folder to exist
+md -force "C:\ProgramData\checkmarx\automation\installers\" | Out-Null 
+
+
 ###############################################################################
 # Get secrets
 ###############################################################################
-$secrets = ""
-$begin = (Get-Date)
-if ($config.Secrets.Source.ToUpper() -eq "SSM") { 
-    $secrets = [AwsSsmSecrets]::new($config)
-} elseif ($config.Secrets.Source.ToUpper() -eq "SECRETSMANAGER") {
-   $secrets = [AwsSecretManagerSecrets]::new($config) 
-} else {
-    $log.Warn("Secrets source $($config.Secrets.Source) is unknown. Expect exceptions later if secrets are needed")
-}
-$log.Info("Secrets resolution time taken: $(New-TimeSpan -Start $begin -end (Get-Date))")
+
+# $secrets = ""
+# $begin = (Get-Date)
+# if ($config.Secrets.Source.ToUpper() -eq "SSM") { 
+#     $secrets = [AwsSsmSecrets]::new($config)
+# } elseif ($config.Secrets.Source.ToUpper() -eq "SECRETSMANAGER") {
+#    $secrets = [AwsSecretManagerSecrets]::new($config) 
+# } else {
+#     $log.Warn("Secrets source $($config.Secrets.Source) is unknown. Expect exceptions later if secrets are needed")
+# }
+# $log.Info("Secrets resolution time taken: $(New-TimeSpan -Start $begin -end (Get-Date))")
+
 
 ###############################################################################
 #  Debug Info
@@ -122,7 +101,7 @@ if ($isManager)  {
         try {
             if (!([String]::IsNullOrEmpty($config.ActiveDirectory.Username))) {  # If the domain info is set in SSM parameters then join the domain
                 $log.Info("Joining the computer to the domain. A reboot will occur.")
-                & C:\programdata\checkmarx\aws-automation\scripts\configure\domain-join.ps1 -domainJoinUserName "$config.ActiveDirectory.Username" -domainJoinUserPassword "$($config.aws.SsmPath)/domain/admin/password" -primaryDns $config.ActiveDirectory.PrimaryDns -secondaryDns $config.ActiveDirectory.SecondaryDns -domainName $config.ActiveDirectory.DomainName
+                & C:\programdata\checkmarx\aws-automation\scripts\configure\domain-join.ps1 -domainJoinUserName "$($config.ActiveDirectory.Username)" -domainJoinUserPassword "$($config.ActiveDirectory.Password)" -primaryDns $($config.ActiveDirectory.PrimaryDns) -secondaryDns $($config.ActiveDirectory.SecondaryDns) -domainName $($config.ActiveDirectory.DomainName)
                 # In case the implicit restart does not occur or is overridden
                 Restart-Computer -Force
                 Sleep 900
@@ -241,8 +220,8 @@ $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) SQLSERVE
 # Add sql server authentication to the install arguments
 if ($config.MsSql.UseSqlAuth -eq "True") {
     #Add the sql server authentication
-    $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) SQLAUTH=1 SQLUSER=$($config.MsSql.Username) SQLPWD=""$($secrets.sql_password)"""
-    $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) CXARM_SQLAUTH=1 CXARM_DB_USER=$($config.MsSql.Username) CXARM_DB_PASSWORD=""$($secrets.sql_password)"""
+    $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) SQLAUTH=1 SQLUSER=$($config.MsSql.Username) SQLPWD=""$($config.MsSql.Password)"""
+    $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) CXARM_SQLAUTH=1 CXARM_DB_USER=$($config.MsSql.Username) CXARM_DB_PASSWORD=""$($config.MsSql.Password)"""
 }
 
 # Install Checkmarx and the Hotfix
@@ -260,13 +239,6 @@ if ($isManager) {
     $log.Info("Hardening IIS")
     C:\programdata\checkmarx\aws-automation\scripts\configure\configure-iis-hardening.ps1
     $log.Info("...finished hardening IIS")
-
-    $log.Info("Configuring windows defender")
-    # Add exclusions
-    Add-MpPreference -ExclusionPath "C:\Program Files\Checkmarx\*"
-    Add-MpPreference -ExclusionPath "C:\CxSrc\*"  
-    Add-MpPreference -ExclusionPath "C:\ExtSrc\*"  
-    $log.Info("...finished configuring windows defender")
 }
 
 ###############################################################################
@@ -419,7 +391,7 @@ if (!([String]::IsNullOrEmpty($config.Ssl.Url))) {
     $ssl_file = [Utility]::Fetch($config.Ssl.Url)
     if ([Utility]::Basename($ssl_file).EndsWith(".ps1")) {
         $log.Info("SSL URL identified as a powershell script. Executing $ssl_file")
-        iex "$ssl_file -domainName ""$hostname"" -pfxpassword ""$($secrets.sql_password)"""
+        iex "$ssl_file -domainName ""$hostname"" -pfxpassword ""$($config.Ssl.PfxPassword)"""
         $log.Info("... finished executing $ssl_file")
     } elseif ([Utility]::Basename($ssl_File).EndsWith(".pfx")) {
         $log.Info("SSL URL is a .pfx file that has been downloaded"    )    
@@ -427,7 +399,7 @@ if (!([String]::IsNullOrEmpty($config.Ssl.Url))) {
 } 
 
 $log.Info("configuring ssl")
-C:\programdata\checkmarx\aws-automation\scripts\ssl\configure-ssl.ps1 -domainName $hostname -pfxpassword "$($secrets.sql_password)"
+C:\programdata\checkmarx\aws-automation\scripts\ssl\configure-ssl.ps1 -domainName $hostname -pfxpassword "$($config.Ssl.PfxPassword)"
 $log.Info("... finished configuring ssl")
 
 ###############################################################################
