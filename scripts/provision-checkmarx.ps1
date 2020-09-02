@@ -416,8 +416,6 @@ $log.Info("disabling provision-checkmarx scheduled task")
 Disable-ScheduledTask -TaskName "provision-checkmarx"
 $log.Info("provisioning has completed")
 
-
-
 if ($isManager) {
     Write-Output "$(get-date) Creating scheduled task for engine registration updates"
     $action = New-ScheduledTaskAction -Execute 'C:\Windows\System32\cmd.exe' -Argument "/C powershell.exe -NoProfile -NonInteractive -NoLogo -ExecutionPolicy Unrestricted -File `"C:\programdata\checkmarx\aws-automation\scripts\configure\register-asg-engines.ps1`"" 
