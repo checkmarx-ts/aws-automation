@@ -222,7 +222,7 @@ Class CxSASTEngineTlsConfigurer : Base {
 
   hidden runCmd($cmd, $arguments, $label) {
     $this.log.Info("running command: $cmd $arguments")
-    Start-Process "$cmd" -ArgumentList "$arguments" -Wait -NoNewWindow -RedirectStandardError "c:\${label}.err" -RedirectStandardOutput "c:\${label}.out" -Verb runas
+    Start-Process "$cmd" -ArgumentList "$arguments" -Wait -NoNewWindow -RedirectStandardError "c:\${label}.err" -RedirectStandardOutput "c:\${label}.out"
     $this.log.Info("finished running command: $cmd $arguments")
     $this.log.Info("Standard output:")
     cat "c:\${label}.out"
@@ -665,7 +665,7 @@ Class BasicInstaller : Base {
         $stdout = "$($this.artifactspath)\$($this.logprefix).out.log"
         $stderr = "$($this.artifactspath)\$($this.logprefix).err.log"
         $begin = (Get-Date)
-        $process = Start-Process -FilePath $this.installer -ArgumentList "$($this.silentInstallArgs)" -Wait -NoNewWindow -Verb runas -RedirectStandardError "${stderr}" -RedirectStandardOutput "${stdout}" -PassThru
+        $process = Start-Process -FilePath $this.installer -ArgumentList "$($this.silentInstallArgs)" -Wait -NoNewWindow -RedirectStandardError "${stderr}" -RedirectStandardOutput "${stdout}" -PassThru
         $this.log.Info("Installation process finished in $(New-TimeSpan -Start $begin -end (Get-Date)) time with exit code: $($process.ExitCode)")
         $this.log.Info("Installer standard output: ")
         cat "$stdout"
@@ -926,7 +926,7 @@ Class CxSastInstaller : Base {
         $temp_args = $temp_args.Replace("WEB=1", "WEB=0").Replace("ENGINE=1", "ENGINE=0").Replace("AUDIT=1", "AUDIT=0")
         $this.log.Info("Installing CxSAST with $temp_args")
         [Utility]::Debug("pre-cx-installer-mgr")  
-        Start-Process -FilePath "$($this.url)" -ArgumentList "$temp_args" -Wait -NoNewWindow -Verb runas
+        Start-Process -FilePath "$($this.url)" -ArgumentList "$temp_args" -Wait -NoNewWindow
         [Utility]::Debug("post-cx-installer-mgr")  
         $this.log.Info("...finished installing")
         "Pass 1 completed" | Set-Content "$($this.url).pass1"
@@ -944,7 +944,7 @@ Class CxSastInstaller : Base {
         $temp_args = $temp_args.Replace("ENGINE=1", "ENGINE=0").Replace("AUDIT=1", "AUDIT=0")
         $this.log.Info("Installing CxSAST with $temp_args")
         [Utility]::Debug("pre-cx-installer-web")  
-        Start-Process -FilePath "$($this.url)" -ArgumentList "$temp_args" -Wait -NoNewWindow -Verb runas
+        Start-Process -FilePath "$($this.url)" -ArgumentList "$temp_args" -Wait -NoNewWindow
         [Utility]::Debug("post-cx-installer-web")  
         $this.log.Info("...finished installing")
         "Pass 2 completed" | Set-Content "$($this.url).pass2"
@@ -959,7 +959,7 @@ Class CxSastInstaller : Base {
     if (!(Test-Path -Path "$($this.url).pass3")) {
       $this.log.Info("Installing CxSAST with $($this.installerArgs)")
       [Utility]::Debug("pre-cx-installer-all")  
-      Start-Process -FilePath "$($this.url)" -ArgumentList "$($this.installerArgs)" -Wait -NoNewWindow -Verb runas
+      Start-Process -FilePath "$($this.url)" -ArgumentList "$($this.installerArgs)" -Wait -NoNewWindow
       [Utility]::Debug("post-cx-installer-all")  
       $this.log.Info("...finished installing")
       "Pass 3 completed" | Set-Content "$($this.url).pass2"
@@ -984,7 +984,7 @@ Class CxSastHotfixInstaller : Base {
     $this.log.Info("Installing hotfix ${hotfixexe}")
     [Utility]::Debug("pre-cx-hotfix")  
     if (!(Test-Path -Path "$($this.url).lock")) {
-      Start-Process -FilePath "$hotfixexe" -ArgumentList "-cmd ACCEPT_EULA=Y" -Wait -NoNewWindow -Verb runas
+      Start-Process -FilePath "$hotfixexe" -ArgumentList "-cmd ACCEPT_EULA=Y" -Wait -NoNewWindow
       [Utility]::Debug("post-cx-hotfix")  
       $this.log.Info("...finished installing")
       "Hotfix completed" | Set-Content "$($this.url).lock"
