@@ -180,7 +180,7 @@ if ($isManager) {
 ###############################################################################
 # Generate Checkmarx License
 ###############################################################################
-if if ($isManager) {
+if ($isManager) {
     if ($config.Checkmarx.License.Url -eq $null) {
         $log.Warn("No license url specified")
     } elseif ($config.Checkmarx.License.Url.EndsWith(".cxl")) {
