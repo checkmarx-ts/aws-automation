@@ -210,6 +210,18 @@ if if ($isManager) {
 }
 
 
+Write-Output "$(get-date) Creating scheduled task for ie4uinit monitoring"
+$action = New-ScheduledTaskAction -Execute 'C:\Windows\System32\cmd.exe' -Argument "/C powershell.exe -NoProfile -NonInteractive -NoLogo -ExecutionPolicy Unrestricted -Command `"Get-Process -Name ie4uinit -ErrorAction SilentlyContinue | Stop-Process -Force;`"" 
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew -DontStopOnIdleEnd -ExecutionTimeLimit 0
+$restartInterval = new-timespan -Minute 1
+$triggers = @($(New-ScheduledTaskTrigger -AtStartup),$(New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval $restartInterval))
+$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
+Register-ScheduledTask -Action $action -Principal $principal -Trigger $triggers -Settings $settings -TaskName "checkmarx-ie4uinit-kill" -Description "Looks for ie4uinit process that hang during the headless cx install and kills them"
+Write-Output "$(get-date) engine registration task has been created"
+
+
+
+
 ###############################################################################
 # Install Checkmarx
 ###############################################################################
