@@ -916,7 +916,13 @@ Class CxSastInstaller : Base {
   }
   Install() {     
     [Utility]::Debug("pre-cx-uninstall")  
-    Start-Process -FilePath "$($this.url)" -ArgumentList "/uninstall /quiet" -Wait -NoNewWindow
+    if (!(Test-Path -Path "$($this.url).pass0")) {
+      Start-Process -FilePath "$($this.url)" -ArgumentList "/uninstall /quiet" -Wait -NoNewWindow
+      "Pass 0 completed" | Set-Content "$($this.url).pass0"
+    } else {
+      $this.log.Info("Pass 0 of the installer has already completed. Skipping")
+    }
+    
     [Utility]::Debug("post-cx-uninstall")  
     # Components should be installed in a certain order or else the install can hang. Order is manager, then web, then engine. 
     # This is accomplished with temp_args and temporarily replacing component choices in order to install in order
