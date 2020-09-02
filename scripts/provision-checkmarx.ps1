@@ -180,32 +180,34 @@ if ($isManager) {
 ###############################################################################
 # Generate Checkmarx License
 ###############################################################################
-if ($config.Checkmarx.License.Url -eq $null) {
-    $log.Warn("No license url specified")
-} elseif ($config.Checkmarx.License.Url.EndsWith(".cxl")) {
-    $log.Info("License file provided and will be downloaded.")
-    [Utility]::Fetch($config.Checkmarx.License.Url)
-} elseif ($config.Checkmarx.License.Url -eq "ALG") {
-    $log.Info("Running automatic license generator")
-    C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
-    $log.Info("... finished running automatic license generator")
-} elseif (!([String]::IsNullOrEmpty($config.Checkmarx.License.Url))) {
-    $log.Warn("config.Checkmarx.License.Url value provided ($($config.Checkmarx.License.Url)) but not sure how to handle. Valid values are 'ALG' and 's3://bucket/keyprefix/somelicensefile.cxl' (must end in .cxl)")
-} else {
-    if ($isManager) {
-        # A manager w/o a license should generate a warning, otherwise it is informational
-        $log.Warn("No license url provided for config.Checkmarx.License.Url")
+if if ($isManager) {
+    if ($config.Checkmarx.License.Url -eq $null) {
+        $log.Warn("No license url specified")
+    } elseif ($config.Checkmarx.License.Url.EndsWith(".cxl")) {
+        $log.Info("License file provided and will be downloaded.")
+        [Utility]::Fetch($config.Checkmarx.License.Url)
+    } elseif ($config.Checkmarx.License.Url -eq "ALG") {
+        $log.Info("Running automatic license generator")
+        C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
+        $log.Info("... finished running automatic license generator")
+    } elseif (!([String]::IsNullOrEmpty($config.Checkmarx.License.Url))) {
+        $log.Warn("config.Checkmarx.License.Url value provided ($($config.Checkmarx.License.Url)) but not sure how to handle. Valid values are 'ALG' and 's3://bucket/keyprefix/somelicensefile.cxl' (must end in .cxl)")
     } else {
-        $log.Info("No license url provided for config.Checkmarx.License.Url")        
+        if ($isManager) {
+            # A manager w/o a license should generate a warning, otherwise it is informational
+            $log.Warn("No license url provided for config.Checkmarx.License.Url")
+        } else {
+            $log.Info("No license url provided for config.Checkmarx.License.Url")        
+        }
     }
-}
 
-# Update the installation command line arguments to specify the license file
-$license_file = [Utility]::Find("*.cxl")
-if ([Utility]::Exists($license_file)) {
-    $log.Info("Using $license_file")
-    $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) LIC=""$($license_file)"""
-} 
+    # Update the installation command line arguments to specify the license file
+    $license_file = [Utility]::Find("*.cxl")
+    if ([Utility]::Exists($license_file)) {
+        $log.Info("Using $license_file")
+        $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) LIC=""$($license_file)"""
+    } 
+}
 
 
 ###############################################################################
