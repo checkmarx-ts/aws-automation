@@ -109,7 +109,7 @@ if ($isManager)  {
         } catch {
             $log.Info("An error occured while joining to domain. Is the ${ssmprefix}/domain/name ssm parameter set? Assuming that no domain join was intended.")
             $_
-        }    
+        }
     }
 }
 
@@ -131,7 +131,6 @@ Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"${installer_zip
 cat .\installer7z.err
 cat .\installer7z.out
  
-
 # Download/Unzip the Checkmarx Hotfix
 $hfinstaller = [DependencyFetcher]::new($config.Checkmarx.Hotfix.Url).Fetch()  
 $hotfix_name = $($hfinstaller.Replace(".zip", "")).Split("\")[-1]
@@ -388,19 +387,27 @@ $log.Info("Configuring SSL")
 $hostname = get-ec2instancemetadata -Category LocalHostname
 $ssl_file = ""
 if (!([String]::IsNullOrEmpty($config.Ssl.Url))) {
-    $ssl_file = [Utility]::Fetch($config.Ssl.Url)
-    if ([Utility]::Basename($ssl_file).EndsWith(".ps1")) {
-        $log.Info("SSL URL identified as a powershell script. Executing $ssl_file")
-        iex "$ssl_file -domainName ""$hostname"" -pfxpassword ""$($config.Ssl.PfxPassword)"""
-        $log.Info("... finished executing $ssl_file")
-    } elseif ([Utility]::Basename($ssl_File).EndsWith(".pfx")) {
-        $log.Info("SSL URL is a .pfx file that has been downloaded"    )    
+    try {
+        $ssl_file = [Utility]::Fetch($config.Ssl.Url)
+        if ([Utility]::Basename($ssl_file).EndsWith(".ps1")) {
+            $log.Info("SSL URL identified as a powershell script. Executing $ssl_file")
+            iex "$ssl_file -domainName ""$hostname"" -pfxpassword ""$($config.Ssl.PfxPassword)"""
+            $log.Info("... finished executing $ssl_file")
+        } elseif ([Utility]::Basename($ssl_File).EndsWith(".pfx")) {
+            $log.Info("SSL URL is a .pfx file that has been downloaded")    
+        }
+
+        $log.Info("configuring ssl")
+        C:\programdata\checkmarx\aws-automation\scripts\ssl\configure-ssl.ps1 -domainName $hostname -pfxpassword "$($config.Ssl.PfxPassword)"
+        $log.Info("... finished configuring ssl")
+    } catch {
+        $log.Error("An exception was thrown while configuring SSL")
+        $_ 
+
     }
 } 
 
-$log.Info("configuring ssl")
-C:\programdata\checkmarx\aws-automation\scripts\ssl\configure-ssl.ps1 -domainName $hostname -pfxpassword "$($config.Ssl.PfxPassword)"
-$log.Info("... finished configuring ssl")
+
 
 ###############################################################################
 # Disable the provisioning task
