@@ -187,9 +187,14 @@ if ($isManager) {
         $log.Info("License file provided and will be downloaded.")
         [Utility]::Fetch($config.Checkmarx.License.Url)
     } elseif ($config.Checkmarx.License.Url -eq "ALG") {
-        $log.Info("Running automatic license generator")
-        C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
-        $log.Info("... finished running automatic license generator")
+        if (!(Test-Path -Path "C:\alg.lock")) {
+            $log.Info("Running automatic license generator")
+            C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
+            $log.Info("... finished running automatic license generator")
+            "ALG Completed" | Set-Content "C:\alg.lock"
+        } else {
+            $log.Info("ALG already ran previously. Skipping")
+        }
     } elseif (!([String]::IsNullOrEmpty($config.Checkmarx.License.Url))) {
         $log.Warn("config.Checkmarx.License.Url value provided ($($config.Checkmarx.License.Url)) but not sure how to handle. Valid values are 'ALG' and 's3://bucket/keyprefix/somelicensefile.cxl' (must end in .cxl)")
     } else {
