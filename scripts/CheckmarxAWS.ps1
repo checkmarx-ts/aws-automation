@@ -962,7 +962,7 @@ Class CxSastInstaller : Base {
       Start-Process -FilePath "$($this.url)" -ArgumentList "$($this.installerArgs)" -Wait -NoNewWindow
       [Utility]::Debug("post-cx-installer-all")  
       $this.log.Info("...finished installing")
-      "Pass 3 completed" | Set-Content "$($this.url).pass2"
+      "Pass 3 completed" | Set-Content "$($this.url).pass3"
       $this.log.Info("Rebooting.")
       Restart-Computer -Force
       Sleep 900
@@ -983,12 +983,9 @@ Class CxSastHotfixInstaller : Base {
     $hotfixexe = [Utility]::Fetch($this.url)#
     $this.log.Info("Installing hotfix ${hotfixexe}")
     [Utility]::Debug("pre-cx-hotfix")  
-    if (!(Test-Path -Path "$($this.url).lock")) {
-      Start-Process -FilePath "$hotfixexe" -ArgumentList "-cmd ACCEPT_EULA=Y" -Wait -NoNewWindow
-      [Utility]::Debug("post-cx-hotfix")  
-      $this.log.Info("...finished installing")
-      "Hotfix completed" | Set-Content "$($this.url).lock"
-    }
+    Start-Process -FilePath "$hotfixexe" -ArgumentList "-cmd ACCEPT_EULA=Y" -Wait -NoNewWindow
+    [Utility]::Debug("post-cx-hotfix")  
+    $this.log.Info("...finished installing")
   }
 }
 
