@@ -109,18 +109,25 @@ if ($isManager)  {
 # The 7zip unzip process is not guarded and instead we use -aos option to skip existing files so there is not a material time penalty for the unguarded command
 $installer_zip = [DependencyFetcher]::new($config.Checkmarx.Installer.Url).Fetch()  
 $installer_name = $($installer_zip.Replace(".zip", "")).Split("\")[-1]
-$log.Info("Unzipping c:\programdata\checkmarx\artifacts\${installer_zip}")
-Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"${installer_zip}`" -aos -o`"C:\programdata\checkmarx\artifacts\${installer_name}`" -p`"$($config.Checkmarx.Installer.ZipKey)`"" -Wait -NoNewWindow -RedirectStandardError .\installer7z.err -RedirectStandardOutput .\installer7z.out
-cat .\installer7z.err
-cat .\installer7z.out
- 
+
+if (!(Test-Path -Path "C:\installerunzip.lock")) {
+    $log.Info("Unzipping c:\programdata\checkmarx\artifacts\${installer_zip}")
+    Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"${installer_zip}`" -aos -o`"C:\programdata\checkmarx\artifacts\${installer_name}`" -p`"$($config.Checkmarx.Installer.ZipKey)`"" -Wait -NoNewWindow -RedirectStandardError .\installer7z.err -RedirectStandardOutput .\installer7z.out
+    cat .\installer7z.err
+    cat .\installer7z.out
+    "completed" | Set-Content "C:\installerunzip.lock" # lock so this unzip doesn't run on reboot
+}
 # Download/Unzip the Checkmarx Hotfix
 $hfinstaller = [DependencyFetcher]::new($config.Checkmarx.Hotfix.Url).Fetch()  
 $hotfix_name = $($hfinstaller.Replace(".zip", "")).Split("\")[-1]
-$log.Info("Unzipping c:\programdata\checkmarx\artifacts\${hotfix_zip}")
-Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"$hfinstaller`" -aos -o`"C:\programdata\checkmarx\artifacts\${hotfix_name}`" -p`"$($config.Checkmarx.Hotfix.ZipKey)`"" -Wait -NoNewWindow -RedirectStandardError .\hotfix7z.err -RedirectStandardOutput .\hotfix7z.out
-cat .\hotfix7z.err
-cat .\hotfix7z.out
+
+if (!(Test-Path -Path "C:\hfunzip.lock")) {
+    $log.Info("Unzipping c:\programdata\checkmarx\artifacts\${hotfix_zip}")
+    Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"$hfinstaller`" -aos -o`"C:\programdata\checkmarx\artifacts\${hotfix_name}`" -p`"$($config.Checkmarx.Hotfix.ZipKey)`"" -Wait -NoNewWindow -RedirectStandardError .\hotfix7z.err -RedirectStandardOutput .\hotfix7z.out
+    cat .\hotfix7z.err
+    cat .\hotfix7z.out
+    "completed" | Set-Content "C:\hfunzip.lock" # lock so this unzip doesn't run on reboot
+}
 
 
 ###############################################################################
