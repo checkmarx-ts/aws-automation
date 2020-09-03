@@ -968,7 +968,8 @@ Class CxSastInstaller : Base {
         Start-Process -FilePath "$($this.url)" -ArgumentList "$temp_args" -Wait -NoNewWindow
         [Utility]::Debug("post-cx-installer-mgr")  
         $this.log.Info("...finished installing")
-        "Pass 1 completed" | Set-Content "$($this.url).pass1"
+        [CxSastServiceController]::new().DisableAll()
+        "Pass 1 completed" | Set-Content "$($this.url).pass1"        
         $this.log.Info("Rebooting.")
         Restart-Computer -Force
         Sleep 900
@@ -986,6 +987,7 @@ Class CxSastInstaller : Base {
         Start-Process -FilePath "$($this.url)" -ArgumentList "$temp_args" -Wait -NoNewWindow
         [Utility]::Debug("post-cx-installer-web")  
         $this.log.Info("...finished installing")
+        [CxSastServiceController]::new().DisableAll()
         "Pass 2 completed" | Set-Content "$($this.url).pass2"
         $this.log.Info("Rebooting.")
         Restart-Computer -Force
@@ -1001,12 +1003,45 @@ Class CxSastInstaller : Base {
       Start-Process -FilePath "$($this.url)" -ArgumentList "$($this.installerArgs)" -Wait -NoNewWindow
       [Utility]::Debug("post-cx-installer-all")  
       $this.log.Info("...finished installing")
+      [CxSastServiceController]::new().DisableAll()
       "Pass 3 completed" | Set-Content "$($this.url).pass3"
       $this.log.Info("Rebooting.")
       Restart-Computer -Force
       Sleep 900
     } else {
       $this.log.Info("Pass 3 of the installer has already completed. Skipping")
+    }
+  }
+}
+
+Class CxSastServiceController: Base {
+  $services = "CxARMETL", "CxARM", "CxJobsManager", "CxScansManager", "CxSystemManager", "W3SVC", "ActiveMQ"
+
+  CxSastServiceController() {
+    
+  }
+
+  hidden [void] DisableByName([String] $name){
+    $this.log.Info("Disabling ${name}")
+    Get-Service $name | Set-Service -StartupType Disabled
+    $this.log.Info("finished disabling ${name}")
+  }
+
+  hidden [void] EnableByName([String] $name){
+    $this.log.Info("Enabling ${name}")
+    Get-Service $name | Set-Service -StartupType Automatic
+    $this.log.Info("finished enabling ${name}")
+  }
+
+  DisableAll() {
+    $this.services | ForEach-Object {
+      $this.DisableByName($_)      
+    }
+  }
+
+  EnableAll() {
+    $this.services | ForEach-Object {
+      $this.EnableByName(($_)      
     }
   }
 }
@@ -1025,6 +1060,7 @@ Class CxSastHotfixInstaller : Base {
     Start-Process -FilePath "$hotfixexe" -ArgumentList "-cmd ACCEPT_EULA=Y" -Wait -NoNewWindow
     [Utility]::Debug("post-cx-hotfix")  
     $this.log.Info("...finished installing")
+    [CxSastServiceController]::new().EnableAll()
   }
 }
 
