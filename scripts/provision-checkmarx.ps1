@@ -227,20 +227,20 @@ if (!(Test-Path -Path "c:\ie4uinit.lock")) {
 }
 
 # Create the database shells when needed for RDS or other install w/o SA permission
-if (!(Test-Path -Path "c:\initdatabases.lock")) {
+if ($isManager -and !(Test-Path -Path "c:\initdatabases.lock")) {
     try {
         [DbUtility] $dbUtil = [DbUtility]::New("localhost\SQLEXPRESS")
         $dbUtil.ensureCxActivityExists()
-        $dbUtil.ensureCxArmExists()
         $dbUtil.ensureCxDbExists()
+        if ($config.Checkmarx.Installer.Args.contains("BI=1")) {
+            $dbUtil.ensureCxArmExists()
+        }        
     } catch {
         $log.Error("An exception occured while ensuring that databases exist")
         $_
     }
     "databases initialized" | Set-Content "c:\initdatabases.lock"
 }
-
-
 
 ###############################################################################
 # Install Checkmarx
