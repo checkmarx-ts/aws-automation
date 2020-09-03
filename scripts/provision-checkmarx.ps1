@@ -179,8 +179,13 @@ if ($isManager) {
     } elseif ($config.Checkmarx.License.Url -eq "ALG") {
         if (!(Test-Path -Path "C:\alg.lock")) {
             $log.Info("Running automatic license generator")
-            C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
-            $log.Info("... finished running automatic license generator")
+            try {
+                C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
+                $log.Info("... finished running automatic license generator")
+            } catch {
+                $log.Error("an error occured while running the ALG. Error details follows. The provisoning process will continue w/o a license")
+                $_
+            }
             "ALG Completed" | Set-Content "C:\alg.lock"
         } else {
             $log.Info("ALG already ran previously. Skipping")
@@ -222,7 +227,11 @@ if (!(Test-Path -Path "c:\ie4uinit.lock")) {
 # Create the database shells when needed for RDS or other install w/o SA permission
 if ($isManager -and !(Test-Path -Path "c:\initdatabases.lock")) {
     try {
-        [DbUtility] $dbUtil = [DbUtility]::New("localhost\SQLEXPRESS")
+        [DbUtility] $dbUtil = [DbUtility]::New($config.MsSql.Host)
+        if ($config.MsSql.UseSqlAuth.ToUpper() -eq "TRUE") {
+            # Swap for sql authn version if needed
+            $dbUtil = [DbUtility]::New($config.MsSql.Host, $config.MsSql.Username, $config.MsSql.Password)
+        } 
         $dbUtil.ensureCxActivityExists()
         $dbUtil.ensureCxDbExists()
         if ($config.Checkmarx.Installer.Args.contains("BI=1")) {

@@ -66,7 +66,15 @@ log "Configuring this cert to be trusted locally"
 log "Exporting the certificate to c:\cxserver.cer"
 Export-Certificate -Cert Cert:\LocalMachine\My\$thumbprint -FilePath c:\cxserver.cer | Out-Null
 log "Writing cert to s3://$($env:CheckmarxBucket)/ssl/certs/${domainname}.cer"
-Write-S3Object -BucketName $env:CheckmarxBucket -key "ssl/certs/${domainname}.cer" -file c:\cxserver.cer
+
+try {
+  Write-S3Object -BucketName $env:CheckmarxBucket -key "ssl/certs/${domainname}.cer" -file c:\cxserver.cer
+} catch {
+  log "ERROR: Could not upload the cert file to s3 at s3://$($env:CheckmarxBucket)/ssl/certs/${domainname}.cer"
+  log "Will continue to configure TLS despite the s3 write failure."
+  log "error details:"
+  $_
+}
 log "Importing the certificate to Cert:\LocalMachine\Root"
 Import-Certificate -FilePath c:\cxserver.cer -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
 log "Importing the certificate to Cert:\LocalMachine\TrustedPublisher"
