@@ -1041,7 +1041,19 @@ Class CxSastServiceController: Base {
 
   EnableAll() {
     $this.services | ForEach-Object {
-      $this.EnableByName(($_)      
+      $this.EnableByName($_)     
+    }
+  }
+
+  StartByName([String] $name) {
+    $this.log.Info("Starting ${name}")
+    Get-Service $name | Start-Service
+    $this.log.Info("finished starting ${name}")
+  }
+
+  StartAll() {
+    $this.services | ForEach-Object {
+      $this.StartByName($_)     
     }
   }
 }
@@ -1061,6 +1073,7 @@ Class CxSastHotfixInstaller : Base {
     [Utility]::Debug("post-cx-hotfix")  
     $this.log.Info("...finished installing")
     [CxSastServiceController]::new().EnableAll()
+    [CxSastServiceController]::new().StartAll()
   }
 }
 
