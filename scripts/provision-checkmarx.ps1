@@ -32,23 +32,6 @@ md -Force "$($env:CheckmarxHome)" | Out-Null
 # Some cert chains require this folder to exist
 md -force "C:\ProgramData\checkmarx\automation\installers\" | Out-Null 
 
-
-###############################################################################
-# Get secrets
-###############################################################################
-
-# $secrets = ""
-# $begin = (Get-Date)
-# if ($config.Secrets.Source.ToUpper() -eq "SSM") { 
-#     $secrets = [AwsSsmSecrets]::new($config)
-# } elseif ($config.Secrets.Source.ToUpper() -eq "SECRETSMANAGER") {
-#    $secrets = [AwsSecretManagerSecrets]::new($config) 
-# } else {
-#     $log.Warn("Secrets source $($config.Secrets.Source) is unknown. Expect exceptions later if secrets are needed")
-# }
-# $log.Info("Secrets resolution time taken: $(New-TimeSpan -Start $begin -end (Get-Date))")
-
-
 ###############################################################################
 #  Debug Info
 ###############################################################################
@@ -214,15 +197,18 @@ if ($isManager) {
     } 
 }
 
+# ie4uinit.exe is a process that is used to refresh icons on a users desktop.
+# In certain situations it can cause the installer to block when running a headless
+# install. 
 if (!(Test-Path -Path "c:\ie4uinit.lock")) {
-    $log.Info("Creating scheduled task for ie4uinit monitoring")
+    $log.Info("Creating reaper task for ie4uinit")
     $action = New-ScheduledTaskAction -Execute 'C:\Windows\System32\cmd.exe' -Argument "/C powershell.exe -NoProfile -NonInteractive -NoLogo -ExecutionPolicy Unrestricted -Command `"Get-Process -Name ie4uinit -ErrorAction SilentlyContinue | Stop-Process -Force;`"" 
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew -DontStopOnIdleEnd -ExecutionTimeLimit 0
     $restartInterval = new-timespan -Minute 1
     $triggers = @($(New-ScheduledTaskTrigger -AtStartup),$(New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval $restartInterval))
     $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
-    Register-ScheduledTask -Action $action -Principal $principal -Trigger $triggers -Settings $settings -TaskName "checkmarx-ie4uinit-kill" -Description "Looks for ie4uinit process that hang during the headless cx install and kills them"
-    $log.Info("ie4uinit monitoring scheduled task has been created")
+    Register-ScheduledTask -Action $action -Principal $principal -Trigger $triggers -Settings $settings -TaskName "checkmarx-ie4uinit-reaper" -Description "Looks for ie4uinit process that hang during the headless cx install and kills them"
+    $log.Info("ie4uinit reaper task has been created")
     "ie4uinit installed" | Set-Content "c:\ie4uinit.lock"
 }
 
@@ -448,8 +434,11 @@ if (!([String]::IsNullOrEmpty($config.Ssl.Url))) {
 ###############################################################################
 $log.Info("disabling provision-checkmarx scheduled task")
 Disable-ScheduledTask -TaskName "provision-checkmarx"
-$log.Info("provisioning has completed")
 
+$log.Info("disabling checkmarx-ie4uinit-reaper scheduled task")
+Disable-ScheduledTask -TaskName "checkmarx-ie4uinit-reaper"
+
+# Create a scheduled task to run on the manager to keep engines in sync and up to date based on tags set by ASGs
 if ($isManager) {
     Write-Output "$(get-date) Creating scheduled task for engine registration updates"
     $action = New-ScheduledTaskAction -Execute 'C:\Windows\System32\cmd.exe' -Argument "/C powershell.exe -NoProfile -NonInteractive -NoLogo -ExecutionPolicy Unrestricted -File `"C:\programdata\checkmarx\aws-automation\scripts\configure\register-asg-engines.ps1`"" 
@@ -461,7 +450,7 @@ if ($isManager) {
     Write-Output "$(get-date) engine registration task has been created"
 }
 
-
+$log.Info("provisioning has completed")
 
 ###############################################################################
 #  Debug Info

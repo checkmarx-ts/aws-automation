@@ -229,49 +229,6 @@ Class CheckmarxSystemInfo {
 }
 
 
-Class AwsSsmSecrets : Base {
-    [String] $sql_password
-    [String] $cxapi_password
-    [String] $tomcat_password
-    [String] $pfx_password
-    AwsSsmSecrets($config) {
-        $this.log.Info("Resolving secrets from AWS SSM Parameter Store")
-        try {
-            $this.sql_password = $(Get-SSMParameter -Name "$($config.Aws.SsmPath)/sql/password" -WithDecryption $True).Value
-            $this.cxapi_password = $(Get-SSMParameter -Name "$($config.Aws.SsmPath)/api/password" -WithDecryption $True).Value
-            $this.tomcat_password = $(Get-SSMParameter -Name "$($config.Aws.SsmPath)/tomcat/password" -WithDecryption $True).Value
-            $this.pfx_password = $(Get-SSMParameter -Name "$($config.Aws.SsmPath)/pfx/password" -WithDecryption $True).Value
-       } catch {
-            $this.log.Error("An exception occured while resolving secrets from AWS SSM Parameter Store")
-            Throw $_
-       }
-        $this.log.Info("finished fetching secrets")
-    }
-}
-
-Class AwsSecretManagerSecrets : Base {
-    [String] $sql_password
-    [String] $cxapi_password
-    [String] $tomcat_password
-    [String] $pfx_password
-    AwsSecretManagerSecrets($config) {
-        $this.log.Info("Resolving secrets from AWS Secrets Manager")
-        try {
-            $this.sql_password  = (Get-SECSecretValue -SecretId "$config.Aws.SsmPath)/sql" | ConvertFrom-Json).password
-            $this.cxapi_password  = (Get-SECSecretValue -SecretId "$config.Aws.SsmPath)/api" | ConvertFrom-Json).password
-            $this.tomcat_password  = (Get-SECSecretValue -SecretId "$config.Aws.SsmPath)/tomcat" | ConvertFrom-Json).password
-            $this.pfx_password  = (Get-SECSecretValue -SecretId "$config.Aws.SsmPath)/pfx" | ConvertFrom-Json).password
-        } catch {
-            $this.log.Error("An exception occured while resolving secrets from AWS Secrets Manager")
-            Throw $_
-        }
-        $this.log.Info("finished fetching secrets")
-    }
-}
-
-
-
-
 Class CxSASTEngineTlsConfigurer : Base {
   hidden [String] $tlsPort
   hidden [String] $thumbprint
@@ -631,7 +588,6 @@ Class DependencyFetcher : Base {
                 $this.CopyToArtifacts()
             }
             $this.log.Info("Fetch time taken: $(New-TimeSpan -Start $begin -end (Get-Date))")
-
         }
 
         if ($this.IsFilePresent() -eq $false) {        
@@ -680,8 +636,7 @@ Class DependencyFetcher : Base {
             $this.log.Error("An exception occured calling Read-S3Object cmdlet. Check IAM Policies and if AWS Powershell is installed")
             Throw $_            
         }
-        $this.log.Info("finished downloading from s3")
-         
+        $this.log.Info("finished downloading from s3")         
     }
     hidden CopyToArtifacts() {
         # Copy it to our artifacts folder if it somehow exists outside of artifacts
@@ -705,12 +660,10 @@ Class BasicInstaller : Base {
         $this.installer = $installer
         $this.silentInstallArgs = $silentInstallArgs                
         $this.log.AppendName("/$($installer)".Replace("\", "/").Split("/")[-1])
-        $this.log.Info("Instance created with installer = $installer")
-        
+        $this.log.Info("Instance created with installer = $installer")        
     }
 
     BasicInstaller() {
-
     }
     
     BaseInstall() {
@@ -987,7 +940,6 @@ Class IisInstaller : Base {
     }
 }
 
-
 Class CxSastInstaller : Base {
   [String] $url
   [String] $installerArgs
@@ -1075,7 +1027,6 @@ Class CxSastHotfixInstaller : Base {
     $this.log.Info("...finished installing")
   }
 }
-
 
 
 Class CxEnginesApiClient {
