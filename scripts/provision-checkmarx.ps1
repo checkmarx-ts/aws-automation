@@ -226,6 +226,20 @@ if (!(Test-Path -Path "c:\ie4uinit.lock")) {
     "ie4uinit installed" | Set-Content "c:\ie4uinit.lock"
 }
 
+# Create the database shells when needed for RDS or other install w/o SA permission
+if (!(Test-Path -Path "c:\initdatabases.lock")) {
+    try {
+        [DbUtility] $dbUtil = [DbUtility]::New("localhost\SQLEXPRESS")
+        $dbUtil.ensureCxActivityExists()
+        $dbUtil.ensureCxArmExists()
+        $dbUtil.ensureCxDbExists()
+    } catch {
+        $log.Error("An exception occured while ensuring that databases exist")
+        $_
+    }
+    "databases initialized" | Set-Content "c:\initdatabases.lock"
+}
+
 
 
 ###############################################################################

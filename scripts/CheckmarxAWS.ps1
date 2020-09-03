@@ -66,53 +66,134 @@ Class Base {
   [String] $artifactspath = "C:\programdata\checkmarx\artifacts"
 }
 
+Class DbClient : Base {
+  hidden [String] $connectionString
+  [Int] $sqlTimeout = 60
 
-Class DbClient {
-    hidden [String] $connectionString
-    [Int] $sqlTimeout = 60
-  
-    DbClient([String] $sqlHost, [String] $database, [bool] $useWindowsAuthentication, [String] $username, [String] $password) {
-      if ($useWindowsAuthentication) {
-          $this.connectionString = "Server={0}; Database={1}; Trusted_Connection=Yes; Integrated Security=SSPI;" -f $sqlHost, $database
-      } else {
-          $this.connectionString = "Server={0}; Database={1}; User ID={2}; Password={3}" -f $sqlHost, $database, $username, $password
-      }
+  DbClient([String] $sqlHost, [String] $database, [bool] $useWindowsAuthentication, [String] $username, [String] $password) {
+    if ($useWindowsAuthentication) {
+      $this.connectionString = "Server={0}; Database={1}; Trusted_Connection=Yes; Integrated Security=SSPI;" -f $sqlHost, $database
+    } else {
+      $this.connectionString = "Server={0}; Database={1}; User ID={2}; Password={3}" -f $sqlHost, $database, $username, $password
     }
-  
-    [Object] ExecuteSql([String] $sql) {
-      [System.Data.SqlClient.SqlConnection] $sqlConnection = [System.Data.SqlClient.SqlConnection]::new($this.connectionString)
-      $table = $null
-  
-      try {
-        $sqlConnection.Open()
-  
-        #build query object
-        $command = $sqlConnection.CreateCommand()
-        $command.CommandText = $sql
-        $command.CommandTimeout = $this.sqlTimeout
-  
-        #run query
-        $adapter = [System.Data.SqlClient.SqlDataAdapter]::new($command)
-        $dataset = [System.Data.DataSet]::new()
-        $adapter.Fill($dataset) | out-null
-  
-        #return the first collection of results or an empty array
-        if ($null -ne $dataset.Tables[0]) {$table = $dataset.Tables[0]}
-        elseif ($table.Rows.Count -eq 0) { $table = [System.Collections.ArrayList]::new() }
-  
-        $sqlConnection.Close()
-        return $table
-  
-      } catch {
-        log "An error occured executing sql: $sql"
-        log "Error message: $($_.Exception.Message))"
-        log "Error exception: $($_.Exception))"
-        throw $_
-      } finally {
-        $sqlConnection.Close()
-      }
-    } 
   }
+
+  DbClient([String] $sqlHost, [String] $database) {
+    $this.connectionString = "Server={0}; Database={1}; Trusted_Connection=Yes; Integrated Security=SSPI;" -f $sqlHost, $database     
+  }
+
+  [Object] ExecuteSql([String] $sql) {
+    [System.Data.SqlClient.SqlConnection] $sqlConnection = [System.Data.SqlClient.SqlConnection]::new($this.connectionString)
+    $table = $null
+
+    try {
+      $sqlConnection.Open()
+
+      #build query object
+      $command = $sqlConnection.CreateCommand()
+      $command.CommandText = $sql
+      $command.CommandTimeout = $this.sqlTimeout
+
+      #run query
+      $adapter = [System.Data.SqlClient.SqlDataAdapter]::new($command)
+      $dataset = [System.Data.DataSet]::new()
+      $adapter.Fill($dataset) | out-null
+
+      #return the first collection of results or an empty array
+      if ($null -ne $dataset.Tables[0]) {$table = $dataset.Tables[0]}
+      elseif ($table.Rows.Count -eq 0) { $table = [System.Collections.ArrayList]::new() }
+
+      
+      return $table
+
+    } catch {
+      $this.log.Error("An error occured executing sql: $sql")
+      $this.log.Error("Error message: $($_.Exception.Message))")
+      $this.log.Error("Error exception: $($_.Exception))")
+      throw $_
+    } finally {
+      $sqlConnection.Close()
+    }
+  } 
+
+  [void] ExecuteNonQuery([String] $nonquery) {
+    [System.Data.SqlClient.SqlConnection] $sqlConnection = [System.Data.SqlClient.SqlConnection]::new($this.connectionString)
+    try {
+      $sqlConnection.Open()
+
+      #build query object
+      $command = $sqlConnection.CreateCommand()
+      $command.CommandText = $nonquery
+      $command.CommandTimeout = $this.sqlTimeout
+      $result = $command.ExecuteNonQuery() | Out-Null
+
+    } catch {
+      $this.log.Error("An error occured executing sql: $nonquery")
+      $this.log.Error("Error message: $($_.Exception.Message))")
+      $this.log.Error("Error exception: $($_.Exception))")
+      throw $_
+    } finally {
+      $sqlConnection.Close()
+    }
+  }
+}
+
+
+Class DbUtility : Base {
+  [String] $create_cxdb = @"
+USE [master]
+
+IF NOT EXISTS (select * from sys.databases where name = 'CxDB')
+BEGIN
+  create database CxDB
+END
+"@
+
+  [String] $create_cxactivity = @"
+USE [master]
+
+IF NOT EXISTS (select * from sys.databases where name = 'CxActivity')
+BEGIN
+  create database CxActivity
+END  
+"@
+
+$create_cxarm = @"
+USE [master]
+
+IF NOT EXISTS (select * from sys.databases where name = 'CxARM')
+BEGIN
+	CREATE DATABASE CxARM;
+END;
+"@
+
+  hidden [DbClient] $db
+
+  DbUtility($connectionString, $username, $password) {
+    $this.log.Info("Creating db client with sql server authN")
+    $this.db = [DbClient]::new($connectionString, "master", $True, $username, $password)
+  }
+
+  DbUtility($connectionString) {
+    $this.log.Info("Creating db client with windows authN")
+    $this.db = [DbClient]::new($connectionString, "master")
+  }
+
+  [void] ensureCxDbExists() {
+    $this.log.Info("Creating CxDB if it does not exist")
+    $this.db.ExecuteNonQuery($this.create_cxdb)
+  }
+
+  [void] ensureCxActivityExists() {
+    $this.log.Info("Creating CxActivity if it does not exist")
+    $this.db.ExecuteNonQuery($this.create_cxactivity)
+  }
+
+  [void] ensureCxArmExists() {
+    $this.log.Info("Creating CxARM if it does not exist")
+    $this.db.ExecuteNonQuery($this.create_cxarm)
+  }
+}
 
 
 Class CheckmarxSystemInfo {
