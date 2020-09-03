@@ -24,11 +24,21 @@ function CreateCollectListObject ([String] $log_group_name, [String] $filepath) 
 <###################################
   Check tag for environment name
 ###################################>
-[String]$log_env = Get-EC2Tag -filter @{Name="resource-id";Value="${instance_id}"} | Where-Object { $_.Key -eq "Environment" } | Select-Object -ExpandProperty Value
-if ([String]::IsNullOrEmpty($dns)) { 
-    log "No Environment tag found, using default `"dev`""
-    $log_env = "dev"
+[String]$log_env = "dev"
+if ([String]::IsNullOrEmpty($env:CheckmarxEnvironment)) {
+  log "Using env:CheckmarxEnvironment as the log group prefix"
+  $log_env = $env:CheckmarxEnvironment
+} else {
+  try {
+    log "No env:CheckmarxEnvironment value found "
+    [String]$log_env = Get-EC2Tag -filter @{Name="resource-id";Value="${instance_id}"} | Where-Object { $_.Key -eq "Environment" } | Select-Object -ExpandProperty Value
+  } catch {
+    log "ERROR: an exception occured while looking for the Environment tag on the ec2 instance"
+    $_ 
+    log "The default log environment value will be used"
+  }
 }
+
 log "Environment: $log_env"
 
 <###################################
