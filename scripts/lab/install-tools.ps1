@@ -13,11 +13,11 @@ $ProgressPreference = "SilentlyContinue"
 choco install notepadplusplus --no-progress -y
 choco install googlechrome --no-progress -y
 choco install sql-server-management-studio --no-progress -y
-
+choco install sysinternals --no-progress -y
 choco install vim --no-progress -y
 choco install firefox --no-progress -y
 choco install vscode --no-progress -y
 choco install postman --no-progress -y
-choco install sysinternals --no-progress -y
+
 
 log "Finished installing tools"

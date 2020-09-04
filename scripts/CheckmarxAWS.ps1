@@ -837,7 +837,7 @@ Class DotnetCoreHostingInstaller : BasicInstaller {
 }
 
 Class MsSqlServerExpressInstaller : BasicInstaller {
-    hidden [String] $silentInstallArgs = "/IACCEPTSQLSERVERLICENSETERMS /Q /ACTION=install /INSTANCEID=SQLEXPRESS /INSTANCENAME=SQLEXPRESS /UPDATEENABLED=FALSE /BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1"
+    hidden [String] $silentInstallArgs = "/IACCEPTSQLSERVERLICENSETERMS /Q /ACTION=install /INSTANCEID=SQLEXPRESS /INSTANCENAME=SQLEXPRESS /UPDATEENABLED=FALSE /BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCSTARTUPTYPE=Automatic /TCPENABLED=1 /SQLSYSADMINACCOUNTS=""BUILTIN\ADMINISTRATORS"" "
     MsSqlServerExpressInstaller([String] $installer) {
         $this.log.Info("instance created with installer = $installer")
         $this.installer = $installer       
