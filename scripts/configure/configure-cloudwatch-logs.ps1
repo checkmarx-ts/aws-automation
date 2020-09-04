@@ -25,7 +25,7 @@ function CreateCollectListObject ([String] $log_group_name, [String] $filepath) 
   Check tag for environment name
 ###################################>
 [String]$log_env = "dev"
-if ([String]::IsNullOrEmpty($env:CheckmarxEnvironment)) {
+if (![String]::IsNullOrEmpty($env:CheckmarxEnvironment)) {
   log "Using env:CheckmarxEnvironment as the log group prefix"
   $log_env = $env:CheckmarxEnvironment
 } else {
