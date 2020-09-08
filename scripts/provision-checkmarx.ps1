@@ -542,9 +542,9 @@ if ($isManager) {
 #$cxdb.ExecuteSql
 #$cxdb.ExecuteNonQuery
 $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = 'C:\Program Files\Git\bin\git.exe' where [key] = 'GIT_EXE_PATH'")
-$cxdb.ExecuteNonQuery("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = '' where [key] = 'WebServer'")
-$cxdb.ExecuteNonQuery("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = 'http://localhost' where [key] = 'IdentityAuthority'")
-$cxdb.ExecuteNonQuery("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = '' where [key] = 'SamlServiceProviderIssuer'")
+#$cxdb.ExecuteNonQuery("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = '' where [key] = 'WebServer'")
+#$cxdb.ExecuteNonQuery("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = 'http://localhost' where [key] = 'IdentityAuthority'")
+#$cxdb.ExecuteNonQuery("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = '' where [key] = 'SamlServiceProviderIssuer'")
 
 
 ###############################################################################
