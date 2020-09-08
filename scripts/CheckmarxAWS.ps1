@@ -1023,7 +1023,7 @@ Class CxSastServiceController: Base {
 
   hidden [void] DisableByName([String] $name){
     $this.log.Info("Disabling ${name}")
-    Get-Service $name | Set-Service -StartupType Disabled
+    Get-Service $name -ErrorAction SilentlyContinue | Set-Service -StartupType Disabled
     $this.log.Info("finished disabling ${name}")
   }
 

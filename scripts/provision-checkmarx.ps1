@@ -302,7 +302,7 @@ if ($config.MsSql.UseSqlAuth -eq "True") {
 
 if (!([Utility]::Exists("${lockdir}\cxsastinstall.lock"))) {
     # Install Checkmarx and the Hotfix
-    [BasicInstaller]::new([Utility]::Find("CxSetup.exe"), $config.Checkmarx.Installer.Args).Install()
+    [BasicInstaller]::new([Utility]::Find("CxSetup.exe"), $config.Checkmarx.Installer.Args).BaseInstall()
     [CxSastServiceController]::new().DisableAll()
     "complete" | Set-Content "${lockdir}\cxsastinstall.lock"
     restart-computer -Force
@@ -551,3 +551,5 @@ Wmic qfe list  | Format-Table
 
 [CxSastServiceController]::new().EnableAll()
 $log.Info("provisioning has completed. Rebooting.")
+restart-computer -force 
+sleep 900
