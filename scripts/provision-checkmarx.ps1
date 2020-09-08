@@ -167,6 +167,8 @@ if (!([Utility]::Exists("${lockdir}\adoptopenjdk.lock"))) {
 if (!([Utility]::Exists("${lockdir}\dotnetframework.lock"))) {
     [DotnetFrameworkInstaller]::new([DependencyFetcher]::new($config.Dependencies.DotnetFramework).Fetch()).Install()
     "completed" | Set-Content "${lockdir}\dotnetframework.lock" # lock so this doesn't run on reboot
+    Restart-Computer -Force; 
+    sleep 900 # force in case anyone is logged in
 } 
 
 if ($isManager) {
@@ -178,6 +180,8 @@ if ($isManager) {
     if (!([Utility]::Exists("${lockdir}\iis.lock"))) {    
         [IisInstaller]::new().Install()
         "completed" | Set-Content "${lockdir}\iis.lock" # lock so this doesn't run on reboot
+        Restart-Computer -Force
+        Sleep 900
     }           
 
     if (!([Utility]::Exists("${lockdir}\iisurlrewrite.lock"))) {        

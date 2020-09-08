@@ -251,7 +251,6 @@ Class CxSASTEngineTlsConfigurer : Base {
 
     $this.ConfigureNetsh()
     $this.ConfigureServiceConfigFile()
-    Restart-Service -Name CxScanEngine
   }
 
   hidden [String] GetIp() {
@@ -794,9 +793,7 @@ Class DotnetFrameworkInstaller : BasicInstaller {
             return
         }
         $this.BaseInstall()
-        $this.log.Info("Finished dotnet framework install. Rebooting.")
-        Restart-Computer -Force; 
-        sleep 900 # force in case anyone is logged in
+        $this.log.Info("Finished dotnet framework install.")
     }
 }
 
@@ -935,8 +932,6 @@ Class IisInstaller : Base {
         $this.log.Info("... finished Installing IIS. Rebooting.")
         # the iis.lock file is used to track state and prevent reinstallation and reboots on subsequent script execution
         "IIS completed" | Set-Content "$($this.home)\iis.lock"
-        Restart-Computer -Force
-        Sleep 900
     }
 }
 
