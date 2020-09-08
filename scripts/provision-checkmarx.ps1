@@ -543,9 +543,11 @@ if ($isManager) {
 }
 
 if ($isManager) {
+    $log.Info("Applying DB configuration")
     [DbClient] $cxdb = [DbClient]::new($config.MsSql.Host, "CxDB", ($config.MsSql.UseSqlAuth.ToUpper() -eq "FALSE"), $config.MsSql.Username, $config.MsSql.Password)
     #$cxdb.ExecuteSql
     #$cxdb.ExecuteNonQuery
+    $log.Info("Updating GIT_EXE_PATH")
     $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = 'C:\Program Files\Git\bin\git.exe' where [key] = 'GIT_EXE_PATH'")
     #$cxdb.ExecuteNonQuery("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = '' where [key] = 'WebServer'")
     #$cxdb.ExecuteNonQuery("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = 'http://localhost' where [key] = 'IdentityAuthority'")
