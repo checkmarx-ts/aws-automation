@@ -1015,7 +1015,7 @@ Class CxSastInstaller : Base {
 }
 
 Class CxSastServiceController: Base {
-  $services = "CxARMETL", "CxARM", "CxJobsManager", "CxScansManager", "CxSystemManager", "W3SVC", "ActiveMQ"
+  $services = "CxARMETL", "CxARM", "CxJobsManager", "CxScansManager", "CxScanEngine", "CxSystemManager", "W3SVC", "ActiveMQ"
 
   CxSastServiceController() {
     
