@@ -470,6 +470,23 @@ if ($isManager) {
 }
 
 ###############################################################################
+# Trusted Certs
+###############################################################################
+$config.Ssl.TrustedCerts | ForEach-Object {
+    if (!([String]::IsNullOrEmpty($_))) {
+        try {
+            $log.Info("Attempting to import $_ into LocaMachine\Root and LocalMachine\TrustedPublisher cert stores")
+            $cert = [DependencyFetcher]::new($_).Fetch()  
+            Import-Certificate -FilePath  "${cert}" -CertStoreLocation "Cert:\LocalMachine\Root"
+            Import-Certificate -FilePath  "${cert}" -CertStoreLocation "Cert:\LocalMachine\TrustedPublisher" 
+        } catch {
+            $log.Warn("An error occured attempting to import $_ into LocaMachine\Root and LocalMachine\TrustedPublisher cert stores")
+        }
+    }
+}
+
+
+###############################################################################
 # SSL Configuration
 ###############################################################################
 $log.Info("Configuring SSL")
@@ -508,14 +525,17 @@ Disable-ScheduledTask -TaskName "checkmarx-ie4uinit-reaper"
 
 # Create a scheduled task to run on the manager to keep engines in sync and up to date based on tags set by ASGs
 if ($isManager) {
-    Write-Output "$(get-date) Creating scheduled task for engine registration updates"
-    $action = New-ScheduledTaskAction -Execute 'C:\Windows\System32\cmd.exe' -Argument "/C powershell.exe -NoProfile -NonInteractive -NoLogo -ExecutionPolicy Unrestricted -File `"C:\programdata\checkmarx\aws-automation\scripts\configure\register-asg-engines.ps1`"" 
-    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew -DontStopOnIdleEnd -ExecutionTimeLimit 0
-    $restartInterval = new-timespan -minute 3
-    $triggers = @($(New-ScheduledTaskTrigger -AtStartup),$(New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval $restartInterval))
-    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
-    Register-ScheduledTask -Action $action -Principal $principal -Trigger $triggers -Settings $settings -TaskName "checkmarx-update-engine-registration" -Description "Looks for EC2 servers that are Checkmarx Engine Servers and updates the engine registration"
-    Write-Output "$(get-date) engine registration task has been created"
+    if (!([String]::IsNullOrEmpty($config.AutomationOptions.EngineRegistrationScript))) {   
+        $registrationscript = [DependencyFetcher]::new($config.AutomationOptions.EngineRegistrationScript).Fetch()
+        Write-Output "$(get-date) Creating scheduled task for engine registration updates"
+        $action = New-ScheduledTaskAction -Execute 'C:\Windows\System32\cmd.exe' -Argument "/C powershell.exe -NoProfile -NonInteractive -NoLogo -ExecutionPolicy Unrestricted -File `"${registrationscript}`"" 
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew -DontStopOnIdleEnd -ExecutionTimeLimit 0
+        $restartInterval = new-timespan -minute 3
+        $triggers = @($(New-ScheduledTaskTrigger -AtStartup),$(New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval $restartInterval))
+        $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
+        Register-ScheduledTask -Action $action -Principal $principal -Trigger $triggers -Settings $settings -TaskName "checkmarx-update-engine-registration" -Description "Looks for EC2 servers that are Checkmarx Engine Servers and updates the engine registration"
+        Write-Output "$(get-date) engine registration task has been created"
+    }
 }
 
 ###############################################################################
