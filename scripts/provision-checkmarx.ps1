@@ -542,6 +542,9 @@ if ($isManager) {
     }
 }
 
+###############################################################################
+# DB Configuration
+###############################################################################
 if ($isManager) {
     $log.Info("Applying DB configuration")
     [DbClient] $cxdb = [DbClient]::new($config.MsSql.Host, "CxDB", ($config.MsSql.UseSqlAuth.ToUpper() -eq "FALSE"), $config.MsSql.Username, $config.MsSql.Password)
