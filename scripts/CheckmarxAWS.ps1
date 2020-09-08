@@ -171,7 +171,7 @@ END;
 
   DbUtility($connectionString, $username, $password) {
     $this.log.Info("Creating db client with sql server authN")
-    $this.db = [DbClient]::new($connectionString, "master", $False, $username, $password)
+    $this.db = [DbClient]::new($connectionString, "master", $True, $username, $password)
   }
 
   DbUtility($connectionString) {
@@ -1029,7 +1029,7 @@ Class CxSastServiceController: Base {
 
   hidden [void] EnableByName([String] $name){
     $this.log.Info("Enabling ${name}")
-    Get-Service $name | Set-Service -StartupType Automatic
+    Get-Service $name -ErrorAction SilentlyContinue | Set-Service -StartupType Automatic
     $this.log.Info("finished enabling ${name}")
   }
 
@@ -1071,9 +1071,7 @@ Class CxSastHotfixInstaller : Base {
     [Utility]::Debug("pre-cx-hotfix")  
     Start-Process -FilePath "$hotfixexe" -ArgumentList "-cmd ACCEPT_EULA=Y" -Wait -NoNewWindow
     [Utility]::Debug("post-cx-hotfix")  
-    $this.log.Info("...finished installing")
-    [CxSastServiceController]::new().EnableAll()
-    [CxSastServiceController]::new().StartAll()
+    $this.log.Info("...finished installing")    
   }
 }
 

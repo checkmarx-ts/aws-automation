@@ -88,8 +88,6 @@ $cloudwatch_config = @"
 }
 "@
 
-log "Cloudwatch log config file generated is: "
-$cloudwatch_config
 
 md "C:\programdata\checkmarx\artifacts" -force 
 $ConfigFile = "C:\programdata\checkmarx\artifacts\checkmarx-cloudwatch.json"

@@ -100,18 +100,4 @@ try {
     log "An error occured flushing dns"
 }
 
-try {
-  restart-service cx*    
-} catch {
-  log "An error occured restarting cx* services"
-}
-
-try {
-  if ($cx.IsWebPortal -or $cx.IsSystemManager) {
-    iisreset
-  }
-} catch {
-  log "An error occured restarting iis"
-}
-
 log "finished"

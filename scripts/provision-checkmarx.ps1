@@ -27,15 +27,16 @@ $config.Ssl.PfxPassword = [Utility]::TryGetSSMParameter($config.Ssl.PfxPassword)
 ###############################################################################
 $log.Info("Creating Checkmarx folders")
 $env:CheckmarxHome = if ($env:CheckmarxHome -eq $null) { "C:\programdata\checkmarx" } Else { $env:CheckmarxHome }
+$lockdir = "$($env:CheckmarxHome)\locks"
 md -Force "$($env:CheckmarxHome)" | Out-Null
-
+md -Force "$lockdir"
 # Some cert chains require this folder to exist
 md -force "C:\ProgramData\checkmarx\automation\installers\" | Out-Null 
 
 ###############################################################################
 #  Debug Info
 ###############################################################################
-if (!([Utility]::Exists("$($env:CheckmarxHome)\systeminfo.lock"))) {
+if (!([Utility]::Exists("${lockdir}\systeminfo.lock"))) {
     Write-Host "################################"
     Write-Host "  System Info"
     Write-Host "################################"
@@ -69,7 +70,7 @@ if (!([Utility]::Exists("$($env:CheckmarxHome)\systeminfo.lock"))) {
     $log.Info("checkmarx-config.psd1 configuration:")
     cat C:\checkmarx-config.psd1    
 
-    "completed" | Set-Content "$($env:CheckmarxHome)\systeminfo.lock"
+    "completed" | Set-Content "${lockdir}\systeminfo.lock"
 }
 
 
@@ -101,68 +102,108 @@ if ($isManager)  {
 #  Fetch Checkmarx Installation Media and Unzip
 ###############################################################################
 
-# First install 7zip so it can unzip password protected zip files.
-[SevenZipInstaller]::new([DependencyFetcher]::new($config.Dependencies.Sevenzip).Fetch()).Install()
 
-# Download/Unzip the Checkmarx installer. 
-# Many dependencies (cpp redists, dotnet core, sql server express) comes from this zip so it must be unzipped early in the process. 
-# The 7zip unzip process is not guarded and instead we use -aos option to skip existing files so there is not a material time penalty for the unguarded command
-$installer_zip = [DependencyFetcher]::new($config.Checkmarx.Installer.Url).Fetch()  
-$installer_name = $($installer_zip.Replace(".zip", "")).Split("\")[-1]
+if (!([Utility]::Exists("${lockdir}\7zip.lock"))) {
+    # First install 7zip so it can unzip password protected zip files.
+    [SevenZipInstaller]::new([DependencyFetcher]::new($config.Dependencies.Sevenzip).Fetch()).Install()
+    "Complete" | Set-Content "${lockdir}\7zip.lock"
+}
 
-if (!(Test-Path -Path "C:\installerunzip.lock")) {
+if (!([Utility]::Exists("${lockdir}\installer.lock"))) {
+    # Download/Unzip the Checkmarx installer. 
+    # Many dependencies (cpp redists, dotnet core, sql server express) comes from this zip so it must be unzipped early in the process. 
+    # The 7zip unzip process is not guarded and instead we use -aos option to skip existing files so there is not a material time penalty for the unguarded command
+    $installer_zip = [DependencyFetcher]::new($config.Checkmarx.Installer.Url).Fetch()  
+    $installer_name = $($installer_zip.Replace(".zip", "")).Split("\")[-1]
+
     $log.Info("Unzipping c:\programdata\checkmarx\artifacts\${installer_zip}")
     Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"${installer_zip}`" -aos -o`"C:\programdata\checkmarx\artifacts\${installer_name}`" -p`"$($config.Checkmarx.Installer.ZipKey)`"" -Wait -NoNewWindow -RedirectStandardError .\installer7z.err -RedirectStandardOutput .\installer7z.out
     cat .\installer7z.err
     cat .\installer7z.out
-    "completed" | Set-Content "C:\installerunzip.lock" # lock so this unzip doesn't run on reboot
+    "completed" | Set-Content "${lockdir}\installer.lock" # lock so this unzip doesn't run on reboot
 }
-# Download/Unzip the Checkmarx Hotfix
-$hfinstaller = [DependencyFetcher]::new($config.Checkmarx.Hotfix.Url).Fetch()  
-$hotfix_name = $($hfinstaller.Replace(".zip", "")).Split("\")[-1]
 
-if (!(Test-Path -Path "C:\hfunzip.lock")) {
+if (!([Utility]::Exists("${lockdir}\hotfix.lock"))) {
+    # Download/Unzip the Checkmarx Hotfix
+    $hfinstaller = [DependencyFetcher]::new($config.Checkmarx.Hotfix.Url).Fetch()  
+    $hotfix_name = $($hfinstaller.Replace(".zip", "")).Split("\")[-1]
+
     $log.Info("Unzipping c:\programdata\checkmarx\artifacts\${hotfix_zip}")
     Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"$hfinstaller`" -aos -o`"C:\programdata\checkmarx\artifacts\${hotfix_name}`" -p`"$($config.Checkmarx.Hotfix.ZipKey)`"" -Wait -NoNewWindow -RedirectStandardError .\hotfix7z.err -RedirectStandardOutput .\hotfix7z.out
     cat .\hotfix7z.err
     cat .\hotfix7z.out
-    "completed" | Set-Content "C:\hfunzip.lock" # lock so this unzip doesn't run on reboot
+    "completed" | Set-Content "${lockdir}\hotfix.lock" # lock so this unzip doesn't run on reboot
 }
+
+
 
 
 ###############################################################################
 #  Dependencies
 ###############################################################################
-# Only install if it was unzipped from the installation package
-$cpp2010 = $(Get-ChildItem "$($env:CheckmarxHome)" -Recurse -Filter "vcredist_x64.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)  
-if (!([String]::IsNullOrEmpty($cpp2010))) {
-    [Cpp2010RedistInstaller]::new([DependencyFetcher]::new($cpp2010).Fetch()).Install()
+if (!([Utility]::Exists("${lockdir}\cpp2010.lock"))) {
+    # Only install if it was unzipped from the installation package
+    $cpp2010 = $(Get-ChildItem "$($env:CheckmarxHome)" -Recurse -Filter "vcredist_x64.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)  
+    if (!([String]::IsNullOrEmpty($cpp2010))) {
+        [Cpp2010RedistInstaller]::new([DependencyFetcher]::new($cpp2010).Fetch()).Install()
+    }  
+    "completed" | Set-Content "${lockdir}\cpp2010.lock" # lock so this doesn't run on reboot
+}
+
+if (!([Utility]::Exists("${lockdir}\cpp2015.lock"))) {
+    # Only install if it was unzipped from the installation package
+    $cpp2015 = $(Get-ChildItem "$($env:CheckmarxHome)" -Recurse -Filter "vc_redist2015.x64.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)  
+    if (!([String]::IsNullOrEmpty($cpp2015))) {
+        [Cpp2015RedistInstaller]::new([DependencyFetcher]::new($cpp2015).Fetch()).Install()
+    }
+    "completed" | Set-Content "${lockdir}\cpp2015.lock" # lock so this doesn't run on reboot
+}
+
+if (!([Utility]::Exists("${lockdir}\adoptopenjdk.lock"))) {
+    [AdoptOpenJdkInstaller]::new([DependencyFetcher]::new($config.Dependencies.AdoptOpenJdk).Fetch()).Install()
+    "completed" | Set-Content "${lockdir}\adoptopenjdk.lock" # lock so this doesn't run on reboot
 }  
 
-# Only install if it was unzipped from the installation package
-$cpp2015 = $(Get-ChildItem "$($env:CheckmarxHome)" -Recurse -Filter "vc_redist2015.x64.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)  
-if (!([String]::IsNullOrEmpty($cpp2015))) {
-    [Cpp2015RedistInstaller]::new([DependencyFetcher]::new($cpp2015).Fetch()).Install()
-}
- 
-[AdoptOpenJdkInstaller]::new([DependencyFetcher]::new($config.Dependencies.AdoptOpenJdk).Fetch()).Install()
-[DotnetFrameworkInstaller]::new([DependencyFetcher]::new($config.Dependencies.DotnetFramework).Fetch()).Install()
-
+if (!([Utility]::Exists("${lockdir}\dotnetframework.lock"))) {
+    [DotnetFrameworkInstaller]::new([DependencyFetcher]::new($config.Dependencies.DotnetFramework).Fetch()).Install()
+    "completed" | Set-Content "${lockdir}\dotnetframework.lock" # lock so this doesn't run on reboot
+} 
 
 if ($isManager) {
-    [GitInstaller]::new([DependencyFetcher]::new($config.Dependencies.Git).Fetch()).Install()
-    [IisInstaller]::new().Install()
-    [IisUrlRewriteInstaller]::new([DependencyFetcher]::new($config.Dependencies.IisRewriteModule).Fetch()).Install()
-    [IisApplicationRequestRoutingInstaller]::new([DependencyFetcher]::new($config.Dependencies.IisApplicationRequestRoutingModule).Fetch()).Install()
+    if (!([Utility]::Exists("${lockdir}\git.lock"))) {
+        [GitInstaller]::new([DependencyFetcher]::new($config.Dependencies.Git).Fetch()).Install()
+        "completed" | Set-Content "${lockdir}\git.lock" # lock so this doesn't run on reboot
+    }           
+        
+    if (!([Utility]::Exists("${lockdir}\iis.lock"))) {    
+        [IisInstaller]::new().Install()
+        "completed" | Set-Content "${lockdir}\iis.lock" # lock so this doesn't run on reboot
+    }           
+
+    if (!([Utility]::Exists("${lockdir}\iisurlrewrite.lock"))) {        
+        [IisUrlRewriteInstaller]::new([DependencyFetcher]::new($config.Dependencies.IisRewriteModule).Fetch()).Install()
+        "completed" | Set-Content "${lockdir}\iisurlrewrite.lock" # lock so this doesn't run on reboot
+    }           
+
+    if (!([Utility]::Exists("${lockdir}\iisarr.lock"))) {            
+        [IisApplicationRequestRoutingInstaller]::new([DependencyFetcher]::new($config.Dependencies.IisApplicationRequestRoutingModule).Fetch()).Install()
+        "completed" | Set-Content "${lockdir}\iisarr.lock" # lock so this doesn't run on reboot
+    }           
 
     # Only install if it was unzipped from the installation package
-    $dotnetcore = $(Get-ChildItem "$($env:CheckmarxHome)" -Recurse -Filter "dotnet-hosting-2.1.16-win.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)  
-    if (!([String]::IsNullOrEmpty($dotnetcore))) {
-        [DotnetCoreHostingInstaller]::new([DependencyFetcher]::new($dotnetcore).Fetch()).Install()
-    } 
+    if (!([Utility]::Exists("${lockdir}\dotnetcore.lock"))) {       
+        $dotnetcore = $(Get-ChildItem "$($env:CheckmarxHome)" -Recurse -Filter "dotnet-hosting-2.1.16-win.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)  
+        if (!([String]::IsNullOrEmpty($dotnetcore))) {
+            [DotnetCoreHostingInstaller]::new([DependencyFetcher]::new($dotnetcore).Fetch()).Install()
+        }
+        "completed" | Set-Content "${lockdir}\dotnetcore.lock" # lock so this doesn't run on reboot
+    }          
 
-    if ($config.MsSql.UseLocalSqlExpress -eq "True") {
-        [MsSqlServerExpressInstaller]::new([DependencyFetcher]::new("SQLEXPR*.exe").Fetch()).Install()
+    if (!([Utility]::Exists("${lockdir}\sqlexpress.lock"))) {        
+        if ($config.MsSql.UseLocalSqlExpress -eq "True") {
+            [MsSqlServerExpressInstaller]::new([DependencyFetcher]::new("SQLEXPR*.exe").Fetch()).Install()
+        }
+        "completed" | Set-Content "${lockdir}\sqlexpress.lock" # lock so this doesn't run on reboot
     }
 }
 
@@ -177,7 +218,7 @@ if ($isManager) {
         $log.Info("License file provided and will be downloaded.")
         [Utility]::Fetch($config.Checkmarx.License.Url)
     } elseif ($config.Checkmarx.License.Url -eq "ALG") {
-        if (!(Test-Path -Path "C:\alg.lock")) {
+        if (!(Test-Path -Path "${lockdir}\alg.lock")) {
             $log.Info("Running automatic license generator")
             try {
                 C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
@@ -186,7 +227,7 @@ if ($isManager) {
                 $log.Error("an error occured while running the ALG. Error details follows. The provisoning process will continue w/o a license")
                 $_
             }
-            "ALG Completed" | Set-Content "C:\alg.lock"
+            "ALG Completed" | Set-Content "${lockdir}\alg.lock"
         } else {
             $log.Info("ALG already ran previously. Skipping")
         }
@@ -212,7 +253,7 @@ if ($isManager) {
 # ie4uinit.exe is a process that is used to refresh icons on a users desktop.
 # In certain situations it can cause the installer to block when running a headless
 # install. 
-if (!(Test-Path -Path "c:\ie4uinit.lock")) {
+if (!(Test-Path -Path "${lockdir}\ie4uinit.lock")) {
     $log.Info("Creating reaper task for ie4uinit")
     $action = New-ScheduledTaskAction -Execute 'C:\Windows\System32\cmd.exe' -Argument "/C powershell.exe -NoProfile -NonInteractive -NoLogo -ExecutionPolicy Unrestricted -Command `"Get-Process -Name ie4uinit -ErrorAction SilentlyContinue | Stop-Process -Force;`"" 
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew -DontStopOnIdleEnd -ExecutionTimeLimit 0
@@ -221,11 +262,11 @@ if (!(Test-Path -Path "c:\ie4uinit.lock")) {
     $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
     Register-ScheduledTask -Action $action -Principal $principal -Trigger $triggers -Settings $settings -TaskName "checkmarx-ie4uinit-reaper" -Description "Looks for ie4uinit process that hang during the headless cx install and kills them"
     $log.Info("ie4uinit reaper task has been created")
-    "ie4uinit installed" | Set-Content "c:\ie4uinit.lock"
+    "ie4uinit installed" | Set-Content "${lockdir}\ie4uinit.lock"
 }
 
 # Create the database shells when needed for RDS or other install w/o SA permission
-if ($isManager -and !(Test-Path -Path "c:\initdatabases.lock")) {
+if ($isManager -and !(Test-Path -Path "${lockdir}\initdatabases.lock")) {
     try {
         [DbUtility] $dbUtil = [DbUtility]::New($config.MsSql.Host)
         if ($config.MsSql.UseSqlAuth.ToUpper() -eq "TRUE") {
@@ -241,7 +282,7 @@ if ($isManager -and !(Test-Path -Path "c:\initdatabases.lock")) {
         $log.Error("An exception occured while ensuring that databases exist")
         $_
     }
-    "databases initialized" | Set-Content "c:\initdatabases.lock"
+    "databases initialized" | Set-Content "${lockdir}\initdatabases.lock"
 }
 
 ###############################################################################
@@ -259,10 +300,22 @@ if ($config.MsSql.UseSqlAuth -eq "True") {
     $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) CXARM_SQLAUTH=1 CXARM_DB_USER=$($config.MsSql.Username) CXARM_DB_PASSWORD=""$($config.MsSql.Password)"""
 }
 
-# Install Checkmarx and the Hotfix
-[CxSastInstaller]::new([Utility]::Find("CxSetup.exe"), $config.Checkmarx.Installer.Args).Install()
-[CxSastHotfixInstaller]::new([Utility]::Find("*HF*.exe")).Install()
+if (!([Utility]::Exists("${lockdir}\cxsastinstall.lock"))) {
+    # Install Checkmarx and the Hotfix
+    [BasicInstaller]::new([Utility]::Find("CxSetup.exe"), $config.Checkmarx.Installer.Args).Install()
+    [CxSastServiceController]::new().DisableAll()
+    "complete" | Set-Content "${lockdir}\cxsastinstall.lock"
+    restart-computer -Force
+    sleep 900
+}
 
+if (!([Utility]::Exists("${lockdir}\cxhfinstall.lock"))) {
+    #[CxSastInstaller]::new([Utility]::Find("CxSetup.exe"), $config.Checkmarx.Installer.Args).Install()
+    [CxSastHotfixInstaller]::new([Utility]::Find("*HF*.exe")).Install()
+    "complete" | Set-Content "${lockdir}\cxhfinstall.lock"
+    #restart-computer -Force
+    #sleep 900
+}
 
 ###############################################################################
 # Post Install Windows Configuration
@@ -465,8 +518,6 @@ if ($isManager) {
     Write-Output "$(get-date) engine registration task has been created"
 }
 
-$log.Info("provisioning has completed")
-
 ###############################################################################
 #  Debug Info
 ###############################################################################
@@ -477,3 +528,6 @@ $log.Info("provisioning has completed")
 ################################################################################
 "@ | Write-Output
 Wmic qfe list  | Format-Table
+
+[CxSastServiceController]::new().EnableAll()
+$log.Info("provisioning has completed. Rebooting.")
