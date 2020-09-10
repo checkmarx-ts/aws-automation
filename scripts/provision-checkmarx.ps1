@@ -272,11 +272,13 @@ if (!(Test-Path -Path "${lockdir}\ie4uinit.lock")) {
 # Create the database shells when needed for RDS or other install w/o SA permission
 if ($isManager -and !(Test-Path -Path "${lockdir}\initdatabases.lock")) {
     try {
-        [DbUtility] $dbUtil = [DbUtility]::New($config.MsSql.Host)
+        [DbUtility] $dbUtil = $null
         if ($config.MsSql.UseSqlAuth.ToUpper() -eq "TRUE") {
             # Swap for sql authn version if needed
             $dbUtil = [DbUtility]::New($config.MsSql.Host, $config.MsSql.Username, $config.MsSql.Password)
-        } 
+        } else {
+            $dbUtil = [DbUtility]::New($config.MsSql.Host)
+        }
         $dbUtil.ensureCxActivityExists()
         $dbUtil.ensureCxDbExists()
         if ($config.Checkmarx.Installer.Args.contains("BI=1")) {
@@ -552,6 +554,7 @@ if ($isManager) {
     #$cxdb.ExecuteNonQuery
     $log.Info("Updating GIT_EXE_PATH")
     $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = 'C:\Program Files\Git\bin\git.exe' where [key] = 'GIT_EXE_PATH'")
+    
     #$cxdb.ExecuteNonQuery("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = '' where [key] = 'WebServer'")
     #$cxdb.ExecuteNonQuery("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = 'http://localhost' where [key] = 'IdentityAuthority'")
     #$cxdb.ExecuteNonQuery("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = '' where [key] = 'SamlServiceProviderIssuer'")

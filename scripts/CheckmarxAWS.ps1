@@ -171,7 +171,7 @@ END;
 
   DbUtility($connectionString, $username, $password) {
     $this.log.Info("Creating db client with sql server authN")
-    $this.db = [DbClient]::new($connectionString, "master", $True, $username, $password)
+    $this.db = [DbClient]::new($connectionString, "master", $False, $username, $password)
   }
 
   DbUtility($connectionString) {
