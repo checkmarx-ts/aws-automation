@@ -2,16 +2,16 @@
 Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; 
 $ProgressPreference = "SilentlyContinue"
 $InformationPreference = "continue"
-Start-Transcript -Path "C:\provision-checkmarx.log" -Append
+Start-Transcript -Path "C:\90-access-control-migration.log" -Append
 . $PSScriptRoot\CheckmarxAWS.ps1
 $config = Import-PowerShellDataFile -Path C:\checkmarx-config.psd1
 $isManager = ($config.Checkmarx.ComponentType.ToUpper() -eq "MANAGER")
 $isEngine = ($config.Checkmarx.ComponentType.ToUpper() -eq "ENGINE")
-[Logger] $log = [Logger]::new("provision-checkmarx.ps1")
+[Logger] $log = [Logger]::new("90-access-control-migration.ps1")
 $log.Info("-------------------------------------------------------------------------")
 $log.Info("-------------------------------------------------------------------------")
 $log.Info("-------------------------------------------------------------------------")
-$log.Info("provision-checkmarx.ps1 script execution beginning")
+$log.Info("90-access-control-migration.ps1 script execution beginning")
 
 
 $config.Tomcat.Username = [Utility]::TryGetSSMParameter($config.Tomcat.Username)
@@ -552,35 +552,12 @@ if ($isManager) {
     [DbClient] $cxdb = [DbClient]::new($config.MsSql.Host, "CxDB", ($config.MsSql.UseSqlAuth.ToUpper() -eq "FALSE"), $config.MsSql.Username, $config.MsSql.Password)
     #$cxdb.ExecuteSql
     #$cxdb.ExecuteNonQuery
-    if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.GIT_EXE_PATH))) {
-        $log.Info("Updating GIT_EXE_PATH")
-        $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.GIT_EXE_PATH)' where [key] = 'GIT_EXE_PATH'")
-    }
-
-    if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.IdentityAuthority))) {
-        $log.Info("Updating IdentityAuthority")
-        $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.IdentityAuthority)' where [key] = 'IdentityAuthority'")
-    }
-
-    if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.CxARMPolicyUrl))) {
-        $log.Info("Updating CxARMPolicyUrl")
-        $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.CxARMPolicyUrl)' where [key] = 'CxARMPolicyUrl'")
-    }
-
-    if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.CxARMURL))) {
-        $log.Info("Updating CxARMURL")
-        $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.CxARMURL)' where [key] = 'CxARMURL'")
-    }
+    $log.Info("Updating GIT_EXE_PATH")
+    $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = 'C:\Program Files\Git\bin\git.exe' where [key] = 'GIT_EXE_PATH'")
     
-    if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.WebServer))) {
-        $log.Info("Updating WebServer")
-        $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.WebServer)' where [key] = 'WebServer'")
-    }
-        
-    if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.ActiveMessageQueueURL))) {
-        $log.Info("Updating ActiveMessageQueueURL")
-        $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.ActiveMessageQueueURL)' where [key] = 'ActiveMessageQueueURL'")
-    }
+    #$cxdb.ExecuteNonQuery("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = '' where [key] = 'WebServer'")
+    #$cxdb.ExecuteNonQuery("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = 'http://localhost' where [key] = 'IdentityAuthority'")
+    #$cxdb.ExecuteNonQuery("update [CxDB].[dbo].[CxComponentConfiguration] set [value] = '' where [key] = 'SamlServiceProviderIssuer'")
 }
 
 ###############################################################################
