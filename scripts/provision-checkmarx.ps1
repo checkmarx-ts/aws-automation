@@ -547,40 +547,45 @@ if ($isManager) {
 ###############################################################################
 # DB Configuration
 ###############################################################################
-if ($isManager) {
-    $log.Info("Applying DB configuration")
-    [DbClient] $cxdb = [DbClient]::new($config.MsSql.Host, "CxDB", ($config.MsSql.UseSqlAuth.ToUpper() -eq "FALSE"), $config.MsSql.Username, $config.MsSql.Password)
-    #$cxdb.ExecuteSql
-    #$cxdb.ExecuteNonQuery
-    if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.GIT_EXE_PATH))) {
-        $log.Info("Updating GIT_EXE_PATH")
-        $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.GIT_EXE_PATH)' where [key] = 'GIT_EXE_PATH'")
-    }
+try {
+    if ($isManager) {
+        $log.Info("Applying DB configuration")
+        [DbClient] $cxdb = [DbClient]::new($config.MsSql.Host, "CxDB", ($config.MsSql.UseSqlAuth.ToUpper() -eq "FALSE"), $config.MsSql.Username, $config.MsSql.Password)
+        #$cxdb.ExecuteSql
+        #$cxdb.ExecuteNonQuery
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.GIT_EXE_PATH))) {
+            $log.Info("Updating GIT_EXE_PATH")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.GIT_EXE_PATH)' where [key] = 'GIT_EXE_PATH'")
+        }
 
-    if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.IdentityAuthority))) {
-        $log.Info("Updating IdentityAuthority")
-        $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.IdentityAuthority)' where [key] = 'IdentityAuthority'")
-    }
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.IdentityAuthority))) {
+            $log.Info("Updating IdentityAuthority")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.IdentityAuthority)' where [key] = 'IdentityAuthority'")
+        }
 
-    if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.CxARMPolicyUrl))) {
-        $log.Info("Updating CxARMPolicyUrl")
-        $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.CxARMPolicyUrl)' where [key] = 'CxARMPolicyUrl'")
-    }
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.CxARMPolicyUrl))) {
+            $log.Info("Updating CxARMPolicyUrl")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.CxARMPolicyUrl)' where [key] = 'CxARMPolicyUrl'")
+        }
 
-    if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.CxARMURL))) {
-        $log.Info("Updating CxARMURL")
-        $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.CxARMURL)' where [key] = 'CxARMURL'")
-    }
-    
-    if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.WebServer))) {
-        $log.Info("Updating WebServer")
-        $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.WebServer)' where [key] = 'WebServer'")
-    }
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.CxARMURL))) {
+            $log.Info("Updating CxARMURL")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.CxARMURL)' where [key] = 'CxARMURL'")
+        }
         
-    if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.ActiveMessageQueueURL))) {
-        $log.Info("Updating ActiveMessageQueueURL")
-        $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.ActiveMessageQueueURL)' where [key] = 'ActiveMessageQueueURL'")
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.WebServer))) {
+            $log.Info("Updating WebServer")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.WebServer)' where [key] = 'WebServer'")
+        }
+            
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.ActiveMessageQueueURL))) {
+            $log.Info("Updating ActiveMessageQueueURL")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.ActiveMessageQueueURL)' where [key] = 'ActiveMessageQueueURL'")
+        }
     }
+} catch {
+    $log.Warn("An error occured updating the database")
+    $_
 }
 
 ###############################################################################
