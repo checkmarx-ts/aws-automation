@@ -95,6 +95,7 @@ if ($isManager) {
         } else {
             $log.Info("Largest disk is already D drive - no need to remap partitions")
         }
+        sleep 60
         "Complete" | Set-Content "${lockdir}\disk-label.lock"
     }
 }
