@@ -73,6 +73,26 @@ if (!([Utility]::Exists("${lockdir}\systeminfo.lock"))) {
     "completed" | Set-Content "${lockdir}\systeminfo.lock"
 }
 
+###############################################################################
+#  Disk Configuration
+###############################################################################
+if ($isManager) {
+    if (!([Utility]::Exists("${lockdir}\disk-label.lock"))) {
+        $log.Info("Examining disks to set largest to D drive")
+        Get-Partition
+        $initial_data_drive = Get-Partition | Where-Object { $_.DriveLetter -eq "D" }
+        $largest_data_drive = Get-Partition | Where-Object { $_.Size -gt (500 * 1024 * 1024 * 1024) }
+
+        if ($largest_data_drive.DriveLetter -ne "D") {
+            $log.Info("Reconfiguring D drive")
+            Remove-PartitionAccessPath -DiskNumber $initial_data_drive.DiskNumber -PartitionNumber $initial_data_drive.PartitionNumber -AccessPath $($initial_data_drive.DriveLetter + ":")
+            Get-Partition -DiskNumber $largest_data_drive.DiskNumber | Set-Partition -NewDriveLetter D
+            Get-Partition
+        }
+        "Complete" | Set-Content "${lockdir}\disk-label.lock"
+    }
+}
+
 
 ###############################################################################
 #  Domain Join
@@ -600,6 +620,21 @@ try {
         if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.ActiveMessageQueueURL))) {
             $log.Info("Updating ActiveMessageQueueURL")
             $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.ActiveMessageQueueURL)' where [key] = 'ActiveMessageQueueURL'")
+        }
+
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.SOURCE_PATH))) {
+            $log.Info("Updating SOURCE_PATH")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.SOURCE_PATH)' where [key] = 'SOURCE_PATH'")
+        }
+
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.REPORTS_PATH))) {
+            $log.Info("Updating REPORTS_PATH")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.REPORTS_PATH)' where [key] = 'REPORTS_PATH'")
+        }
+
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.EngineScanLogsPath))) {
+            $log.Info("Updating EngineScanLogsPath")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.EngineScanLogsPath)' where [key] = 'EngineScanLogsPath'")
         }
     }
 } catch {
