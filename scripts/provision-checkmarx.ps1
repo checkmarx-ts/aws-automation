@@ -79,7 +79,7 @@ if (!([Utility]::Exists("${lockdir}\systeminfo.lock"))) {
 if ($isManager) {
     if (!([Utility]::Exists("${lockdir}\disk-label.lock"))) {
         $log.Info("Initializing disks with C:\ProgramData\Amazon\EC2-Windows\Launch\Scripts\InitializeDisks.ps1")
-        & C:\ProgramData\Amazon\EC2-Windows\Launch\Scripts\InitializeDisks.ps1
+        iex "C:\ProgramData\Amazon\EC2-Windows\Launch\Scripts\InitializeDisks.ps1"
         $log.Info("Finished running C:\ProgramData\Amazon\EC2-Windows\Launch\Scripts\InitializeDisks.ps1")
         
         $log.Info("Examining disks to set largest to D drive")
@@ -90,12 +90,12 @@ if ($isManager) {
         if ($largest_data_drive.DriveLetter -ne "D") {
             $log.Info("Reconfiguring D drive")
             Remove-PartitionAccessPath -DiskNumber $initial_data_drive.DiskNumber -PartitionNumber $initial_data_drive.PartitionNumber -AccessPath $($initial_data_drive.DriveLetter + ":")
-            Get-Partition -DiskNumber $largest_data_drive.DiskNumber | Set-Partition -NewDriveLetter D
-            Get-Partition
+            Get-Partition -DiskNumber $largest_data_drive.DiskNumber | Set-Partition -NewDriveLetter D            
         } else {
             $log.Info("Largest disk is already D drive - no need to remap partitions")
         }
         sleep 60
+        Get-Partition
         "Complete" | Set-Content "${lockdir}\disk-label.lock"
     }
 }
@@ -143,7 +143,7 @@ if (!([Utility]::Exists("${lockdir}\installer.lock"))) {
     $installer_zip = [DependencyFetcher]::new($config.Checkmarx.Installer.Url).Fetch()  
     $installer_name = $($installer_zip.Replace(".zip", "")).Split("\")[-1]
 
-    $log.Info("Unzipping c:\programdata\checkmarx\artifacts\${installer_zip}")
+    $log.Info("Unzipping ${installer_zip}")
     Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"${installer_zip}`" -aos -o`"C:\programdata\checkmarx\artifacts\${installer_name}`" -p`"$($config.Checkmarx.Installer.ZipKey)`"" -Wait -NoNewWindow -RedirectStandardError .\installer7z.err -RedirectStandardOutput .\installer7z.out
     cat .\installer7z.err
     cat .\installer7z.out
@@ -155,7 +155,7 @@ if (!([Utility]::Exists("${lockdir}\hotfix.lock"))) {
     $hfinstaller = [DependencyFetcher]::new($config.Checkmarx.Hotfix.Url).Fetch()  
     $hotfix_name = $($hfinstaller.Replace(".zip", "")).Split("\")[-1]
 
-    $log.Info("Unzipping c:\programdata\checkmarx\artifacts\${hotfix_zip}")
+    $log.Info("Unzipping ${hotfix_zip}")
     Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"$hfinstaller`" -aos -o`"C:\programdata\checkmarx\artifacts\${hotfix_name}`" -p`"$($config.Checkmarx.Hotfix.ZipKey)`"" -Wait -NoNewWindow -RedirectStandardError .\hotfix7z.err -RedirectStandardOutput .\hotfix7z.out
     cat .\hotfix7z.err
     cat .\hotfix7z.out
