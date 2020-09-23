@@ -544,6 +544,20 @@ if ($isManager) {
     }
 }
 
+if ($isManager) {
+    if (!([String]::IsNullOrEmpty($config.AutomationOptions.AutoUpdateSamlUserNames))) {   
+        $updatescript = [DependencyFetcher]::new($config.AutomationOptions.AutoUpdateSamlUserNames).Fetch()
+        Write-Output "$(get-date) Creating scheduled task for saml username updates"
+        $action = New-ScheduledTaskAction -Execute 'C:\Windows\System32\cmd.exe' -Argument "/C powershell.exe -NoProfile -NonInteractive -NoLogo -ExecutionPolicy Unrestricted -File `"${updatescript}`"" 
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew -DontStopOnIdleEnd -ExecutionTimeLimit 0
+        $restartInterval = new-timespan -minute 3
+        $triggers = @($(New-ScheduledTaskTrigger -AtStartup),$(New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval $restartInterval))
+        $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
+        Register-ScheduledTask -Action $action -Principal $principal -Trigger $triggers -Settings $settings -TaskName "checkmarx-update-saml-usernames" -Description "Adds SAML prefix to user names that don't yet have it"
+        Write-Output "$(get-date) engine registration task has been created"
+    }
+}
+
 ###############################################################################
 # DB Configuration
 ###############################################################################
