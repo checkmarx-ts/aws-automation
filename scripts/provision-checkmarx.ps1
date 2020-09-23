@@ -92,6 +92,8 @@ if ($isManager) {
             Remove-PartitionAccessPath -DiskNumber $initial_data_drive.DiskNumber -PartitionNumber $initial_data_drive.PartitionNumber -AccessPath $($initial_data_drive.DriveLetter + ":")
             Get-Partition -DiskNumber $largest_data_drive.DiskNumber | Set-Partition -NewDriveLetter D
             Get-Partition
+        } else {
+            $log.Info("Largest disk is already D drive - no need to remap partitions")
         }
         "Complete" | Set-Content "${lockdir}\disk-label.lock"
     }
