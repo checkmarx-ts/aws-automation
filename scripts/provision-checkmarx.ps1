@@ -591,6 +591,11 @@ try {
             $log.Info("Updating WebServer")
             $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.WebServer)' where [key] = 'WebServer'")
         }
+
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.SamlServiceProviderIssuer))) {
+            $log.Info("Updating SamlServiceProviderIssuer")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.SamlServiceProviderIssuer)' where [key] = 'SamlServiceProviderIssuer'")
+        }
             
         if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.ActiveMessageQueueURL))) {
             $log.Info("Updating ActiveMessageQueueURL")
