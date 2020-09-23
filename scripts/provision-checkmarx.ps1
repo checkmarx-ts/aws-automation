@@ -79,7 +79,7 @@ if (!([Utility]::Exists("${lockdir}\systeminfo.lock"))) {
 if ($isManager) {
     if (!([Utility]::Exists("${lockdir}\disk-label.lock"))) {
         $log.Info("Initializing disks with C:\ProgramData\Amazon\EC2-Windows\Launch\Scripts\InitializeDisks.ps1")
-        C:\ProgramData\Amazon\EC2-Windows\Launch\Scripts\InitializeDisks.ps1
+        & C:\ProgramData\Amazon\EC2-Windows\Launch\Scripts\InitializeDisks.ps1
         $log.Info("Finished running C:\ProgramData\Amazon\EC2-Windows\Launch\Scripts\InitializeDisks.ps1")
         
         $log.Info("Examining disks to set largest to D drive")
