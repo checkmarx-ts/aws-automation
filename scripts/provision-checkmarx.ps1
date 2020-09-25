@@ -351,6 +351,18 @@ if (!([Utility]::Exists("${lockdir}\cxhfinstall.lock"))) {
     #sleep 900
 }
 
+if ($isManager) {    
+    $log.Info("Installing OSA Quickfix")
+    $osa_quickfix_zip = [DependencyFetcher]::new("https://download.checkmarx.com/8.9.0/HF/8.9.0.QF_OSA.CLI.zip").Fetch() 
+    $osa_quickfix_name = $($osa_quickfix_zip.Replace(".zip", "")).Split("\")[-1]
+    $log.Info("Unzipping ${osa_quickfix_zip}")
+    Start-Process "C:\Program Files\7-Zip\7z.exe" -ArgumentList "x `"${osa_quickfix_zip}`" -aos -o`"C:\programdata\checkmarx\artifacts\${osa_quickfix_name}`" " -Wait -NoNewWindow -RedirectStandardError .\osa_quickfix7z.err -RedirectStandardOutput .\osa_quickfix7z.out
+    cat .\osa_quickfix7z.err
+    cat .\osa_quickfix7z.out
+
+    [BasicInstaller]::new([DependencyFetcher]::new([Utility]::Find("8.9.0.QF_OSA.CLI.exe")).Fetch(),"-cmd").BaseInstall()  
+}
+
 ###############################################################################
 # Post Install Windows Configuration
 #
