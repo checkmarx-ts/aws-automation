@@ -78,6 +78,15 @@ if (!([Utility]::Exists("${lockdir}\systeminfo.lock"))) {
 ###############################################################################
 if ($isManager) {
     if (!([Utility]::Exists("${lockdir}\disk-label.lock"))) {
+
+        $log.Info("Bringing all disks online...")
+        Get-Disk | Where-Object { $_.OperationalStatus -eq "Offline" } | ForEach-Object {
+            $log.Info("Bringing Disk # $($_.Number) online")
+            Set-Disk -Number $_.Number -IsOffline $false 
+            $log.Info("Bringing Disk # $($_.Number) writable")
+            Set-Disk -Number $_.Number -IsReadOnly $false 
+        }
+
         $log.Info("Initializing disks with C:\ProgramData\Amazon\EC2-Windows\Launch\Scripts\InitializeDisks.ps1")
         iex "C:\ProgramData\Amazon\EC2-Windows\Launch\Scripts\InitializeDisks.ps1"
         $log.Info("Finished running C:\ProgramData\Amazon\EC2-Windows\Launch\Scripts\InitializeDisks.ps1")
