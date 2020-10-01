@@ -42,7 +42,7 @@ if ([String]::IsNullOrEmpty($pfxfile) -and [String]::IsNullOrEmpty($domainname) 
 
 if ([String]::IsNullOrEmpty($pfxfile) -and -not [string]::IsNullOrEmpty($pfxpassword)) {
   log "Searching for server.pfx file"
-  $pfxfile = $(Get-ChildItem C:\programdata\checkmarx -Recurse -Filter "server.pfx" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
+  $pfxfile = $(Get-ChildItem C:\ -Recurse -Filter "server.pfx" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
 }
 
 if ([String]::IsNullOrEmpty($domainname)) {
