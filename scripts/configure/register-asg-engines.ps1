@@ -1,22 +1,26 @@
 $config = Import-PowerShellDataFile -Path C:\checkmarx-config.psd1
 . $PSScriptRoot\..\CheckmarxAWS.ps1
 
-$username = $config.Checkmarx.Username
+function Get-JsonSsmParam ([string] $ssmpath) {
+    $json = $(Get-SSMParameter -Name "$ssmpath" -WithDecryption $True).Value
+    $ps_params = $json | ConvertFrom-Json
+    return $ps_params
+}
 
 ###############################################################################
 # Get secrets
 ###############################################################################
 $secrets = ""
 $begin = (Get-Date)
-if ($config.Secrets.Source.ToUpper() -eq "SSM") { 
-    $password = $(Get-SSMParameter -Name "$($config.Aws.SsmPath)/api/password" -WithDecryption $True).Value
-} elseif ($config.Secrets.Source.ToUpper() -eq "SECRETSMANAGER") {
-    $password = (Get-SECSecretValue -SecretId "$config.Aws.SsmPath)/api" | ConvertFrom-Json).password
-} 
+$CxApiParams = Get-JsonSsmParam "$($config.Aws.SsmPath)/api"
+
+$CxApiParams.password
+$CxApiParams.username
+$CxApiParams.url # URL is not used, instead we use the internal ec2 localhostname
 
 $url = get-ec2instancemetadata -Category LocalHostname
 
-[CxEnginesApiClient] $api = [CxEnginesApiClient]::new($username, $password, $url)
+[CxEnginesApiClient] $api = [CxEnginesApiClient]::new($CxApiParams.username, $CxApiParams.password, $url)
 $api.Login()
 
 # Unregister dead engines

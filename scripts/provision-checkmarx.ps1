@@ -13,14 +13,79 @@ $log.Info("---------------------------------------------------------------------
 $log.Info("-------------------------------------------------------------------------")
 $log.Info("provision-checkmarx.ps1 script execution beginning")
 
+function Get-JsonSsmParam ([string] $ssmpath) {
+    $json = $null
+    $ps_params = $null
+    $json = $(Get-SSMParameter -Name "$ssmpath" -WithDecryption $True).Value
+    $ps_params = $json | ConvertFrom-Json
+    return $ps_params
+}
 
-$config.Tomcat.Username = [Utility]::TryGetSSMParameter($config.Tomcat.Username)
-$config.Tomcat.Password = [Utility]::TryGetSSMParameter($config.Tomcat.Password)
-$config.MsSql.Username = [Utility]::TryGetSSMParameter($config.MsSql.Username)
-$config.MsSql.Password = [Utility]::TryGetSSMParameter($config.MsSql.Password)
-$config.Checkmarx.Username = [Utility]::TryGetSSMParameter($config.Checkmarx.Username)
-$config.Checkmarx.Password = [Utility]::TryGetSSMParameter($config.Checkmarx.Password)
+# Fetch the SSM Parameter JSON Objects and load them into powershell
+try {
+    $log.Info("Fetching api ssm json config object")
+    $CxApiParams = Get-JsonSsmParam "$($config.Aws.SsmPath)/api"
+
+    if ([String]::IsNullOrEmpty($CxApiParams.username)) {
+        $log.Info("API username field is null or empty - cannot continue")
+        exit 1
+    }
+    if ([String]::IsNullOrEmpty($CxApiParams.password)) {
+        $log.Info("API password field is null or empty - cannot continue")
+        exit 1
+    }
+    $config.Checkmarx.Username = $CxApiParams.username
+    $config.Checkmarx.Password = $CxApiParams.password
+} catch {
+    $log.Info("An error occured while fetching API parameters from $($config.Aws.SsmPath)/api")
+    $_ 
+    exit 1
+}
+
+try {
+    $log.Info("Fetching sql ssm json config object")
+    $CxSqlParams = Get-JsonSsmParam "$($config.Aws.SsmPath)/sql"
+
+    if ([String]::IsNullOrEmpty($CxSqlParams.username)) {
+        $log.Info("SQL username field is null or empty - cannot continue")
+        exit 1
+    }
+    if ([String]::IsNullOrEmpty($CxSqlParams.password)) {
+        $log.Info("SQL password field is null or empty - cannot continue")
+        exit 1
+    }
+    $config.MsSql.Username = $CxSqlParams.username
+    $config.MsSql.Password = $CxSqlParams.password
+} catch {
+    $log.Info("An error occured while fetching SQL parameters from $($config.Aws.SsmPath)/sql")
+    $_ 
+    exit 1
+}
+
+
+try {
+    $log.Info("Fetching tomcat ssm json config object")
+    $CxTomcatParams = Get-JsonSsmParam "$($config.Aws.SsmPath)/tomcat"
+
+    if ([String]::IsNullOrEmpty($CxTomcatParams.username)) {
+        $log.Info("SQL username field is null or empty - cannot continue")
+        exit 1
+    }
+    if ([String]::IsNullOrEmpty($CxTomcatParams.password)) {
+        $log.Info("SQL password field is null or empty - cannot continue")
+        exit 1
+    }
+    $config.Tomcat.Username = $CxTomcatParams.username
+    $config.Tomcat.Password = $CxTomcatParams.password
+} catch {
+    $log.Info("An error occured while fetching tomcat parameters from $($config.Aws.SsmPath)/tomcat")
+    $_ 
+    exit 1
+}
+
+$log.Info("Attempting to fetch PfxPassword from SSM")
 $config.Ssl.PfxPassword = [Utility]::TryGetSSMParameter($config.Ssl.PfxPassword)
+
 
 ###############################################################################
 #  Create Folders
