@@ -594,16 +594,16 @@ if ($isManager) {
 ###############################################################################
 $config.Ssl.TrustedCerts | ForEach-Object {
     if (!([String]::IsNullOrEmpty($_))) {
+
+        $cert = [DependencyFetcher]::new($_).Fetch()  
         try {
-            $log.Info("Attempting to import $_ into LocaMachine\Root and LocalMachine\TrustedPublisher cert stores")
-            $cert = [DependencyFetcher]::new($_).Fetch()  
+            $log.Info("Attempting to import $_ into LocaMachine\Root and LocalMachine\TrustedPublisher cert stores")            
             Import-Certificate -FilePath  "${cert}" -CertStoreLocation "Cert:\LocalMachine\Root"
             Import-Certificate -FilePath  "${cert}" -CertStoreLocation "Cert:\LocalMachine\TrustedPublisher"            
 
         } catch {
             $log.Warn("An error occured attempting to import $_ into LocaMachine\Root and LocalMachine\TrustedPublisher cert stores")
         }
-
         
         try {
             $cacerts = (gci "C:\Program Files\Checkmarx" -Recurse -Filter "cacerts").FullName
