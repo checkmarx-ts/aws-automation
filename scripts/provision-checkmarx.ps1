@@ -599,6 +599,10 @@ $config.Ssl.TrustedCerts | ForEach-Object {
             $cert = [DependencyFetcher]::new($_).Fetch()  
             Import-Certificate -FilePath  "${cert}" -CertStoreLocation "Cert:\LocalMachine\Root"
             Import-Certificate -FilePath  "${cert}" -CertStoreLocation "Cert:\LocalMachine\TrustedPublisher" 
+
+            $cacerts = (gci "C:\Program Files\Checkmarx" -Recurse -Filter "cacerts").FullName
+            keytool -importcert -file "${cert}" -keystore "${cacerts}" -storepass "changeit" -noprompt
+
         } catch {
             $log.Warn("An error occured attempting to import $_ into LocaMachine\Root and LocalMachine\TrustedPublisher cert stores")
         }
