@@ -81,6 +81,9 @@ log "Importing the certificate to Cert:\LocalMachine\TrustedPublisher"
 Import-Certificate -FilePath c:\cxserver.cer -CertStoreLocation Cert:\LocalMachine\TrustedPublisher | Out-Null
 log "Finished configuring this cert to be trusted locally"
 
+$cacerts = (gci "C:\Program Files\Checkmarx" -Recurse -Filter "cacerts").FullName
+keytool -importcert -file "c:\cxserver.cer" -keystore "${cacerts}" -storepass "changeit" -noprompt
+
 [CxSASTEngineTlsConfigurer]::New($thumbprint).Configure()
 [CxManagerIisTlsConfigurer]::New("Default Web Site", "443", $thumbprint).Configure()
 [CxManagerTlsConfigurer]::New("443", $True, $domainname).Configure()
