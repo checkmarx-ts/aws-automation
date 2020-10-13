@@ -84,7 +84,7 @@ log "Finished configuring this cert to be trusted locally"
 try {
   $cacerts = (gci "C:\Program Files\Checkmarx" -Recurse -Filter "cacerts").FullName
   if (![String]::IsNullOrEmpty($cacerts)) {
-      keytool -importcert -file "c:\cxserver.cer" -keystore "${cacerts}" -storepass "changeit" -noprompt
+      keytool -importcert -file "c:\cxserver.cer" -keystore "${cacerts}" -storepass "changeit" -alias "cxserver.cer" -noprompt
   }
 } catch {
   log "WARN: Could not import cert into cacerts"

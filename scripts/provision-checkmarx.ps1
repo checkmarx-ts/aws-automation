@@ -592,7 +592,9 @@ if ($isManager) {
 ###############################################################################
 # Trusted Certs
 ###############################################################################
+$certalias = 0
 $config.Ssl.TrustedCerts | ForEach-Object {
+    $certalias++
     if (!([String]::IsNullOrEmpty($_))) {
 
         $cert = [DependencyFetcher]::new($_).Fetch()  
@@ -605,12 +607,17 @@ $config.Ssl.TrustedCerts | ForEach-Object {
             $log.Warn("An error occured attempting to import $_ into LocaMachine\Root and LocalMachine\TrustedPublisher cert stores")
         }
         
+        # Import the cert to the java keystore with its filename as alias. If that fails, use a incremental alias.
         try {
             $cacerts = (gci "C:\Program Files\Checkmarx" -Recurse -Filter "cacerts").FullName
             if (![String]::IsNullOrEmpty($cacerts)) {
-                keytool -importcert -file "${cert}" -keystore "${cacerts}" -storepass "changeit" -noprompt
+                $log.Info("Importing ${cert} to ${cacerts} with alias $($_)")
+                keytool -importcert -file "${cert}" -keystore "${cacerts}" -storepass "changeit" -alias "$_" -noprompt
             }
         } catch {
+            if (![String]::IsNullOrEmpty($cacerts)) {
+                keytool -importcert -file "${cert}" -keystore "${cacerts}" -storepass "changeit" -alias "checkmarx_trustedcert_${certalias}" -noprompt
+            }
             $log.Warn("Could not import cert into cacerts")
         }
     }
