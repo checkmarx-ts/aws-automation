@@ -492,6 +492,9 @@ if ($isEngine) {
   New-NetFirewallRule -DisplayName "CxScanEngine HTTP Port 443" -Direction Inbound -LocalPort 443 -Protocol TCP -Action Allow
 }
 
+###############################################################################
+# Run the initial CxARM ETL Sync Job
+###############################################################################
 if (Test-Path -Path "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties") {
     # The db.properties file can have a bug where extra spaces are not trimmed off of the DB_HOST line
     # which can cause connection string concatenation to fail due to a space between the host and :port
@@ -501,10 +504,12 @@ if (Test-Path -Path "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config
     # As a work around we trim the end off of each line in db.properties
     $log.Info("Fixing db.properties")
     (Get-Content "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties") | ForEach-Object {$_.TrimEnd()} | Set-Content "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties"
+    
+    # DB_PORT can not be set in some cases which will cause the ETL Initial Sync silent invocation to fail, so make sure the DB_PORT is configured here. 
+    (Get-Content -path "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties") | % { $_ -Replace '^DB_PORT=$', "DB_PORT=$($config.MsSql.Port)" } |  Set-Content "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties"
   
-    $log.Info("Running the initial ETL sync for CxArm")
-    #Start-Process "C:\Program Files\Checkmarx\Checkmarx Risk Management\ETL\etl_executor.exe" -ArgumentList "-q -console -VSILENT_FLOW=true -VSOURCE_PASS_SILENT=""$($config.MsSql.Password)"" -VTARGET_PASS_SILENT=""$($config.MsSql.Password)"" -Dinstall4j.logToStderr=true -Dinstall4j.debug=true -Dinstall4j.detailStdout=true" -WorkingDirectory "C:\Program Files\Checkmarx\Checkmarx Risk Management\ETL" -NoNewWindow -Wait #sql server auth vars -VSOURCE_PASS_SILENT=${db_password} -VTARGET_PASS_SILENT=${db_password}
-    $log.Info("Finished initial ETL sync")
+} else {
+      $log.Warn("C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties file was NOT found")
   }
 
 try {
@@ -518,7 +523,7 @@ try {
             } else {
                 $log.Info("CxARM initial sync has not run before")        
                 $log.Info("Running the initial ETL sync for CxArm")
-                Start-Process "C:\Program Files\Checkmarx\Checkmarx Risk Management\ETL\etl_executor.exe" -ArgumentList "-q -console -VSILENT_FLOW=true -VSOURCE_PASS_SILENT=""$($config.MsSql.Username)"" -VTARGET_PASS_SILENT=""$($config.MsSql.Password)"" -Dinstall4j.logToStderr=true -Dinstall4j.debug=true -Dinstall4j.detailStdout=true" -WorkingDirectory "C:\Program Files\Checkmarx\Checkmarx Risk Management\ETL" -NoNewWindow -Wait 
+                Start-Process "C:\Program Files\Checkmarx\Checkmarx Risk Management\ETL\etl_executor.exe" -ArgumentList "-q -console -VSILENT_FLOW=true -VSOURCE_PASS_SILENT=""$($config.MsSql.Password)"" -VTARGET_PASS_SILENT=""$($config.MsSql.Password)"" -Dinstall4j.logToStderr=true -Dinstall4j.debug=true -Dinstall4j.detailStdout=true" -WorkingDirectory "C:\Program Files\Checkmarx\Checkmarx Risk Management\ETL" -NoNewWindow -Wait 
                 $log.Info("Finished initial ETL sync")
             }
         } else {
@@ -526,10 +531,14 @@ try {
         }
     }
 } catch {
-    $log.Info("An error occured running ETL sync")
+    $log.Error("An error occured running ETL sync")
     $_
 }
 
+
+###############################################################################
+# Configure AWS Cloudwatch Logs
+###############################################################################
 if ($config.aws.UseCloudwatchLogs) {
     $log.Info("Configuring cloudwatch logs")
     C:\programdata\checkmarx\aws-automation\scripts\configure\configure-cloudwatch-logs.ps1
