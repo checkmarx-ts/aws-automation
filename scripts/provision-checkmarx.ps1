@@ -509,27 +509,26 @@ if (Test-Path -Path "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config
     (Get-Content -path "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties") | % { $_ -Replace '^DB_PORT=$', "DB_PORT=$($config.MsSql.Port)" } |  Set-Content "C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties"
   
 } else {
-      $log.Warn("C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties file was NOT found")
-  }
+      $log.Info("C:\Program Files\Checkmarx\Checkmarx Risk Management\Config\db.properties file was NOT found")
+}
 
-try {
-    if (!([String]::IsNullOrEmpty($config.AutomationOptions.EtlSyncFlag))) {   
-        if ($isManager -and ($config.Checkmarx.Installer.Args.contains("BI=1"))) {
-            [DbClient] $cxdb = [DbClient]::new($config.MsSql.Host, "CxDB", ($config.MsSql.UseSqlAuth.ToUpper() -eq "FALSE"), $config.MsSql.Username, $config.MsSql.Password)
-            $arm_initial_sync_status = $cxdb.ExecuteSql("SELECT * FROM [CxARM].[dbo].[SyncLog] where sync_type = 'INITIAL'")
-            
-            if ($arm_initial_sync_status.state -eq "PASSED") {
-                $log.Info("CxARM Initial Sync already completed")
-            } else {
-                $log.Info("CxARM initial sync has not run before")        
-                $log.Info("Running the initial ETL sync for CxArm")
-                Start-Process "C:\Program Files\Checkmarx\Checkmarx Risk Management\ETL\etl_executor.exe" -ArgumentList "-q -console -VSILENT_FLOW=true -VSOURCE_PASS_SILENT=""$($config.MsSql.Password)"" -VTARGET_PASS_SILENT=""$($config.MsSql.Password)"" -Dinstall4j.logToStderr=true -Dinstall4j.debug=true -Dinstall4j.detailStdout=true" -WorkingDirectory "C:\Program Files\Checkmarx\Checkmarx Risk Management\ETL" -NoNewWindow -Wait 
-                $log.Info("Finished initial ETL sync")
-            }
+try { 
+    if ($isManager -and ($config.Checkmarx.Installer.Args.contains("BI=1"))) {
+        # Check for the initial sync run status from the database
+        [DbClient] $cxdb = [DbClient]::new($config.MsSql.Host, "CxDB", ($config.MsSql.UseSqlAuth.ToUpper() -eq "FALSE"), $config.MsSql.Username, $config.MsSql.Password)
+        $arm_initial_sync_status = $cxdb.ExecuteSql("SELECT * FROM [CxARM].[dbo].[SyncLog] where sync_type = 'INITIAL'")
+        
+        if ($arm_initial_sync_status.state -eq "PASSED") {
+            $log.Info("CxARM Initial Sync already completed")
         } else {
-            $log.Info("CxARM (BI) component not installed - skipping ARM Initial ETL sync check and execution")
+            $log.Info("CxARM initial sync has not run before")        
+            $log.Info("Running the initial ETL sync for CxArm")
+            Start-Process "C:\Program Files\Checkmarx\Checkmarx Risk Management\ETL\etl_executor.exe" -ArgumentList "-q -console -VSILENT_FLOW=true -VSOURCE_PASS_SILENT=""$($config.MsSql.Password)"" -VTARGET_PASS_SILENT=""$($config.MsSql.Password)"" -Dinstall4j.logToStderr=true -Dinstall4j.debug=true -Dinstall4j.detailStdout=true" -WorkingDirectory "C:\Program Files\Checkmarx\Checkmarx Risk Management\ETL" -NoNewWindow -Wait 
+            $log.Info("Finished initial ETL sync")
         }
-    }
+    } else {
+        $log.Info("CxARM (BI) component not installed - skipping ARM Initial ETL sync check and execution")
+    }    
 } catch {
     $log.Error("An error occured running ETL sync")
     $_
