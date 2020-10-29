@@ -797,5 +797,12 @@ Wmic qfe list  | Format-Table
 
 [CxSastServiceController]::new().EnableAll()
 $log.Info("provisioning has completed. Rebooting.")
+
+# Copy the log to installation folder so it can be downloaded by server administrator
+try {
+    Copy-Item C:\provision-checkmarx.log 'C:\Program Files\Checkmarx\Logs\Installation\provision-checkmarx.log'
+} catch {
+    $_
+}
 restart-computer -force 
 sleep 900

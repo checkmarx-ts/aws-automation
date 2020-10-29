@@ -1,3 +1,8 @@
+Start-Transcript -Path "C:\Program Files\Checkmarx\Logs\Automation\register-asg-engines.log" 
+
+# Force TLS 1.2
+Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; 
+
 $config = Import-PowerShellDataFile -Path C:\checkmarx-config.psd1
 . $PSScriptRoot\..\CheckmarxAWS.ps1
 
@@ -14,7 +19,6 @@ $secrets = ""
 $begin = (Get-Date)
 $CxApiParams = Get-JsonSsmParam "$($config.Aws.SsmPath)/api"
 
-$CxApiParams.password
 $CxApiParams.username
 $CxApiParams.url # URL is not used, instead we use the internal ec2 localhostname
 
