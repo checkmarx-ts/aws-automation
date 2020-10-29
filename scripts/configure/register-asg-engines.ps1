@@ -1,3 +1,4 @@
+md -force "C:\Program Files\Checkmarx\Logs\Automation"
 Start-Transcript -Path "C:\Program Files\Checkmarx\Logs\Automation\register-asg-engines.log" 
 
 # Force TLS 1.2

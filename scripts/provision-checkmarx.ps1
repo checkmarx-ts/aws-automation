@@ -716,7 +716,7 @@ if ($isManager) {
         $triggers = @($(New-ScheduledTaskTrigger -AtStartup),$(New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval $restartInterval))
         $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
         Register-ScheduledTask -Action $action -Principal $principal -Trigger $triggers -Settings $settings -TaskName "checkmarx-update-saml-usernames" -Description "Adds SAML prefix to user names that don't yet have it"
-        Write-Output "$(get-date) engine registration task has been created"
+        Write-Output "$(get-date) SAML username update task has been created"
     }
 }
 
