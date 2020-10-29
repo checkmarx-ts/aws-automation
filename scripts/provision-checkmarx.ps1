@@ -636,19 +636,24 @@ $config.Ssl.TrustedCerts | ForEach-Object {
         } catch {
             $log.Warn("An error occured attempting to import $_ into LocaMachine\Root and LocalMachine\TrustedPublisher cert stores")
         }
-        
-        # Import the cert to the java keystore with its filename as alias. If that fails, use a incremental alias.
-        try {
-            $cacerts = (gci "C:\Program Files\Checkmarx" -Recurse -Filter "cacerts").FullName
-            if (![String]::IsNullOrEmpty($cacerts)) {
-                $log.Info("Importing ${cert} to ${cacerts} with alias $($_)")
-                keytool -importcert -file "${cert}" -keystore "${cacerts}" -storepass "changeit" -alias "$_" -noprompt
+
+        $certalias = $_
+
+        gci "C:\Program Files\Checkmarx" -Recurse -Filter "cacerts" | ForEach-Object {
+            $cacerts = $_.FullName 
+            try {
+                if (![String]::IsNullOrEmpty($cacerts)) {
+                    $log.Info("Importing ${cert} to ${cacerts} with alias $($certalias)")
+                    keytool -importcert -file "${cert}" -keystore "${cacerts}" -storepass "changeit" -alias "$certalias" -noprompt
+                    $log.Info("Finished import ${cert} to ${cacerts}")
+                }
+            } catch {
+                 # Import the cert to the java keystore with its filename as alias. If that fails, use a incremental alias.
+                if (![String]::IsNullOrEmpty($cacerts)) {
+                    keytool -importcert -file "${cert}" -keystore "${cacerts}" -storepass "changeit" -alias "checkmarx_trustedcert_${certalias}" -noprompt
+                }
+                $log.Warn("Could not import cert into cacerts")
             }
-        } catch {
-            if (![String]::IsNullOrEmpty($cacerts)) {
-                keytool -importcert -file "${cert}" -keystore "${cacerts}" -storepass "changeit" -alias "checkmarx_trustedcert_${certalias}" -noprompt
-            }
-            $log.Warn("Could not import cert into cacerts")
         }
     }
 }
