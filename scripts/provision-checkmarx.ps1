@@ -545,9 +545,9 @@ try {
             $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.SamlServiceProviderIssuer)' where [key] = 'SamlServiceProviderIssuer'")
         }
             
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.ActiveMessageQueueURL))) {
+        if (!([String]::IsNullOrEmpty($config.ActiveMq.Host))) {
             $log.Info("Updating ActiveMessageQueueURL")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.ActiveMessageQueueURL)' where [key] = 'ActiveMessageQueueURL'")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.ActiveMq.Host)' where [key] = 'ActiveMessageQueueURL'")
         }
 
         if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.SOURCE_PATH))) {
@@ -580,9 +580,9 @@ try {
             $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.NumberOfPromotableScans)' where [key] = 'NumberOfPromotableScans'")
         }
 
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.ActiveMessageQueueURL))) {
+        if (!([String]::IsNullOrEmpty($config.ActiveMq.Host))) {
             $log.Info("Updating ACTIVE_MESSAGE_QUEUE_URL")
-            $cxdb.ExecuteNonQuery("update [Config].[CxEngineConfigurationKeysMeta] set [value] = '$($config.CxComponentConfiguration.ActiveMessageQueueURL)' where [key] = 'ACTIVE_MESSAGE_QUEUE_URL'")
+            $cxdb.ExecuteNonQuery("update [Config].[CxEngineConfigurationKeysMeta] set [value] = '$($config.ActiveMq.Host)' where [key] = 'ACTIVE_MESSAGE_QUEUE_URL'")
         }
 
         if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.WebServer))) {
@@ -591,9 +591,9 @@ try {
             $cxdb.ExecuteNonQuery("update [accesscontrol].[ConfigurationItems] set [value] = '$($config.CxComponentConfiguration.WebServer)' where [key] = 'SERVER_PUBLIC_ORIGIN'")
         }
 
-        if (!([String]::IsNullOrEmpty($config.Amq.Password))) {
+        if (!([String]::IsNullOrEmpty($config.ActiveMq.Password))) {
             $log.Info("Updating AMQ Password")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.Amq.Password)' where [key] = 'MessageQueuePassword'")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.ActiveMq.Password)' where [key] = 'MessageQueuePassword'")
             $cxdb.ExecuteNonQuery("Update [Config].[CxEngineConfigurationKeysMeta] set [DefaultValue] = (SELECT TOP 1 [Value]  FROM [CxDB].[dbo].[CxComponentConfiguration]  where [Key] = 'MessageQueuePassword') where [KeyName]='MESSAGE_QUEUE_PASSWORD'")
         }
     }
