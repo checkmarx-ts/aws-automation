@@ -410,6 +410,52 @@ if ($config.MsSql.UseSqlAuth -eq "True") {
     $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) CXARM_SQLAUTH=1 CXARM_DB_USER=$($config.MsSql.Username) CXARM_DB_PASSWORD=""$($config.MsSql.Password)"""
 }
 
+
+
+
+
+
+#-----------------------------------------------------------------------------------------------------------------------
+# If this is an engine server and NOT a manager, then we need to wait here until the engineConfiguration.json file
+# is uploaded to s3 so we can fetch it from that location and use it in the install. The manager installation creates
+# some data that is required to successfully install the engine server. 
+#
+# The scenario where both an engine and a manager are installed will be handled later in this script. 
+#-----------------------------------------------------------------------------------------------------------------------
+
+if ($isEngine -and (!($isManager))) {
+    Write-Host "$(Get-Date) Waiting for the engineConfiguration.json file to be ready in s3." 
+    $s3object = ""
+    while ([String]::IsNullOrEmpty($s3object)) {        
+        Write-Host "$(Get-Date) Searching s3://$($env:CheckmarxBucket)/$($env:CheckmarxEnvironment)/engineConfiguration.json"
+        try {
+            $s3object = (Get-S3Object -BucketName $env:CheckmarxBucket -Key "$($env:CheckmarxEnvironment)/engineConfiguration.json" | Select -ExpandProperty Key | Sort -Descending | Select -First 1)
+        } catch {
+            Write-Host "ERROR: An exception occured calling Get-S3Object cmdlet. Check IAM Policies and if AWS Powershell is installed"
+            exit 1
+        }
+        sleep 30
+    }    
+
+    Write-Host "Found s3://$env:CheckmarxBucket/$s3object"
+    $filename = $s3object.Substring($s3object.LastIndexOf("/") + 1)
+    try {
+       Write-Host "Downloading from s3://$env:CheckmarxBucket/$s3object"
+       Read-S3Object -BucketName $env:CheckmarxBucket -Key $s3object -File "C:\ProgramData\CheckmarxAutomation\Artifacts\engineConfiguration.json"
+       Write-Host "Finished downloading $filename"
+       $config.Checkmarx.InstallerArgs = "$($config.Checkmarx.InstallerArgs) ENGINE_SETTINGS_FILE=""C:\ProgramData\CheckmarxAutomation\Artifacts\engineConfiguration.json"""
+    } catch {
+       Throw "ERROR: An exception occured calling Read-S3Object cmdlet. Check IAM Policies and if AWS Powershell is installed"
+       exit 1
+    }
+}
+
+
+
+
+
+
+
 if (!([Utility]::Exists("${lockdir}\cxsastinstall.lock"))) {
     # Install Checkmarx and the Hotfix
 
@@ -580,40 +626,6 @@ if ($isManager) {
 
 }
 
-#-----------------------------------------------------------------------------------------------------------------------
-# If this is an engine server and NOT a manager, then we need to wait here until the engineConfiguration.json file
-# is uploaded to s3 so we can fetch it from that location and use it in the install. The manager installation creates
-# some data that is required to successfully install the engine server. 
-#
-# The scenario where both an engine and a manager are installed will be handled later in this script. 
-#-----------------------------------------------------------------------------------------------------------------------
-
-if ($isEngine -and (!($isManager))) {
-    Write-Host "$(Get-Date) Waiting for the engineConfiguration.json file to be ready in s3." 
-    $s3object = ""
-    while ([String]::IsNullOrEmpty($s3object)) {        
-        Write-Host "$(Get-Date) Searching s3://$($env:CheckmarxBucket)/$($env:CheckmarxEnvironment)/engineConfiguration.json"
-        try {
-            $s3object = (Get-S3Object -BucketName $env:CheckmarxBucket -Key "$($env:CheckmarxEnvironment)/engineConfiguration.json" | Select -ExpandProperty Key | Sort -Descending | Select -First 1)
-        } catch {
-            Write-Host "ERROR: An exception occured calling Get-S3Object cmdlet. Check IAM Policies and if AWS Powershell is installed"
-            exit 1
-        }
-        sleep 30
-    }    
-
-    Write-Host "Found s3://$env:CheckmarxBucket/$s3object"
-    $filename = $s3object.Substring($s3object.LastIndexOf("/") + 1)
-    try {
-       Write-Host "Downloading from s3://$env:CheckmarxBucket/$s3object"
-       Read-S3Object -BucketName $env:CheckmarxBucket -Key $s3object -File "C:\ProgramData\CheckmarxAutomation\Artifacts\engineConfiguration.json"
-       Write-Host "Finished downloading $filename"
-       $config.Checkmarx.InstallerArgs = "$($config.Checkmarx.InstallerArgs) ENGINE_SETTINGS_FILE=""C:\ProgramData\CheckmarxAutomation\Artifacts\engineConfiguration.json"""
-    } catch {
-       Throw "ERROR: An exception occured calling Read-S3Object cmdlet. Check IAM Policies and if AWS Powershell is installed"
-       exit 1
-    }
-}
 
 ###############################################################################
 # Configure AWS Cloudwatch Logs
