@@ -520,9 +520,9 @@ try {
             $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.IdentityAuthority)' where [key] = 'IdentityAuthority'")
         }
 
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.CxSASTManagerUri))) {
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.WebServer))) {
             $log.Info("Updating CxSASTManagerUri")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.CxSASTManagerUri)' where [key] = 'CxSASTManagerUri'")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.WebServer)' where [key] = 'CxSASTManagerUri'")
         }
 
         if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.CxARMPolicyUrl))) {
