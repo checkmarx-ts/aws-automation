@@ -493,20 +493,120 @@ if (!([Utility]::Exists("${lockdir}\cxsastinstall.lock"))) {
 if (!([Utility]::Exists("${lockdir}\cxhfinstall.lock"))) {
     #[CxSastInstaller]::new([Utility]::Find("CxSetup.exe"), $config.Checkmarx.Installer.Args).Install()
     [CxSastHotfixInstaller]::new([Utility]::Find("*HF*.exe")).Install()
+    [CxSastServiceController]::new().EnableAll()
     "complete" | Set-Content "${lockdir}\cxhfinstall.lock"
     #restart-computer -Force
     #sleep 900
 }
 
-#Reconfigure Access Control on Manager
-if ($isManager) {
-    Write-Host"$(Get-Date) reconfiguring access control"
-    Start-Installer -command (Find-Artifact -artifact "CxSetup.exe") -installerArguments "/install /quiet RECONFIGURE_ACCESS_CONTROL=1"
-    Write-Host"$(Get-Date) restarting IIS"
-    iisreset
-    Write-Host"$(Get-Date) waking up the identity authority"
-    iwr -uri "https://$($config.Checkmarx.fqdn)/cxrestapi/auth" -UseBasicParsing
+
+
+###############################################################################
+# DB Configuration
+###############################################################################
+try {
+    if ($isManager) {
+        $log.Info("Applying DB configuration")
+        [DbClient] $cxdb = [DbClient]::new($config.MsSql.Host, "CxDB", ($config.MsSql.UseSqlAuth.ToUpper() -eq "FALSE"), $config.MsSql.Username, $config.MsSql.Password)
+        #$cxdb.ExecuteSql
+        #$cxdb.ExecuteNonQuery
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.GIT_EXE_PATH))) {
+            $log.Info("Updating GIT_EXE_PATH")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.GIT_EXE_PATH)' where [key] = 'GIT_EXE_PATH'")
+        }
+
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.IdentityAuthority))) {
+            $log.Info("Updating IdentityAuthority")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.IdentityAuthority)' where [key] = 'IdentityAuthority'")
+        }
+
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.CxSASTManagerUri))) {
+            $log.Info("Updating CxSASTManagerUri")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.CxSASTManagerUri)' where [key] = 'CxSASTManagerUri'")
+        }
+
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.CxARMPolicyUrl))) {
+            $log.Info("Updating CxARMPolicyUrl")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.CxARMPolicyUrl)' where [key] = 'CxARMPolicyUrl'")
+        }
+
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.CxARMURL))) {
+            $log.Info("Updating CxARMURL")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.CxARMURL)' where [key] = 'CxARMURL'")
+        }
+        
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.WebServer))) {
+            $log.Info("Updating WebServer")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.WebServer)' where [key] = 'WebServer'")
+        }
+
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.SamlServiceProviderIssuer))) {
+            $log.Info("Updating SamlServiceProviderIssuer")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.SamlServiceProviderIssuer)' where [key] = 'SamlServiceProviderIssuer'")
+        }
+            
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.ActiveMessageQueueURL))) {
+            $log.Info("Updating ActiveMessageQueueURL")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.ActiveMessageQueueURL)' where [key] = 'ActiveMessageQueueURL'")
+        }
+
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.SOURCE_PATH))) {
+            $log.Info("Updating SOURCE_PATH")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.SOURCE_PATH)' where [key] = 'SOURCE_PATH'")
+        }
+
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.REPORTS_PATH))) {
+            $log.Info("Updating REPORTS_PATH")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.REPORTS_PATH)' where [key] = 'REPORTS_PATH'")
+        }
+
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.EngineScanLogsPath))) {
+            $log.Info("Updating EngineScanLogsPath")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.EngineScanLogsPath)' where [key] = 'EngineScanLogsPath'")
+        }
+
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.EX_SOURCE_PATH))) {
+            $log.Info("Updating EX_SOURCE_PATH")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.EX_SOURCE_PATH)' where [key] = 'EX_SOURCE_PATH'")
+        }
+
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.IsLongPathEnabled))) {
+            $log.Info("Updating IsLongPathEnabled")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.IsLongPathEnabled)' where [key] = 'IsLongPathEnabled'")
+        }
+
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.NumberOfPromotableScans))) {
+            $log.Info("Updating NumberOfPromotableScans")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.NumberOfPromotableScans)' where [key] = 'NumberOfPromotableScans'")
+        }
+
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.ActiveMessageQueueURL))) {
+            $log.Info("Updating ACTIVE_MESSAGE_QUEUE_URL")
+            $cxdb.ExecuteNonQuery("update [Config].[CxEngineConfigurationKeysMeta] set [value] = '$($config.CxComponentConfiguration.ActiveMessageQueueURL)' where [key] = 'ACTIVE_MESSAGE_QUEUE_URL'")
+        }
+
+        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.WebServer))) {
+            # SERVER_PUBLIC_ORIGIN should key off WebServer
+            $log.Info("Updating SERVER_PUBLIC_ORIGIN")
+            $cxdb.ExecuteNonQuery("update [accesscontrol].[ConfigurationItems] set [value] = '$($config.CxComponentConfiguration.WebServer)' where [key] = 'SERVER_PUBLIC_ORIGIN'")
+        }
+
+        if (!([String]::IsNullOrEmpty($config.Amq.Password))) {
+            $log.Info("Updating AMQ Password")
+            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.Amq.Password)' where [key] = 'MessageQueuePassword'")
+            $cxdb.ExecuteNonQuery("Update [Config].[CxEngineConfigurationKeysMeta] set [DefaultValue] = (SELECT TOP 1 [Value]  FROM [CxDB].[dbo].[CxComponentConfiguration]  where [Key] = 'MessageQueuePassword') where [KeyName]='MESSAGE_QUEUE_PASSWORD'")
+        }
+    }
+} catch {
+    $log.Warn("An error occured updating the database")
+    $_
 }
+
+
+
+
+
+
 
 ###############################################################################
 # Post Install Windows Configuration
@@ -603,27 +703,6 @@ try {
 } catch {
     $log.Error("An error occured running ETL sync")
     $_
-}
-
-###############################################################################
-# Generate the Engine Configuration File
-###############################################################################
-if ($isManager) {
-
-    Write-Host "$(Get-Date) Exporting the engineConfiguration.json file"
-    $p = Start-Process "dotnet" -ArgumentList ".\EngineConfigurationExporter.dll" -WorkingDirectory "C:\Program Files\Checkmarx\Tools\Engine Configuration Exporter" -Wait -NoNewWindow -PassThru
-    Write-Host "$(Get-Date) EngineConfigurationExplorter exit code: $($p.ExitCode)"
-    $engineConfigFile = (Get-ChildItem "C:\Program Files\Checkmarx\Tools" -Recurse -Filter "engineConfiguration.json" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
-    Write-Host "$(Get-Date) EngineConfigurationExplorter created config file at: $engineConfigFile)"
-    Write-Host "$(Get-Date) Writing the $engineConfigFile file to s3://$($env:CheckmarxBucket)/$($env:CheckmarxEnvironment)/engineConfiguration.json"
-    write-s3object -bucketname $env:CheckmarxBucket -key "$env:CheckmarxEnvironment/engineConfiguration.json" -file "$engineConfigFile"
-
-    if ($isEngine) {
-        Write-Host "$(Get-Date) Reconfiguring the local engine"
-        $p = Start-Process (Find-Artifact -Artifact "*CxSetup.exe") -ArgumentList "/install /quiet RECONFIGURE_ENGINE=1 ENGINE_SETTINGS_FILE=""$engineConfigFile""" -Wait -NoNewWindow -PassThru
-        Write-Host "$(Get-Date) Reconfigure engine exit code: $($p.ExitCode)"
-    }
-
 }
 
 
@@ -776,6 +855,16 @@ if (!([String]::IsNullOrEmpty($config.Ssl.Url))) {
         $_ 
 
     }
+
+
+    Write-Host "$(Get-Date) restarting services"
+    Stop-Service cx* -Force
+    if ($isManager) {
+        start-service CxSystemManager
+    }
+
+    iisreset
+    start-service cx*
 } 
 
 
@@ -817,139 +906,47 @@ if ($isManager) {
     }
 }
 
-###############################################################################
-# DB Configuration
-###############################################################################
-try {
-    if ($isManager) {
-        $log.Info("Applying DB configuration")
-        [DbClient] $cxdb = [DbClient]::new($config.MsSql.Host, "CxDB", ($config.MsSql.UseSqlAuth.ToUpper() -eq "FALSE"), $config.MsSql.Username, $config.MsSql.Password)
-        #$cxdb.ExecuteSql
-        #$cxdb.ExecuteNonQuery
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.GIT_EXE_PATH))) {
-            $log.Info("Updating GIT_EXE_PATH")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.GIT_EXE_PATH)' where [key] = 'GIT_EXE_PATH'")
-        }
 
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.IdentityAuthority))) {
-            $log.Info("Updating IdentityAuthority")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.IdentityAuthority)' where [key] = 'IdentityAuthority'")
-        }
 
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.CxSASTManagerUri))) {
-            $log.Info("Updating CxSASTManagerUri")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.CxSASTManagerUri)' where [key] = 'CxSASTManagerUri'")
-        }
 
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.CxARMPolicyUrl))) {
-            $log.Info("Updating CxARMPolicyUrl")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.CxARMPolicyUrl)' where [key] = 'CxARMPolicyUrl'")
-        }
-
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.CxARMURL))) {
-            $log.Info("Updating CxARMURL")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.CxARMURL)' where [key] = 'CxARMURL'")
-        }
-        
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.WebServer))) {
-            $log.Info("Updating WebServer")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.WebServer)' where [key] = 'WebServer'")
-        }
-
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.SamlServiceProviderIssuer))) {
-            $log.Info("Updating SamlServiceProviderIssuer")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.SamlServiceProviderIssuer)' where [key] = 'SamlServiceProviderIssuer'")
-        }
-            
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.ActiveMessageQueueURL))) {
-            $log.Info("Updating ActiveMessageQueueURL")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.ActiveMessageQueueURL)' where [key] = 'ActiveMessageQueueURL'")
-        }
-
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.SOURCE_PATH))) {
-            $log.Info("Updating SOURCE_PATH")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.SOURCE_PATH)' where [key] = 'SOURCE_PATH'")
-        }
-
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.REPORTS_PATH))) {
-            $log.Info("Updating REPORTS_PATH")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.REPORTS_PATH)' where [key] = 'REPORTS_PATH'")
-        }
-
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.EngineScanLogsPath))) {
-            $log.Info("Updating EngineScanLogsPath")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.EngineScanLogsPath)' where [key] = 'EngineScanLogsPath'")
-        }
-
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.EX_SOURCE_PATH))) {
-            $log.Info("Updating EX_SOURCE_PATH")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.EX_SOURCE_PATH)' where [key] = 'EX_SOURCE_PATH'")
-        }
-
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.IsLongPathEnabled))) {
-            $log.Info("Updating IsLongPathEnabled")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.IsLongPathEnabled)' where [key] = 'IsLongPathEnabled'")
-        }
-
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.MaxConcurrentJobs))) {
-            $log.Info("Updating MaxConcurrentJobs")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.MaxConcurrentJobs)' where [key] = 'MaxConcurrentJobs'")
-        }
-
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.MaxParallelReports))) {
-            $log.Info("Updating MaxParallelReports")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.MaxParallelReports)' where [key] = 'MaxParallelReports'")
-        }
-
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.NumberOfPromotableScans))) {
-            $log.Info("Updating NumberOfPromotableScans")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.NumberOfPromotableScans)' where [key] = 'NumberOfPromotableScans'")
-        }
-
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.RESULT_ATTRIBUTES_PER_SIMILARITY))) {
-            $log.Info("Updating RESULT_ATTRIBUTES_PER_SIMILARITY")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.RESULT_ATTRIBUTES_PER_SIMILARITY)' where [key] = 'RESULT_ATTRIBUTES_PER_SIMILARITY'")
-        }
-
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.UnzipLocalPath))) {
-            $log.Info("Updating UnzipLocalPath")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.UnzipLocalPath)' where [key] = 'UnzipLocalPath'")
-        }
-
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.MandatoryCommentOnChangeResultStateToNE))) {
-            $log.Info("Updating MandatoryCommentOnChangeResultStateToNE")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.MandatoryCommentOnChangeResultStateToNE)' where [key] = 'MandatoryCommentOnChangeResultStateToNE'")
-        }
-
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.MandatoryCommentOnChangeResultState))) {
-            $log.Info("Updating MandatoryCommentOnChangeResultState")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.CxComponentConfiguration.MandatoryCommentOnChangeResultState)' where [key] = 'MandatoryCommentOnChangeResultState'")
-        }
-
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.ACTIVE_MESSAGE_QUEUE_URL))) {
-            $log.Info("Updating ACTIVE_MESSAGE_QUEUE_URL")
-            $cxdb.ExecuteNonQuery("update [Config].[CxEngineConfigurationKeysMeta] set [value] = '$($config.CxComponentConfiguration.ACTIVE_MESSAGE_QUEUE_URL)' where [key] = 'ACTIVE_MESSAGE_QUEUE_URL'")
-        }
-
-        if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.SERVER_PUBLIC_ORIGIN))) {
-            $log.Info("Updating SERVER_PUBLIC_ORIGIN")
-            $cxdb.ExecuteNonQuery("update [accesscontrol].[ConfigurationItems] set [value] = '$($config.CxComponentConfiguration.SERVER_PUBLIC_ORIGIN)' where [key] = 'SERVER_PUBLIC_ORIGIN'")
-        }
-
-        if (!([String]::IsNullOrEmpty($config.Amq.Password))) {
-            $log.Info("Updating SERVER_PUBLIC_ORIGIN")
-            $cxdb.ExecuteNonQuery("update [dbo].[CxComponentConfiguration] set [value] = '$($config.Amq.Password)' where [key] = 'MessageQueuePassword'")
-        }
-
-        if (!([String]::IsNullOrEmpty($config.Amq.Password))) {
-            $log.Info("Updating SERVER_PUBLIC_ORIGIN")
-            $cxdb.ExecuteNonQuery("Update [Config].[CxEngineConfigurationKeysMeta] set [DefaultValue] = (SELECT TOP 1 [Value]  FROM [CxDB].[dbo].[CxComponentConfiguration]  where [Key] = 'MessageQueuePassword') where [KeyName]='MESSAGE_QUEUE_PASSWORD'")
-        }
-    }
-} catch {
-    $log.Warn("An error occured updating the database")
-    $_
+#Reconfigure Access Control on Manager
+if ($isManager) {
+    Write-Host"$(Get-Date) reconfiguring access control"
+    Start-Installer -command (Find-Artifact -artifact "CxSetup.exe") -installerArguments "/install /quiet RECONFIGURE_ACCESS_CONTROL=1"
+    Write-Host"$(Get-Date) restarting IIS"
+    iisreset
+    Write-Host"$(Get-Date) waking up the identity authority"
+    iwr -uri "https://$($config.Checkmarx.fqdn)/cxrestapi/auth" -UseBasicParsing
 }
+
+
+
+
+###############################################################################
+# Generate the Engine Configuration File
+###############################################################################
+if ($isManager) {
+
+    Write-Host "$(Get-Date) Exporting the engineConfiguration.json file"
+    $p = Start-Process "dotnet" -ArgumentList ".\EngineConfigurationExporter.dll" -WorkingDirectory "C:\Program Files\Checkmarx\Tools\Engine Configuration Exporter" -Wait -NoNewWindow -PassThru
+    Write-Host "$(Get-Date) EngineConfigurationExplorter exit code: $($p.ExitCode)"
+    $engineConfigFile = (Get-ChildItem "C:\Program Files\Checkmarx\Tools" -Recurse -Filter "engineConfiguration.json" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
+    Write-Host "$(Get-Date) EngineConfigurationExplorter created config file at: $engineConfigFile)"
+    Write-Host "$(Get-Date) Writing the $engineConfigFile file to s3://$($env:CheckmarxBucket)/$($env:CheckmarxEnvironment)/engineConfiguration.json"
+    write-s3object -bucketname $env:CheckmarxBucket -key "$env:CheckmarxEnvironment/engineConfiguration.json" -file "$engineConfigFile"
+
+    if ($isEngine) {
+        Write-Host "$(Get-Date) Reconfiguring the local engine"
+        $p = Start-Process (Find-Artifact -Artifact "*CxSetup.exe") -ArgumentList "/install /quiet RECONFIGURE_ENGINE=1 ENGINE_SETTINGS_FILE=""$engineConfigFile""" -Wait -NoNewWindow -PassThru
+        Write-Host "$(Get-Date) Reconfigure engine exit code: $($p.ExitCode)"
+    }
+
+}
+
+
+
+
+
 
 ###############################################################################
 #  Debug Info
@@ -962,7 +959,7 @@ try {
 "@ | Write-Output
 Wmic qfe list  | Format-Table
 
-[CxSastServiceController]::new().EnableAll()
+
 $log.Info("provisioning has completed. Rebooting.")
 
 # Copy the log to installation folder so it can be downloaded by server administrator
