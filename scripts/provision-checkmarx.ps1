@@ -412,8 +412,33 @@ if ($config.MsSql.UseSqlAuth -eq "True") {
 
 if (!([Utility]::Exists("${lockdir}\cxsastinstall.lock"))) {
     # Install Checkmarx and the Hotfix
+
+
+    if ($config.Checkmarx.Installer.Args.ToUpper().Contains(("BI=1"))) {
+
+        # When the BI component is installed on an existing database the GUI installer
+        # will not allow you to continue. The authoritative way to do this is to install
+        # everything except BI, then run the installer again to add the BI component.
+        # We can detect this scenario of BI=1 in the install args and run the install args
+        # twice - the first time we set BI=0, then rerun with the full install args to 
+        # complete the installation. 
+
+        Write-Host "$(Get-Date) Performing CxSAST install in 2 phases"
+        $temporary_install_args = $config.Checkmarx.Installer.Args.Replace("BI=1", "BI=0")
+
+        Write-Host "$(Get-Date) Installing CxSAST without BI=1 first"
+        [BasicInstaller]::new([Utility]::Find("CxSetup.exe"), $temporary_install_args).BaseInstall()
+        [CxSastServiceController]::new().DisableAll()
+    }
+
+    Write-Host "$(Get-Date) Installing CxSAST with specified install args"
+
+
     [BasicInstaller]::new([Utility]::Find("CxSetup.exe"), $config.Checkmarx.Installer.Args).BaseInstall()
     [CxSastServiceController]::new().DisableAll()
+    
+    
+    
     "complete" | Set-Content "${lockdir}\cxsastinstall.lock"
     restart-computer -Force
     sleep 900
