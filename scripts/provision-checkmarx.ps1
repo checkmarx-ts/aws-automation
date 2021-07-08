@@ -254,7 +254,9 @@ if (!([Utility]::Exists("${lockdir}\cpp2010.lock"))) {
 
 if (!([Utility]::Exists("${lockdir}\cpp2015.lock"))) {
     # Only install if it was unzipped from the installation package
-    $cpp2015 = $(Get-ChildItem "$($env:CheckmarxHome)" -Recurse -Filter "vc_redist2015.x64.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)  
+    #$cpp2015 = $(Get-ChildItem "$($env:CheckmarxHome)" -Recurse -Filter "vc_redist2015.x64.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)  
+    #use 9.3 version c++
+    $cpp2015 = $(Get-ChildItem "$($env:CheckmarxHome)" -Recurse -Filter "VC_redist.x64.exe" | Sort -Descending | Select -First 1 -ExpandProperty FullName)  
     if (!([String]::IsNullOrEmpty($cpp2015))) {
         [Cpp2015RedistInstaller]::new([DependencyFetcher]::new($cpp2015).Fetch()).Install()
     }
