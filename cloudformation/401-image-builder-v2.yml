@@ -1,0 +1,309 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create Checkmarx EC2 Image Builder Resources
+
+Parameters: 
+  pS3Bucket:
+    Description: The s3 bucket with dependencies in it
+    Default: checkmarx-stokes
+    Type: String
+  pEngineBaseAmi:
+    Description: Base image to build engine servers 
+    Default: arn:aws:imagebuilder:us-east-2:aws:image/windows-server-2016-english-core-base-x86/x.x.x
+    Type: String
+  pManagerBaseAmi:
+    Description: Base image to build manager servers 
+    Default: arn:aws:imagebuilder:us-east-2:aws:image/windows-server-2016-english-full-base-x86/x.x.x
+    Type: String
+  pRemoteDesktopCIDR:
+    Type: String
+    Description: CIDR address of clients to connect via RDP
+    Default: 0.0.0.0/0
+  pVpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC to build in 
+    Default: vpc-0831354559b3b7a2b
+  pBuilderSubnet:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet id where AMIs will be built 
+    Default: subnet-0d39e07a38c8556c2
+  pBuilderKeypair:
+    Type: String
+    Description: Keypair used to build the images
+    Default: stokes
+  pAmiDistributionRegion:
+    Type: String
+    Description: Region into which you want to distribute your AMIs once built
+    Default: us-east-2
+
+Resources:
+
+####################################
+#
+# EC2 Image Builder Security Groups    
+#
+####################################
+
+  rImageBuilderSGv2:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: Checkmarx EC2 Image Builder SGv2
+      GroupDescription: A security group for use by EC2 Image Builder Service to build Checkmarx AMIs
+      VpcId: !Ref pVpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3389
+          ToPort: 3389
+          CidrIp: !Ref pRemoteDesktopCIDR
+        - IpProtocol: udp
+          FromPort: 3389
+          ToPort: 3389
+          CidrIp: !Ref pRemoteDesktopCIDR
+
+
+####################################
+#
+# EC2 Image Builder Common Components    
+#
+####################################
+  ibBootStrap:
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Bootstrap some tools and build scripts
+      Name: checkmarx-bootstrap
+      Platform: Windows
+      Version: 1.0.0
+      Data: !Sub |
+        name: bootstrap
+        description: bootstraps tools and build scripts
+        schemaVersion: 1.0
+        phases: 
+          - name: build
+            steps:
+              - name: bootstrap
+                action: ExecutePowerShell
+                timeoutSeconds: 600
+                inputs:
+                  commands:
+                    - | 
+                      Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; 
+                      $ProgressPreference = "SilentlyContinue"
+                      [System.Environment]::SetEnvironmentVariable('CheckmarxBucket', 'checkmarx-stokes', [System.EnvironmentVariableTarget]::Machine)
+                      md -force "c:\programdata\checkmarx\automation\dependencies"  
+                      md -force "c:\programdata\checkmarx\automation\installers"  
+                      $expectedPath = "c:\programdata\checkmarx\automation\dependencies"
+                      $git = (Invoke-RestMethod -Method GET -Uri "https://api.github.com/repos/git-for-windows/git/releases/latest" -UseBasicParsing).assets | Where-Object { $_.name -match "Git-\d\.\d\d\.\d-64-bit\.exe" }
+                      Invoke-WebRequest -UseBasicParsing -Uri "$($git.browser_download_url)" -OutFile (Join-Path $expectedPath $git.name)
+                      $installer = (Join-Path $expectedPath $git.name)
+                      Start-Process "$installer" -ArgumentList "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS" -Wait -NoNewWindow 
+                      cd c:\programdata\checkmarx\automation
+                      Start-Process "C:\Program Files\Git\bin\git.exe" -ArgumentList "clone https://github.com/checkmarx-ts/aws-automation.git c:\programdata\checkmarx\aws-automation" -Wait -NoNewWindow
+                      Start-Process "C:\Program Files\Git\bin\git.exe" -ArgumentList "checkout development" -Wait -NoNewWindow -WorkingDirectory "C:\programdata\checkmarx\aws-automation"
+
+  ibcSast89HF24:
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Builds Checkmarx CxSAST 8.9 HF24 Manager
+      Name: sast89hf24manager
+      Platform: Windows
+      Version: 1.0.0
+      Data: !Sub |
+        name: sast89hf24manager
+        description: Builds Checkmarx CxSAST 8.9 HF24 Manager
+        schemaVersion: 1.0
+        phases:
+          - name: build
+            steps:
+              - name: DOTNET
+                action: ExecutePowerShell
+                timeoutSeconds: 600
+                inputs:
+                  commands:
+                    - C:\programdata\checkmarx\aws-automation\scripts\install\common\install-dotnetframework.ps1
+              - name: REBOOT1
+                action: Reboot 
+              - name: DEPENDENCIES
+                action: ExecutePowerShell
+                timeoutSeconds: 1200
+                inputs:
+                  commands:
+                    - C:\programdata\checkmarx\aws-automation\scripts\install\common\install-cpp2010sp1.ps1
+                    - C:\programdata\checkmarx\aws-automation\scripts\install\common\install-java.ps1
+                    - C:\programdata\checkmarx\aws-automation\scripts\install\common\install-git.ps1
+                    - C:\programdata\checkmarx\aws-automation\scripts\install\common\install-iis.ps1
+              - name: REBOOT2
+                action: Reboot 
+              - name: SQL
+                action: ExecutePowerShell
+                timeoutSeconds: 1200
+                inputs:
+                  commands:  
+                    - C:\programdata\checkmarx\aws-automation\scripts\install\common\install-sqlserver-2012-express-sp2.ps1  
+              - name: REBOOT3
+                action: Reboot                          
+              - name: SAST
+                action: ExecutePowerShell
+                timeoutSeconds: 1200
+                inputs:
+                  commands:
+                    - C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
+                    - C:\programdata\checkmarx\aws-automation\scripts\configure\configure-windows-defender.ps1
+                    - C:\programdata\checkmarx\aws-automation\scripts\install\cxsast\install-cxsast89.ps1 -ACCEPT_EULA -MANAGER -WEB -ENGINE
+                    - C:\programdata\checkmarx\aws-automation\scripts\configure\configure-iis-hardening.ps1
+
+  ibcSast90:
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Builds Checkmarx CxSAST 9.0 Manager
+      Name: sast90hf00manager
+      Platform: Windows
+      Version: 1.0.0
+      Data: !Sub |
+        name: sast90hf00manager
+        description: Builds Checkmarx CxSAST 9.0 Manager
+        schemaVersion: 1.0
+        phases:
+          - name: build
+            steps:
+              - name: DOTNET
+                action: ExecutePowerShell
+                timeoutSeconds: 600
+                inputs:
+                  commands:
+                    - C:\programdata\checkmarx\aws-automation\scripts\install\common\install-dotnetframework.ps1
+              - name: REBOOT1
+                action: Reboot 
+              - name: DEPENDENCIES
+                action: ExecutePowerShell
+                timeoutSeconds: 1500
+                inputs:
+                  commands:
+                    - C:\programdata\checkmarx\aws-automation\scripts\install\common\install-cpp2010sp1.ps1
+                    - C:\programdata\checkmarx\aws-automation\scripts\install\common\install-cpp2015update3rc.ps1                    
+                    - C:\programdata\checkmarx\aws-automation\scripts\install\common\install-java.ps1
+                    - C:\programdata\checkmarx\aws-automation\scripts\install\common\install-git.ps1
+                    - C:\programdata\checkmarx\aws-automation\scripts\install\common\install-iis.ps1
+                    - C:\programdata\checkmarx\aws-automation\scripts\install\common\install-dotnetcore-hosting-2.1.16-win.ps1                    
+              - name: REBOOT2
+                action: Reboot 
+              - name: SQL
+                action: ExecutePowerShell
+                timeoutSeconds: 1200
+                inputs:
+                  commands:  
+                    - C:\programdata\checkmarx\aws-automation\scripts\install\common\install-sqlserver-2012-express-sp2.ps1  
+              - name: REBOOT3
+                action: Reboot                          
+              - name: SAST
+                action: ExecutePowerShell
+                timeoutSeconds: 1200
+                inputs:
+                  commands:
+                    - C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
+                    - C:\programdata\checkmarx\aws-automation\scripts\configure\configure-windows-defender.ps1
+                    - C:\programdata\checkmarx\aws-automation\scripts\install\cxsast\install-cxsast90.ps1 -ACCEPT_EULA -MANAGER -WEB -ENGINE
+                    - C:\programdata\checkmarx\aws-automation\scripts\configure\configure-iis-hardening.ps1
+   
+                
+####################################
+# 8.9 HF24 Build    
+####################################     
+  ibrManagerV89hf24v2:
+    Type: AWS::ImageBuilder::ImageRecipe
+    Properties: 
+      Components: 
+        - ComponentArn: !Ref ibBootStrap
+        - ComponentArn: !Ref ibcSast89HF24
+      Description: Build a Checkmarx CxSAST Manager Server v8.9 HF24v2
+      Name: Checkmarx CxSAST Manager v89 HF24v2
+      ParentImage: !Ref pManagerBaseAmi
+      Version: 1.0.0     
+
+  ibManagerV89hf24Distrovs:    
+    Type: AWS::ImageBuilder::DistributionConfiguration
+    Properties: 
+      Name: sast89hf24managerdistrov2
+      Distributions:         
+        - Region: !Ref pAmiDistributionRegion
+          AmiDistributionConfiguration:
+            Name: 'Checkmarx CxSAST Manager Server v89 HF24 v2v2 {{ imagebuilder:buildDate }}'
+            Description: 'Checkmarx CxSAST Manager Server v8.9 HF24 v2'
+            AmiTags:
+              checkmarx-component: manager
+              checkmarx-version: 8.9
+              checkmarx-hotfix: 24
+              imagebuilder-buildDate: '{{ imagebuilder:buildDate }}'
+              imagebuilder-buildVersion: '{{ imagebuilder:buildVersion }}'
+
+  ibpCxSast89hf24Manager:
+    Type: AWS::ImageBuilder::ImagePipeline
+    Properties: 
+      Description: Checmarx CxSAST 8.9 HF24 Managerv2
+      DistributionConfigurationArn: !Ref ibManagerV89hf24Distrovs
+      ImageRecipeArn: !Ref ibrManagerV89hf24v2
+      InfrastructureConfigurationArn: !Ref ibInfraManagerServerv2
+      Name: Checkmarx CxSAST v89 HF24 Managerv2
+
+####################################
+# 9.0 Build
+####################################
+  ibrManagerV90hf00v2new:
+    Type: AWS::ImageBuilder::ImageRecipe
+    Properties: 
+      Components: 
+        - ComponentArn: !Ref ibBootStrap
+        - ComponentArn: !Ref ibcSast90
+      Description: Build a Checkmarx CxSAST Manager Server v9.0v2
+      Name: Checkmarx CxSAST Manager v90v2
+      ParentImage: !Ref pManagerBaseAmi
+      Version: 1.0.0    
+
+  ibManagerV90Distrov2:    
+    Type: AWS::ImageBuilder::DistributionConfiguration
+    Properties: 
+      Name: sast90managerdistro
+      Distributions: 
+        - Region: !Ref pAmiDistributionRegion
+          AmiDistributionConfiguration:
+            Name: 'Checkmarx CxSAST Manager Server v90v2 {{ imagebuilder:buildDate }}'
+            Description: 'Checkmarx CxSAST Manager Server v90v2'
+            AmiTags:
+              checkmarx-component: manager
+              checkmarx-version: 9.0
+              checkmarx-hotfix: none
+              imagebuilder-buildDate: '{{ imagebuilder:buildDate }}'
+              imagebuilder-buildVersion: '{{ imagebuilder:buildVersion }}'
+
+  ibpCxSast90hf00Manager:
+    Type: AWS::ImageBuilder::ImagePipeline
+    Properties: 
+      Description: Checmarx CxSAST 90 HFna Manager
+      DistributionConfigurationArn: !Ref ibManagerV90Distrov2
+      ImageRecipeArn: !Ref ibrManagerV90hf00v2new
+      InfrastructureConfigurationArn: !Ref ibInfraManagerServerv2
+      Name: Checkmarx CxSAST v90 Managerv22
+
+     
+
+####################################
+#
+# EC2 Image Builder Infrastructure Configurations    
+#
+####################################
+      
+  ibInfraManagerServerv2:  
+    Type: AWS::ImageBuilder::InfrastructureConfiguration
+    Properties: 
+      InstanceProfileName: checkmarx-cxsast-manager
+      InstanceTypes: 
+        - c5.2xlarge
+      KeyPair: !Ref pBuilderKeypair
+      Logging: 
+        S3Logs:
+          S3BucketName: !Ref pS3Bucket
+          S3KeyPrefix: "imagebuilder"
+      Name: ManagerServerv2
+      SecurityGroupIds: 
+        - !Ref rImageBuilderSGv2
+      SubnetId: !Ref pBuilderSubnet   
+      TerminateInstanceOnFailure: True   

@@ -1,0 +1,336 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Create base Checkmarx AWS Infrastructure like Security Groups and IAM Roles
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: VPC Network Security Settings
+      Parameters:
+      - pCxSASTUsersCIDR
+      - pVPCID
+      - pParameterStoreKey
+      - pCheckmarxBucket
+    ParameterLabels:
+      pCxSASTUsersCIDR:
+        default: Checkmarx users CIDR Source
+      pVPCID:
+        default: VPC ID
+      pParameterStoreKey:
+        default: ARN of SSM Parameter Store decryption key
+      pCheckmarxBucket:
+        default: ARN of checkmarx s3 bucket    
+
+Parameters:
+  pCxSASTUsersCIDR:
+    Type: String
+    Description: CIDR address of clients to connect via browser, api, plugin, etc. 
+    Default: 0.0.0.0/0
+  pVPCID:
+    Description: >
+      The VPC ID in which to create resources
+    Type: AWS::EC2::VPC::Id
+  pParameterStoreKey:
+    Description: The ARN to the KMS key used to decrypt SSM Parameter Store values. Find Customer Master Key with aws kms describe-key --key-id alias/aws/ssm
+    Type: String
+    Default: arn:aws:kms:region:account:key/keyid
+  pCheckmarxBucket:
+    Description: The ARN to the s3 bucket you're using for Checkmarx dependencies
+    Type: String
+    Default: arn:aws:s3:::bucketname
+
+Resources:
+  ##########################
+  # Security Groups 
+  ##########################
+
+  rCxSASTManagerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: CxSAST Manager
+      GroupDescription: Checkmarx CxSAST Manager
+      VpcId: !Ref pVPCID
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref pCxSASTUsersCIDR
+        - IpProtocol: tcp
+          FromPort: 8443
+          ToPort: 8443
+          CidrIp: !Ref pCxSASTUsersCIDR
+        # Enable 80, 8080 for ssl-less debugging/troubleshooting
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref pCxSASTUsersCIDR
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: !Ref pCxSASTUsersCIDR
+
+
+  rCxSASTEngineSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: CxSAST Engine
+      GroupDescription: Checkmarx CxSAST Engine
+      VpcId: !Ref pVPCID
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref rCxSASTManagerSG
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref rCxSASTManagerSG
+
+  ##########################
+  # IAM Roles, Policies
+  ##########################
+  rCxManagerIAMRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Description: "IAM Role for Checkmarx CxSAST Manager"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore      # For Using SSM Functionality / EC2-Image Builder
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy       # For Cloudwatch Logs 
+        - arn:aws:iam::aws:policy/EC2InstanceProfileForImageBuilder # For EC2-Image Builder
+        - arn:aws:iam::aws:policy/AmazonSSMDirectoryServiceAccess   # For EC2-Domain Join
+      RoleName: checkmarx-cxsast-manager
+
+  rCxManagerInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      InstanceProfileName: checkmarx-cxsast-manager
+      Path: "/"
+      Roles: 
+        - Ref: rCxManagerIAMRole
+
+  rCxEngineIAMRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Description: "IAM Role for Checkmarx CxSAST Engine"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore      # For Using SSM Functionality / EC2-Image Builder
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy       # For Cloudwatch Logs 
+        - arn:aws:iam::aws:policy/EC2InstanceProfileForImageBuilder # For EC2-Image Builder
+        - arn:aws:iam::aws:policy/AmazonSSMDirectoryServiceAccess   # For EC2-Domain Join
+      RoleName: checkmarx-cxsast-engine
+
+  rCxEngineInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      InstanceProfileName: checkmarx-cxsast-engine
+      Path: "/"
+      Roles: 
+        - Ref: rCxEngineIAMRole
+
+  rCxDependenciesPolicy:
+    Type: AWS::IAM::Policy 
+    Properties:
+      PolicyName: checkmarx-dependency-download
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow 
+            Action:
+              - "s3:GetObject"
+              - "s3:ListBucket"
+              - "s3:PutObject"
+            Resource: !Join [ "", [ !Ref pCheckmarxBucket, "*" ] ]
+      Roles:
+        - !Ref rCxManagerIAMRole
+        - !Ref rCxEngineIAMRole
+
+
+  # This custom policy is used to allow Checkmarx servers to fetch SSM Parameters via their ec2 instance role.
+  rCxSsmInstallationPolicy:
+    Type: AWS::IAM::Policy 
+    Properties:
+      PolicyName: checkmarx-ssm-parameterstore
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow 
+            Action:
+              - "ssm:DescribeParameters"
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - "ssm:GetParameters"
+            Resource: 'arn:aws:ssm:::parameter/checkmarx/*'
+          - Effect: Allow
+            Action:
+              - "kms:Decrypt"
+            Resource: !Ref pParameterStoreKey 
+      Roles:
+        - !Ref rCxManagerIAMRole
+        - !Ref rCxEngineIAMRole
+
+  # This custom policy is used to allow Checkmarx servers to use the Posh-ACME Route53 Plugin for letsencrypt.org
+  # see https://github.com/rmbolger/Posh-ACME/blob/master/Posh-ACME/DnsPlugins/Route53-Readme.md
+  # It is also used by configure-route53-recordset.ps1 to allow EC2 instances to dynamically upsert thier 
+  # dns records in Route 53 based on a tag: dns
+  rR53ACMEChallenge:
+    Type: AWS::IAM::Policy 
+    Properties:
+      PolicyName: checkmarx-posh-acme-r53-zone-editor
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow 
+            Action:
+              - "route53:ListHostedZones"
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - "route53:GetHostedZone"
+              - "route53:ListResourceRecordSets"
+              - "route53:ChangeResourceRecordSets"
+            Resource: 'arn:aws:route53:::hostedzone/*'
+      Roles:
+        - !Ref rCxManagerIAMRole
+
+  # This custom policy is used to allow Checkmarx manager servers to manage dynamic engines. 
+  CxDynEnginesPolicy:
+    Type: AWS::IAM::Policy 
+    Properties:
+      PolicyName: checkmarx-dynamic-engines
+      PolicyDocument:
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Sid": "ActionsRequiredtoRunInstancesInVPC",
+                    "Effect": "Allow",
+                    "Action": [
+                        "iam:PassRole",
+                        "ec2:RunInstances"
+                    ],
+                    "Resource": [
+                        "arn:aws:ec2:*:*:security-group/*",
+                        "arn:aws:ec2:*:*:instance/*",
+                        "arn:aws:ec2:*:*:key-pair/*",
+                        "arn:aws:ec2:*:*:volume/*",
+                        "arn:aws:ec2:*:*:subnet/subnet-*",
+                        "arn:aws:ec2:*:*:network-interface/*",
+                        "arn:aws:iam:::role/*"
+                    ]
+                },
+                {
+                    "Sid": "LaunchingEC2withTaggedAMIs",
+                    "Effect": "Allow",
+                    "Action": "ec2:RunInstances",
+                    "Resource": "arn:aws:ec2:*::image/ami-*",
+                    "Condition": {
+                        "StringEquals": {
+                            "ec2:ResourceTag/checkmarx:component": "engine"
+                        }
+                    }
+                },
+                {
+                    "Sid": "ApplyTagsOnlyOnLaunch",
+                    "Effect": "Allow",
+                    "Action": "ec2:CreateTags",
+                    "Resource": "arn:aws:ec2:*:*:instance/*",
+                    "Condition": {
+                        "StringEquals": {
+                            "ec2:CreateAction": "RunInstances"
+                        }
+                    }
+                },
+                {
+                    "Sid": "AllowTagUpdates",
+                    "Effect": "Allow",
+                    "Action": "ec2:CreateTags",
+                    "Resource": "arn:aws:ec2:*:*:instance/*",
+                    "Condition": {
+                        "ForAllValues:StringEquals": {
+                            "ec2:ResourceTag/cx-role": "ENGINE",
+                            "aws:TagKeys": [
+                                "cx-scan-id",
+                                "cx-engine-id"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "Sid": "ActionsRequiredToStartStopTerminate",
+                    "Effect": "Allow",
+                    "Action": [
+                        "ec2:StartInstances",
+                        "ec2:StopInstances",
+                        "ec2:TerminateInstances"
+                    ],
+                    "Resource": "arn:aws:ec2:*:*:instance/*",
+                    "Condition": {
+                        "ForAllValues:StringEquals": {
+                            "ec2:ResourceTag/cx-role": "ENGINE"
+                        }
+                    }
+                },
+                {
+                    "Sid": "ReadOnlyAccess",
+                    "Effect": "Allow",
+                    "Action": [
+                        "ssm:GetAutomationExecution",
+                        "ec2:DescribeInstances"
+                    ],
+                    "Resource": "*"
+                },
+                {
+                    "Sid": "AutomationDocRequiredToStopInstances",
+                    "Effect": "Allow",
+                    "Action": "ssm:StartAutomationExecution",
+                    "Resource": "arn:aws:ssm:::::automation-definition/AWS-StopEC2Instance:$DEFAULT"
+                }
+            ]
+        }
+      Roles:
+        - !Ref rCxManagerIAMRole
+
+Outputs:
+  ManagerIamRole:
+    Description: CxManager server IAM Role
+    Value: !Ref rCxManagerIAMRole
+  ManagerIamInstanceProfile:
+    Description: CxManager server IAM Instance Profile
+    Value: !Ref rCxManagerInstanceProfile    
+  ManagerSecurityGroupId:
+    Description: CxManager security group
+    Value: !Ref rCxSASTManagerSG
+
+  EngineIamRole:
+    Description: CxEngine server IAM Role
+    Value: !Ref rCxEngineIAMRole
+  EngineIamInstanceProfile:
+    Description: CxEngine server IAM Instance Profile
+    Value: !Ref rCxEngineInstanceProfile        
+  EngineSecurityGroupId:
+    Description: CxEngine security group
+    Value: !Ref rCxSASTEngineSG        
+
+
+
+

@@ -1,0 +1,10 @@
+---
+- name:  Install Adoptopenjdk 8
+  script:  ../../../../scripts/install/common/install-java.ps1
+  when: not use_chocolatey
+
+- name: Install Adoptopenjdk 8
+  win_chocolatey:
+    name: adoptopenjdk8
+    state: present
+  when: use_chocolatey

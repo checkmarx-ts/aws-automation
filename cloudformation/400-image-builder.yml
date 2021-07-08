@@ -1,0 +1,1002 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create Checkmarx EC2 Image Builder Resources
+
+Parameters: 
+  pS3Bucket:
+    Description: The s3 bucket with dependencies in it
+    Default: checkmarx-us-east-1-213611284282
+    Type: String
+  pEngineBaseAmi:
+    Description: Base image to build engine servers 
+    Default: arn:aws:imagebuilder:us-east-2:aws:image/windows-server-2016-english-core-base-x86/x.x.x
+    Type: String
+  pManagerBaseAmi:
+    Description: Base image to build manager servers 
+    Default: arn:aws:imagebuilder:us-east-2:aws:image/windows-server-2016-english-full-base-x86/x.x.x
+    Type: String
+  pRemoteDesktopCIDR:
+    Type: String
+    Description: CIDR address of clients to connect via RDP
+    Default: 0.0.0.0/0
+  pVpcId:
+    Type: String
+    Description: VPC to build in 
+    Default: vpc-03fcc783b081498d9
+  pBuilderSubnet:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet id where AMIs will be built 
+    Default: subnet-0dcb2bf661216b285  
+  pBuilderKeypair:
+    Type: String
+    Description: Keypair used to build the images
+    Default: cxbs
+  pAmiDistributionRegion:
+    Type: String
+    Description: Region into which you want to distribute your AMIs once built
+    Default: us-east-1    
+
+Resources:
+
+####################################
+#
+# EC2 Image Builder Security Groups    
+#
+####################################
+
+  rImageBuilderSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: Checkmarx EC2 Image Builder SG
+      GroupDescription: A security group for use by EC2 Image Builder Service to build Checkmarx AMIs
+      VpcId: !Ref pVpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3389
+          ToPort: 3389
+          CidrIp: !Ref pRemoteDesktopCIDR
+        - IpProtocol: udp
+          FromPort: 3389
+          ToPort: 3389
+          CidrIp: !Ref pRemoteDesktopCIDR
+
+
+####################################
+#
+# EC2 Image Builder Common Components    
+#
+####################################
+
+  ibCreateFoldersv100:
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Creates base folders used by Checkmarx automation
+      Name: Create Checkmarx Folders
+      Platform: Windows
+      Version: 1.0.0
+      Data: !Sub |
+        name: create_cx_folders
+        description: Creates base folders used by Checkmarx automation
+        schemaVersion: 1.0
+        phases: 
+          - name: build
+            steps:
+              - name: CREATE_FOLDERS
+                action: ExecutePowerShell
+                timeoutSeconds: 60
+                inputs:
+                  commands:
+                    - md -force "c:\programdata\checkmarx\automation\dependencies\"  
+                    - md -force "c:\programdata\checkmarx\automation\installers\"  
+
+
+  ibcJdk8v100:
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Installs Java from your s3 bucket cache
+      Name: Java jdk8u252b09
+      Platform: Windows
+      Version: 1.0.0
+      Data: !Sub |
+        name: jdk_8u252b09
+        description: Installs java
+        schemaVersion: 1.0
+        phases: 
+          - name: build
+            steps:
+              - name: DOWNLOAD_JAVA
+                action: S3Download
+                timeoutSeconds: 180
+                inputs:
+                  - source: 's3://${pS3Bucket}/installation/common/OpenJDK8U-jdk_x64_windows_hotspot_8u252b09.msi'
+                    destination: 'c:\programdata\checkmarx\automation\dependencies\OpenJDK8U-jdk_x64_windows_hotspot_8u252b09.msi'                
+              - name: INSTALL_JAVA
+                action: ExecutePowerShell
+                timeoutSeconds: 900
+                inputs:
+                  commands:
+                    - |
+                      $jdk_file = (gci 'c:\programdata\checkmarx\automation\dependencies\OpenJDK8U*msi' | sort LastWriteTime | select -last 1).FullName
+                      Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"$jdk_file`" ADDLOCAL=FeatureMain,FeatureEnvironment,FeatureJarFileRunWith,FeatureJavaHome INSTALLDIR=`"c:\Program Files\AdoptOpenJDK\`" /quiet /L*V `"$jdk_file.log`" " -Wait -NoNewWindow
+                      Write-Host "Java install log:"
+                      cat "$jdk_file.log"    
+                    
+                    
+  ibcGitv100:
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Installs Git from your s3 bucket cache
+      Name: Git 2-27-0-64bit
+      Platform: Windows
+      Version: 1.0.0
+      Data: !Sub |
+        name: git_2_27_0
+        description: Installs git
+        schemaVersion: 1.0
+        phases: 
+          - name: build
+            steps:
+              - name: DOWNLOAD_GIT
+                action: S3Download
+                timeoutSeconds: 180
+                inputs:
+                  - source: 's3://${pS3Bucket}/installation/common/Git-2.27.0-64-bit.exe'
+                    destination: 'c:\programdata\checkmarx\automation\dependencies\Git-2.27.0-64-bit.exe'                
+              - name: INSTALL_GIT
+                action: ExecutePowerShell
+                timeoutSeconds: 900
+                inputs:
+                  commands:
+                    - |
+                      Start-Process "C:\programdata\checkmarx\automation\dependencies\Git-2.27.0-64-bit.exe"  -ArgumentList "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS" -Wait -NoNewWindow     
+
+
+  ibcCpp2010sp1v100:
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Installs C++ 2010 SP 1 Redist from your s3 bucket cache
+      Name: vcredist2010sp1
+      Platform: Windows
+      Version: 1.0.0
+      Data: !Sub |
+        name: vcredist2010sp1
+        description: Installs vcredist2010sp1
+        schemaVersion: 1.0
+        phases: 
+          - name: build
+            steps:
+              - name: DOWNLOAD_INSTALLER
+                action: S3Download
+                timeoutSeconds: 180
+                inputs:
+                  - source: 's3://${pS3Bucket}/installation/common/vcredist_x64.exe'
+                    destination: 'c:\programdata\checkmarx\automation\dependencies\vcredist_x64.exe'                
+              - name: INSTALL_CPP
+                action: ExecutePowerShell
+                timeoutSeconds: 300
+                inputs:
+                  commands:
+                    - Start-Process -FilePath "c:\programdata\checkmarx\automation\dependencies\vcredist_x64.exe" -ArgumentList "/passive /norestart" -Wait        
+
+
+  ibcCpp2015v100:
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Installs C++ 2015 Redist from your s3 bucket cache
+      Name: vcredist2015
+      Platform: Windows
+      Version: 1.0.0
+      Data: !Sub |
+        name: vcredist2015
+        description: Installs vcredist2015
+        schemaVersion: 1.0
+        phases: 
+          - name: build
+            steps:
+              - name: DOWNLOAD_INSTALLER
+                action: S3Download
+                timeoutSeconds: 180
+                inputs:
+                  - source: 's3://${pS3Bucket}/installation/common/vc_redist2015.x64.exe'
+                    destination: 'c:\programdata\checkmarx\automation\dependencies\vc_redist2015.x64.exe'                
+              - name: INSTALL_CPP
+                action: ExecutePowerShell
+                timeoutSeconds: 300
+                inputs:
+                  commands:
+                    - Start-Process -FilePath "c:\programdata\checkmarx\automation\dependencies\vc_redist2015.x64.exe" -ArgumentList "/passive /norestart" -Wait                          
+
+
+  ibcIISv100:
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Installs IIS
+      Name: IIS
+      Platform: Windows
+      Version: 1.0.0
+      Data: !Sub |
+        name: installs_iis
+        description: Installs IIS
+        schemaVersion: 1.0
+        phases: 
+          - name: build
+            steps:
+              - name: INSTALL_IIS
+                action: ExecutePowerShell
+                timeoutSeconds: 600
+                inputs:
+                  commands:
+                    - Install-WindowsFeature -name Web-Server -IncludeManagementTools
+                    - Add-WindowsFeature Web-Http-Redirect      
+                    
+  ibcDotnet48:
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Installs dotnet framework 4.8
+      Name: Dotnet48
+      Platform: Windows
+      Version: 1.0.0
+      Data: !Sub |
+        name: dotnet48
+        description: Downloads and installs dotnet48
+        schemaVersion: 1.0
+        phases:
+          - name: build
+            steps:
+              - name: DOWNLOAD_INSTALLER
+                action: S3Download
+                timeoutSeconds: 180
+                inputs:
+                  - source: 's3://${pS3Bucket}/installation/common/ndp48-x86-x64-allos-enu.exe'
+                    destination: 'c:\programdata\checkmarx\automation\dependencies\ndp48-x86-x64-allos-enu.exe'
+              - name: INSTALL_DOTNET
+                action: ExecutePowerShell
+                timeoutSeconds: 600
+                inputs:
+                  commands:
+                    - Start-Process -FilePath "c:\programdata\checkmarx\automation\dependencies\ndp48-x86-x64-allos-enu.exe" -ArgumentList "/passive /norestart" -Wait -NoNewWindow
+              - name: REBOOT
+                action: Reboot   
+                    
+  ibcDotnetcore:
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Installs dotnet core 2.1.16
+      Name: Dotnetcore2_1_16
+      Platform: Windows
+      Version: 1.0.0
+      Data: !Sub |
+        name: Dotnetcore2_1_16
+        description: Installs dotnet core 2.1.16
+        schemaVersion: 1.0
+        phases:
+          - name: build
+            steps:
+              - name: DOWNLOAD_INSTALLER
+                action: S3Download
+                timeoutSeconds: 180
+                inputs:
+                  - source: 's3://${pS3Bucket}/installation/common/dotnet-hosting-2.1.16-win.exe'
+                    destination: 'c:\programdata\checkmarx\automation\dependencies\dotnet-hosting-2.1.16-win.exe'
+              - name: INSTALL_DOTNETCORE
+                action: ExecutePowerShell
+                timeoutSeconds: 600
+                inputs:
+                  commands:
+                    - Start-Process -FilePath "c:\programdata\checkmarx\automation\dependencies\dotnet-hosting-2.1.16-win.exe" -ArgumentList "/quiet /install /norestart" -Wait -NoNewWindow
+                                  
+                    
+  ibcOneConcurrentScan:    
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Sets engine concurrent scans to 1
+      Name: Checkmarx CxSAST 1 Concurrent Scan
+      Platform: Windows
+      Version: 8.9.0
+      Data: |
+        name: cxsast_engine_1cs
+        description: Sets engine concurrent scans to 1
+        schemaVersion: 1.0
+        phases:
+          - name: build
+            steps:
+              - name: CONCURRENT_SCANS
+                action: ExecutePowerShell
+                timeoutSeconds: 60
+                inputs:
+                  commands: 
+                    - |
+                      [Xml]$xml = Get-Content "$(Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Engine Server' -Name 'Path')\CxSourceAnalyzerEngine.WinService.exe.config"
+                      $obj = $xml.configuration.appSettings.add | where {$_.Key -eq "MAX_SCANS_PER_MACHINE" }
+                      Write-Host "MAX_SCANS_PER_MACHINE initial value is $($obj.value)"
+                      $obj.value = "1" # 1 concurrent scan per engine
+                      $xml.Save("$(Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Engine Server' -Name 'Path')\CxSourceAnalyzerEngine.WinService.exe.config")                       
+
+  ibcSqlServerExpress2012:    
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Installs the Sql Server Express 2012
+      Name: SQL Server Express 2012
+      Platform: Windows
+      Version: 8.9.0
+      Data: !Sub |
+        name: sqlserver_express_2012
+        description: Installs the SQL Server
+        schemaVersion: 1.0
+        phases:
+          - name: build
+            steps:
+              - name: DOWNLOAD_INSTALLER
+                action: S3Download
+                timeoutSeconds: 180
+                inputs:
+                  - source: 's3://${pS3Bucket}/installation/common/SQLEXPR_x64_ENU.exe'
+                    destination: 'c:\programdata\checkmarx\automation\dependencies\SQLEXPR_x64_ENU.exe'
+              - name: INSTALL_SQLSERVER
+                action: ExecutePowerShell
+                timeoutSeconds: 900
+                inputs:
+                  commands:
+                    - |
+                      Set-MpPreference -DisableRealtimeMonitoring $True
+                      $sql_installer = "c:\programdata\checkmarx\automation\dependencies\SQLEXPR_x64_ENU.exe"
+                      Start-Process "$sql_installer" -ArgumentList '/Q /IACCEPTSQLSERVERLICENSETERMS /ACTION=Install /ERRORREPORTING=0 /ROLE=AllFeatures_WithDefaults /INSTANCENAME=SQLEXPRESS /BROWSERSVCSTARTUPTYPE=Automatic /SQLSVCACCOUNT="Network Service" /SQLSVCSTARTUPTYPE=Automatic /SQLSYSADMINACCOUNTS="Administrators" "NETWORK SERVICE" ' -Wait -NoNewWindow   
+                      Set-MpPreference -DisableRealtimeMonitoring $False
+                  
+                  
+  ibcDefenderExclusions:    
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Excludes CxSAST from Windows Defender
+      Name: Checkmarx Windows Defender Exclusions
+      Platform: Windows
+      Version: 1.0.0
+      Data: |
+        name: windows_defender_exclusions
+        description: Excludes CxSAST from Windows Defender
+        schemaVersion: 1.0
+        phases:
+          - name: build
+            steps:
+              - name: CONCURRENT_SCANS
+                action: ExecutePowerShell
+                timeoutSeconds: 60
+                inputs:
+                  commands: 
+                    - |
+                      Add-MpPreference -ExclusionPath "C:\Program Files\Checkmarx\*"
+                      Add-MpPreference -ExclusionPath "C:\CxSrc\*"  
+                      Add-MpPreference -ExclusionPath "C:\ExtSrc\*"                        
+                              
+                              
+  ibcCxManagerIISHardening:    
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Hardens the Checkmarx CxSAST Manager Server
+      Name: Checkmarx - CxSAST Manager Hardening
+      Platform: Windows
+      Version: 8.9.0
+      Data: !Sub |
+        name: cx_iis_hardening
+        description: Hardens IIS on the Checkmarx Manager.
+        schemaVersion: 1.0
+        phases:
+          - name: build
+            steps:
+              - name: DOWNLOAD_IIS_REWRITE
+                action: S3Download
+                timeoutSeconds: 120
+                inputs:
+                 - source: 's3://${pS3Bucket}/installation/common/rewrite_amd64.msi'
+                   destination: 'C:\programdata\checkmarx\automation\dependencies\rewrite_amd64.msi'
+              - name: INSTALL_IIS_REWRITE
+                action: ExecutePowerShell
+                timeoutSeconds: 900
+                inputs:
+                  commands:
+                    - |
+                      Start-Process "C:\Windows\System32\msiexec.exe" -ArgumentList "/i `"C:\programdata\checkmarx\automation\dependencies\rewrite_amd64.msi`" /L*V `"C:\programdata\checkmarx\automation\dependencies\rewrite_install.log`" /QN" -Wait -NoNewWindow
+                      Write-Host "rewrite_install.log content:"
+                      cat "C:\programdata\checkmarx\automation\dependencies\rewrite_install.log"
+              - name: CREATE_REDIRECT_RULE
+                action: ExecutePowerShell
+                timeoutSeconds: 180
+                inputs:
+                  commands:
+                    - |
+                      Add-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST/Default Web Site' -filter "system.webServer/rewrite/rules" -name "." -value @{name='RedirectRootToCxWebClient';stopProcessing='True'}
+                      Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST/Default Web Site' -filter "system.webServer/rewrite/rules/rule[@name='RedirectRootToCxWebClient']/match" -name "url" -value "^$"
+                      Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST/Default Web Site' -filter "system.webServer/rewrite/rules/rule[@name='RedirectRootToCxWebClient']/action" -name "url" -value "/CxWebClient/"
+                      Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST/Default Web Site' -filter "system.webServer/rewrite/rules/rule[@name='RedirectRootToCxWebClient']/action" -name "type" -value "Redirect"
+              - name: REMOVE_DEFAULT_DOC
+                action: ExecutePowerShell
+                timeoutSeconds: 180
+                inputs:
+                  commands:
+                    - Clear-WebConfiguration -PSPath "MACHINE/WEBROOT/APPHOST" -Filter "system.webServer/defaultDocument/files"  
+              - name: DISABLE_POWEREDBY_HEADER
+                action: ExecutePowerShell
+                timeoutSeconds: 180
+                inputs:
+                  commands:
+                    - Remove-WebConfigurationProperty  -pspath 'MACHINE/WEBROOT/APPHOST'  -filter "system.webServer/httpProtocol/customHeaders" -name "." -AtElement @{name='X-Powered-By'}
+              - name: DISABLE_SERVER_HEADER
+                action: ExecutePowerShell
+                timeoutSeconds: 180
+                inputs:
+                  commands:
+                    - Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST'  -filter "system.webServer/security/requestFiltering" -name "removeServerHeader" -value "True"
+              - name: DISABLE_DOTNET_HEADER
+                action: ExecutePowerShell
+                timeoutSeconds: 180
+                inputs:
+                  commands:
+                    - |
+                      "CxWebClient", "CxRestAPI", "CxWebInterface" | ForEach-Object {
+                         Set-WebConfigurationProperty -pspath "MACHINE/WEBROOT/APPHOST/Default Web Site/$_" -filter "system.web/httpRuntime" -name "enableVersionHeader" -value "false"
+                      }   
+              - name: CONFIGURE_APP_INIT
+                action: ExecutePowerShell
+                timeoutSeconds: 180
+                inputs:
+                  commands:
+                    - |
+                      Enable-WindowsOptionalFeature -Online -FeatureName IIS-ApplicationInit  
+                      Write-Host "Configuring startMode on application pools"       
+                      Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST'  -filter "system.applicationHost/applicationPools/add[@name='CxPool']" -name "startMode" -value "AlwaysRunning"
+                      Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST'  -filter "system.applicationHost/applicationPools/add[@name='CxPoolRestAPI']" -name "startMode" -value "AlwaysRunning"
+                      Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST'  -filter "system.applicationHost/applicationPools/add[@name='CxClientPool']" -name "startMode" -value "AlwaysRunning"
+
+                      Write-Host "Configuring preloadEnabled on applications"
+                      Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST'  -filter "system.applicationHost/sites/site[@name='Default Web Site']/application[@path='/CxWebClient']" -name "preloadEnabled" -value "True"
+                      Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST'  -filter "system.applicationHost/sites/site[@name='Default Web Site']/application[@path='/CxWebInterface']" -name "preloadEnabled" -value "True"
+                      Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST'  -filter "system.applicationHost/sites/site[@name='Default Web Site']/application[@path='/CxRestAPI']" -name "preloadEnabled" -value "True"
+                     
+                      Write-Host "Configuring applicationInitialization on website"
+                      Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST/Default Web Site' -filter "system.webServer/applicationInitialization" -name "skipManagedModules" -value "False"
+                      Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST/Default Web Site' -filter "system.webServer/applicationInitialization" -name "doAppInitAfterRestart" -value "True"
+                      Add-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST/Default Web Site' -filter "system.webServer/applicationInitialization" -name "." -value @{initializationPage='/CxWebClient/ProjectState.aspx'}
+
+
+###################################
+#
+# EC2 Image Builder CxSAST 8.9 Components    
+#
+####################################
+
+  ibcCheckmarxInstaller89:
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Caches Checkmarx installer media and installs pre-requisites
+      Name: Checkmarx Installer
+      Platform: Windows
+      Version: 8.9.0
+      Data: !Sub |
+        name: installer_cache
+        description: Caches Checkmarx installer media and installs pre-requisites
+        schemaVersion: 1.0
+        phases:
+          - name: build
+            steps:
+              - name: DOWNLOAD_INSTALLERS
+                action: S3Download
+                timeoutSeconds: 180
+                inputs:
+                  - source: 's3://${pS3Bucket}/installation/cxsast/8.9/CxSAST.890.Release.Setup_8.9.0.210.zip'
+                    destination: 'c:\programdata\checkmarx\automation\installers\CxSAST.890.Release.Setup_8.9.0.210.zip'
+              - name: PREPARE_INSTALLERS
+                action: ExecutePowerShell
+                timeoutSeconds: 120
+                inputs:
+                  commands:
+                    - Expand-Archive -Path "C:\programdata\checkmarx\automation\installers\CxSAST.890.Release.Setup_8.9.0.210.zip" -DestinationPath "C:\programdata\checkmarx\automation\installers\CxSAST.890.Release.Setup_8.9.0.210" -Force
+              - name: VALIDATE_CHECKMARX_SHA
+                action: ExecutePowerShell
+                timeoutSeconds: 240
+                inputs:
+                  commands:
+                    - return ((Get-FileHash "C:\ProgramData\checkmarx\automation\installers\CxSAST.890.Release.Setup_8.9.0.210\CxSetup.exe").Hash -eq "3A07DC1BE3F90F4786552EDB38EF3E9A286E553FEF03EFC2E0A7B0E03640AB52")
+              - name: VALIDATE_CHECKMARX_PATH
+                action: ExecutePowerShell
+                timeoutSeconds: 180
+                inputs:
+                  commands:
+                    - return (Test-Path -Path "C:\ProgramData\checkmarx\automation\installers\CxSAST.890.Release.Setup_8.9.0.210\CxSetup.exe")                    
+
+ 
+  ibcCxEngine89:    
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Installs the Checkmarx CxSAST Engine Server
+      Name: Checkmarx - CxSAST Engine
+      Platform: Windows
+      Version: 8.9.0
+      Data: |
+        name: cxsastengine
+        description: Installs the Checkmarx Engine.
+        schemaVersion: 1.0
+        phases:
+          - name: build
+            steps:
+              - name: INSTALL_ENGINE
+                action: ExecutePowerShell
+                timeoutSeconds: 900
+                inputs:
+                  commands:
+                    - |
+                      Set-MpPreference -DisableRealtimeMonitoring $True
+                      Start-Process "C:\programdata\checkmarx\automation\installers\CxSAST.890.Release.Setup_8.9.0.210\CxSetup.exe" -ArgumentList "/install /quiet ACCEPT_EULA=Y PORT=80 MANAGER=0 WEB=0 ENGINE=1 AUDIT=0 BI=0" -Wait -NoNewWindow
+                      New-NetFirewallRule -DisplayName "CxScanEngine" -Direction Inbound -LocalPort 80,443 -Protocol TCP -Action Allow
+                      Set-MpPreference -DisableRealtimeMonitoring $False  
+    
+  ibcCxManager89:    
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Installs the Checkmarx CxSAST Manager Server
+      Name: Checkmarx - CxSAST Manager
+      Platform: Windows
+      Version: 8.9.0
+      Data: !Sub |
+        name: cxsastmanager_89
+        description: Installs the Checkmarx Manager.
+        schemaVersion: 1.0
+        phases:
+          - name: build
+            steps:
+              - name: DISABLE_REALTIME_MONITORING
+                action: ExecutePowerShell
+                timeoutSeconds: 120
+                inputs:
+                  commands:
+                    - Set-MpPreference -DisableRealtimeMonitoring $True                     
+              - name: INSTALL_CXMANAGER
+                action: ExecutePowerShell
+                timeoutSeconds: 1200
+                inputs:
+                  commands:
+                    - Start-Process "C:\programdata\checkmarx\automation\installers\CxSAST.890.Release.Setup_8.9.0.210\CxSetup.exe" -ArgumentList "/install /quiet ACCEPT_EULA=Y MANAGER=1 WEB=0 ENGINE=0 AUDIT=0 BI=1 SQLAUTH=0 SQLSERVER=localhost\SQLExpress CXARM_SQLAUTH=0 CXARM_DB_HOST=localhost\SQLExpress TOMCATUSERNAME=REPLACEMETOMCAT TOMCATPASSWORD=TCATPASSWORD" -Wait -NoNewWindow
+              - name: INSTALL_CXWEB
+                action: ExecutePowerShell
+                timeoutSeconds: 900
+                inputs:
+                  commands:
+                    - Start-Process "C:\programdata\checkmarx\automation\installers\CxSAST.890.Release.Setup_8.9.0.210\CxSetup.exe" -ArgumentList "/install /quiet ACCEPT_EULA=Y MANAGER=1 WEB=1 ENGINE=0 AUDIT=0 BI=1 SQLAUTH=0 SQLSERVER=localhost\SQLExpress CXARM_SQLAUTH=0 CXARM_DB_HOST=localhost\SQLExpress TOMCATUSERNAME=REPLACEMETOMCAT TOMCATPASSWORD=TCATPASSWORD" -Wait -NoNewWindow
+              - name: INSTALL_CXENGINE
+                action: ExecutePowerShell
+                timeoutSeconds: 900
+                inputs:
+                  commands:
+                    - Start-Process "C:\programdata\checkmarx\automation\installers\CxSAST.890.Release.Setup_8.9.0.210\CxSetup.exe" -ArgumentList "/install /quiet ACCEPT_EULA=Y MANAGER=1 WEB=1 ENGINE=1 AUDIT=0 BI=1 SQLAUTH=0 SQLSERVER=localhost\SQLExpress CXARM_SQLAUTH=0 CXARM_DB_HOST=localhost\SQLExpress TOMCATUSERNAME=REPLACEMETOMCAT TOMCATPASSWORD=TCATPASSWORD" -Wait -NoNewWindow
+              - name: OPEN_WINDOWS_FIREWALL
+                action: ExecutePowerShell
+                timeoutSeconds: 120
+                inputs:
+                  commands:
+                    - New-NetFirewallRule -DisplayName "CxARM" -Direction Inbound -LocalPort 8080 -Protocol TCP -Action Allow
+              - name: ENABLE_REALTIME_MONITORING
+                action: ExecutePowerShell
+                timeoutSeconds: 120
+                inputs:
+                  commands:
+                    - Set-MpPreference -DisableRealtimeMonitoring $False
+      
+   
+  ibcCx89HF14:    
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Installs the Checkmarx CxSAST Hotfix
+      Name: Checkmarx - CxSAST Hotfix
+      Platform: Windows
+      Version: 8.9.14
+      Data: !Sub |
+        name: checkmarx_hotfix_89_14
+        description: Downloads and installs the checkmarx 8.9 hotfix 14.
+        schemaVersion: 1.0
+        phases:
+          - name: build
+            steps:
+              - name: DOWNLOAD
+                action: S3Download
+                timeoutSeconds: 180
+                inputs:
+                  - source: 's3://${pS3Bucket}/installation/cxsast/8.9/8.9.0.HF14.zip'
+                    destination: 'C:\programdata\checkmarx\automation\installers\8.9.0.HF14.zip'
+              - name: UNZIP
+                action: ExecutePowerShell
+                timeoutSeconds: 300
+                inputs:
+                  commands: 
+                    - Expand-Archive -Path "C:\programdata\checkmarx\automation\installers\8.9.0.HF14.zip" -DestinationPath "C:\programdata\checkmarx\automation\installers\8.9.0.HF14"
+              - name: CHECKSUM
+                action: ExecutePowerShell
+                timeoutSeconds: 300
+                inputs:
+                  commands: 
+                    - return ((Get-FileHash "C:\ProgramData\checkmarx\automation\installers\8.9.0.HF14\8.9.0.HF14.exe ").Hash -eq "68AE224C5CFE78EB241EA2BB4C2F39AEF60CFDA58224F52F521BB37379EB7DBB")  
+              - name: INSTALL
+                action: ExecutePowerShell
+                timeoutSeconds: 900
+                inputs:
+                  commands: 
+                    - Stop-Service Cx*
+                    - Stop-Service W3*
+                    - Start-Process "C:\programdata\checkmarx\automation\installers\8.9.0.HF14\8.9.0.HF14.exe" -ArgumentList "-cmd" -Wait -NoNewWindow
+                      
+                      
+###################################
+#
+# EC2 Image Builder CxSAST 9.0 Components    
+#
+####################################
+
+  ibcCheckmarxInstaller90:
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Caches Checkmarx installer media and installs pre-requisites
+      Name: Checkmarx Installer
+      Platform: Windows
+      Version: 9.0.0
+      Data: !Sub |
+        name: installer_cache
+        description: Caches Checkmarx installer media and installs pre-requisites
+        schemaVersion: 1.0
+        phases:
+          - name: build
+            steps:
+              - name: DOWNLOAD_INSTALLERS
+                action: S3Download
+                timeoutSeconds: 180
+                inputs:
+                  - source: 's3://${pS3Bucket}/installation/cxsast/9.0/CxSAST.900.Release.Setup_9.0.0.40085.zip'
+                    destination: 'c:\programdata\checkmarx\automation\installers\CxSAST.900.Release.Setup_9.0.0.40085.zip'
+              - name: PREPARE_INSTALLERS
+                action: ExecutePowerShell
+                timeoutSeconds: 120
+                inputs:
+                  commands:
+                    - Expand-Archive -Path "c:\programdata\checkmarx\automation\installers\CxSAST.900.Release.Setup_9.0.0.40085.zip" -DestinationPath "C:\programdata\checkmarx\automation\installers\CxSAST.900.Release.Setup_9.0.0.40085" -Force
+              - name: VALIDATE_CHECKMARX_SHA
+                action: ExecutePowerShell
+                timeoutSeconds: 240
+                inputs:
+                  commands:
+                    - return ((Get-FileHash "C:\programdata\checkmarx\automation\installers\CxSAST.900.Release.Setup_9.0.0.40085\CxSetup.exe").Hash -eq "735970D365FAB181F4E1E486856385CAECF05BDCCCFEC3EF94C82C3891D2317C")
+              - name: VALIDATE_CHECKMARX_PATH
+                action: ExecutePowerShell
+                timeoutSeconds: 180
+                inputs:
+                  commands:
+                    - return (Test-Path -Path "C:\ProgramData\checkmarx\automation\installers\CxSAST.900.Release.Setup_9.0.0.40085\CxSetup.exe")                    
+
+
+  ibcCxEngine90:    
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Installs the Checkmarx CxSAST Engine Server
+      Name: Checkmarx - CxSAST Engine
+      Platform: Windows
+      Version: 9.0.0
+      Data: |
+        name: cxsastengine
+        description: Installs the Checkmarx Engine.
+        schemaVersion: 1.0
+        phases:
+          - name: build
+            steps:
+              - name: INSTALL_ENGINE
+                action: ExecutePowerShell
+                timeoutSeconds: 900
+                inputs:
+                  commands:
+                    - |
+                      Set-MpPreference -DisableRealtimeMonitoring $True
+                      Start-Process "C:\ProgramData\checkmarx\automation\installers\CxSAST.900.Release.Setup_9.0.0.40085\CxSetup.exe" -ArgumentList "/install /quiet ACCEPT_EULA=Y PORT=80 MANAGER=0 WEB=0 ENGINE=1 AUDIT=0 BI=0 ACCESSCONTROL=0 ACTIVEMQ=0" -Wait -NoNewWindow
+                      New-NetFirewallRule -DisplayName "CxScanEngine" -Direction Inbound -LocalPort 80,443 -Protocol TCP -Action Allow
+                      Set-MpPreference -DisableRealtimeMonitoring $False  
+    
+    
+  ibcCxManager90:    
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Description: Installs the Checkmarx CxSAST Manager Server
+      Name: Checkmarx - CxSAST Manager
+      Platform: Windows
+      Version: 9.0.0
+      Data: !Sub |
+        name: cxsastmanager_90
+        description: Installs the Checkmarx Manager.
+        schemaVersion: 1.0
+        phases:
+          - name: build
+            steps:
+              - name: DISABLE_REALTIME_MONITORING
+                action: ExecutePowerShell
+                timeoutSeconds: 120
+                inputs:
+                  commands:
+                    - Set-MpPreference -DisableRealtimeMonitoring $True   
+              - name: INSTALL_ACCESSCONTROL
+                action: ExecutePowerShell
+                timeoutSeconds: 1200
+                inputs:
+                  commands:
+                    - Start-Process "C:\ProgramData\checkmarx\automation\installers\CxSAST.900.Release.Setup_9.0.0.40085\CxSetup.exe" -ArgumentList "/install /quiet ACCEPT_EULA=Y ACCESSCONTROL=1 MANAGER=0 WEB=0 ENGINE=0 AUDIT=0 BI=0 SQLAUTH=0 SQLSERVER=localhost\SQLExpress" -Wait -NoNewWindow                    
+              - name: INSTALL_CXMANAGER
+                action: ExecutePowerShell
+                timeoutSeconds: 1200
+                inputs:
+                  commands:
+                    - Start-Process "C:\ProgramData\checkmarx\automation\installers\CxSAST.900.Release.Setup_9.0.0.40085\CxSetup.exe" -ArgumentList "/install /quiet ACCEPT_EULA=Y ACCESSCONTROL=1 MANAGER=1 WEB=0 ENGINE=0 AUDIT=0 BI=0 SQLAUTH=0 SQLSERVER=localhost\SQLExpress" -Wait -NoNewWindow
+              - name: INSTALL_CXWEB
+                action: ExecutePowerShell
+                timeoutSeconds: 900
+                inputs:
+                  commands:
+                    - Start-Process "C:\ProgramData\checkmarx\automation\installers\CxSAST.900.Release.Setup_9.0.0.40085\CxSetup.exe" -ArgumentList "/install /quiet ACCEPT_EULA=Y ACCESSCONTROL=1 MANAGER=1 WEB=1 ENGINE=0 AUDIT=0 BI=0 SQLAUTH=0 SQLSERVER=localhost\SQLExpress" -Wait -NoNewWindow
+              - name: INSTALL_CXENGINE
+                action: ExecutePowerShell
+                timeoutSeconds: 900
+                inputs:
+                  commands:
+                    - Start-Process "C:\ProgramData\checkmarx\automation\installers\CxSAST.900.Release.Setup_9.0.0.40085\CxSetup.exe" -ArgumentList "/install /quiet ACCEPT_EULA=Y ACCESSCONTROL=1 MANAGER=1 WEB=1 ENGINE=1 AUDIT=0 BI=0 SQLAUTH=0 SQLSERVER=localhost\SQLExpress" -Wait -NoNewWindow
+              - name: ENABLE_REALTIME_MONITORING
+                action: ExecutePowerShell
+                timeoutSeconds: 120
+                inputs:
+                  commands:
+                    - Set-MpPreference -DisableRealtimeMonitoring $False     
+   
+                
+####################################
+#
+# EC2 Image Builder Recipes    
+#
+####################################     
+                 
+  ibrEngineV89hf14:
+    Type: AWS::ImageBuilder::ImageRecipe
+    Properties: 
+      Components:
+        - ComponentArn: !Ref ibCreateFoldersv100
+        - ComponentArn: !Ref ibcCpp2010sp1v100
+        - ComponentArn: !Ref ibcCpp2015v100
+        - ComponentArn: !Ref ibcDotnet48
+        - ComponentArn: !Ref ibcDefenderExclusions
+        - ComponentArn: !Ref ibcCheckmarxInstaller89
+        - ComponentArn: !Ref ibcCxEngine89
+        - ComponentArn: !Ref ibcCx89HF14
+        - ComponentArn: !Ref ibcOneConcurrentScan
+      Description: Build a Checkmarx CxSAST Engine Server v8.9 HF14
+      Name: Checkmarx CxSAST Engine v89 HF14
+      ParentImage: !Ref pEngineBaseAmi
+      Tags: 
+        Provider: Checkmarx
+      Version: 1.0.0
+      
+      
+  ibrManagerV89hf14:
+    Type: AWS::ImageBuilder::ImageRecipe
+    Properties: 
+      Components: 
+        - ComponentArn: !Ref ibCreateFoldersv100
+        - ComponentArn: !Ref ibcCpp2010sp1v100
+        - ComponentArn: !Ref ibcCpp2015v100
+        - ComponentArn: !Ref ibcJdk8v100
+        - ComponentArn: !Ref ibcGitv100
+        - ComponentArn: !Ref ibcIISv100
+        - ComponentArn: !Ref ibcSqlServerExpress2012        
+        - ComponentArn: !Ref ibcDotnet48
+        - ComponentArn: !Ref ibcDefenderExclusions      
+        - ComponentArn: !Ref ibcCheckmarxInstaller89
+        - ComponentArn: !Ref ibcCxManager89
+        - ComponentArn: !Ref ibcCx89HF14
+        - ComponentArn: !Ref ibcCxManagerIISHardening
+      Description: Build a Checkmarx CxSAST Manager Server v8.9 HF14
+      Name: Checkmarx CxSAST Manager v89 HF14
+      ParentImage: !Ref pManagerBaseAmi
+      Tags: 
+        Provider: Checkmarx
+      Version: 1.0.0
+      
+      
+      
+  ibrEngineV90hf00:
+    Type: AWS::ImageBuilder::ImageRecipe
+    Properties: 
+      Components:
+        - ComponentArn: !Ref ibCreateFoldersv100
+        - ComponentArn: !Ref ibcCpp2010sp1v100
+        - ComponentArn: !Ref ibcCpp2015v100
+        - ComponentArn: !Ref ibcDotnet48
+        - ComponentArn: !Ref ibcDefenderExclusions
+        - ComponentArn: !Ref ibcCheckmarxInstaller90
+        - ComponentArn: !Ref ibcCxEngine90
+        - ComponentArn: !Ref ibcOneConcurrentScan
+      Description: Build a Checkmarx CxSAST Engine Server v9.0
+      Name: Checkmarx CxSAST Engine v90
+      ParentImage: !Ref pEngineBaseAmi
+      Tags: 
+        Provider: Checkmarx
+      Version: 1.0.0
+      
+      
+  ibrManagerV90hf00:
+    Type: AWS::ImageBuilder::ImageRecipe
+    Properties: 
+      Components: 
+        - ComponentArn: !Ref ibCreateFoldersv100
+        - ComponentArn: !Ref ibcCpp2010sp1v100
+        - ComponentArn: !Ref ibcCpp2015v100
+        - ComponentArn: !Ref ibcJdk8v100
+        - ComponentArn: !Ref ibcGitv100  
+        - ComponentArn: !Ref ibcDotnetcore
+        - ComponentArn: !Ref ibcIISv100
+        - ComponentArn: !Ref ibcSqlServerExpress2012        
+        - ComponentArn: !Ref ibcDotnet48
+        - ComponentArn: !Ref ibcDefenderExclusions      
+        - ComponentArn: !Ref ibcCheckmarxInstaller90
+        - ComponentArn: !Ref ibcCxManager90
+      Description: Build a Checkmarx CxSAST Manager Server v9.0
+      Name: Checkmarx CxSAST Manager v90
+      ParentImage: !Ref pManagerBaseAmi
+      Tags: 
+        Provider: Checkmarx
+      Version: 1.0.0      
+
+####################################
+#
+# EC2 Image Builder Distribution Configurations    
+#
+####################################
+
+  ibEngineV89hf14Distro:    
+    Type: AWS::ImageBuilder::DistributionConfiguration
+    Properties: 
+      Distributions: 
+        - Region: !Ref pAmiDistributionRegion
+          AmiDistributionConfiguration:
+            Name: 'Checkmarx CxSAST Engine v89 HF14 - {{ imagebuilder:buildDate }}'
+            Description: 'Checkmarx CxSAST Engine Server v8.9 HF14'
+            AmiTags:
+              checkmarx-component: engine
+              checkmarx-version: 8.9
+              checkmarx-hotfix: 14
+              imagebuilder-buildDate: '{{ imagebuilder:buildDate }}'
+              imagebuilder-buildVersion: '{{ imagebuilder:buildVersion }}'
+      Name: Checkmarx CxSAST Engine v89 HF14 Distribution
+     
+     
+  ibManagerV89hf14Distro:    
+    Type: AWS::ImageBuilder::DistributionConfiguration
+    Properties: 
+      Distributions: 
+        - Region: !Ref pAmiDistributionRegion
+          AmiDistributionConfiguration:
+            Name: 'Checkmarx CxSAST Manager Server v89 HF14{{ imagebuilder:buildDate }}'
+            Description: 'Checkmarx CxSAST Manager Server v8.9 HF14'
+            AmiTags:
+              checkmarx-component: manager
+              checkmarx-version: 8.9
+              checkmarx-hotfix: 14
+              imagebuilder-buildDate: '{{ imagebuilder:buildDate }}'
+              imagebuilder-buildVersion: '{{ imagebuilder:buildVersion }}'
+      Name: Checkmarx CxSAST Manager v89 HF14 Distribution
+      
+            
+  ibEngineV90Distro:    
+    Type: AWS::ImageBuilder::DistributionConfiguration
+    Properties: 
+      Distributions: 
+        - Region: !Ref pAmiDistributionRegion
+          AmiDistributionConfiguration:
+            Name: 'Checkmarx CxSAST Engine v90  - {{ imagebuilder:buildDate }}'
+            Description: 'Checkmarx CxSAST Engine Server v90'
+            AmiTags:
+              checkmarx-component: engine
+              checkmarx-version: 9.0
+              checkmarx-hotfix: none
+              imagebuilder-buildDate: '{{ imagebuilder:buildDate }}'
+              imagebuilder-buildVersion: '{{ imagebuilder:buildVersion }}'
+      Name: Checkmarx CxSAST Engine v90 Distribution
+     
+     
+  ibManagerV90Distro:    
+    Type: AWS::ImageBuilder::DistributionConfiguration
+    Properties: 
+      Distributions: 
+        - Region: !Ref pAmiDistributionRegion
+          AmiDistributionConfiguration:
+            Name: 'Checkmarx CxSAST Manager Server v90 {{ imagebuilder:buildDate }}'
+            Description: 'Checkmarx CxSAST Manager Server v90'
+            AmiTags:
+              checkmarx-component: manager
+              checkmarx-version: 9.0
+              checkmarx-hotfix: none
+              imagebuilder-buildDate: '{{ imagebuilder:buildDate }}'
+              imagebuilder-buildVersion: '{{ imagebuilder:buildVersion }}'
+      Name: Checkmarx CxSAST Manager v90 Distribution      
+
+####################################
+#
+# EC2 Image Builder Infrastructure Configurations    
+#
+####################################
+
+  ibInfraEngineServerCore:  
+    Type: AWS::ImageBuilder::InfrastructureConfiguration
+    Properties: 
+      InstanceProfileName: checkmarx-cxsast-engine
+      InstanceTypes: 
+        - t3.medium
+      KeyPair: !Ref pBuilderKeypair
+      Logging: 
+        S3Logs:
+          S3BucketName: !Ref pS3Bucket
+          S3KeyPrefix: "imagebuilder"
+      Name: EngineServerCore
+      SecurityGroupIds: 
+        - !Ref rImageBuilderSG
+      SubnetId: !Ref pBuilderSubnet      
+      TerminateInstanceOnFailure: True
+      
+      
+  ibInfraManagerServer:  
+    Type: AWS::ImageBuilder::InfrastructureConfiguration
+    Properties: 
+      InstanceProfileName: checkmarx-cxsast-manager
+      InstanceTypes: 
+        - c5.xlarge
+      KeyPair: !Ref pBuilderKeypair
+      Logging: 
+        S3Logs:
+          S3BucketName: !Ref pS3Bucket
+          S3KeyPrefix: "imagebuilder"
+      Name: ManagerServer
+      SecurityGroupIds: 
+        - !Ref rImageBuilderSG
+      SubnetId: !Ref pBuilderSubnet   
+      TerminateInstanceOnFailure: True
+      
+####################################
+#
+# EC2 Image Builder Pipelines    
+#
+####################################   
+
+  ibpCxSast89hf14engine:
+    Type: AWS::ImageBuilder::ImagePipeline
+    Properties: 
+      Description: Checmarx CxSAST 8.9 HF14 Engine
+      DistributionConfigurationArn: !Ref ibEngineV89hf14Distro
+      ImageRecipeArn: !Ref ibrEngineV89hf14
+      InfrastructureConfigurationArn: !Ref ibInfraEngineServerCore
+      Name: Checkmarx CxSAST v89 HF14 Engine
+
+  ibpCxSast89hf14Manager:
+    Type: AWS::ImageBuilder::ImagePipeline
+    Properties: 
+      Description: Checmarx CxSAST 8.9 HF14 Manager
+      DistributionConfigurationArn: !Ref ibManagerV89hf14Distro
+      ImageRecipeArn: !Ref ibrManagerV89hf14
+      InfrastructureConfigurationArn: !Ref ibInfraManagerServer
+      Name: Checkmarx CxSAST v89 HF14 Manager
+            
+      
+  ibpCxSast90hfnaengine:
+    Type: AWS::ImageBuilder::ImagePipeline
+    Properties: 
+      Description: Checmarx CxSAST 9.0 HFna Engine
+      DistributionConfigurationArn: !Ref ibEngineV90Distro
+      ImageRecipeArn: !Ref ibrEngineV90hf00
+      InfrastructureConfigurationArn: !Ref ibInfraEngineServerCore
+      Name: Checkmarx CxSAST v90 HFna Engine
+      
+      
+  ibpCxSast90hfna4Manager:
+    Type: AWS::ImageBuilder::ImagePipeline
+    Properties: 
+      Description: Checmarx CxSAST 90 HFna Manager
+      DistributionConfigurationArn: !Ref ibManagerV90Distro
+      ImageRecipeArn: !Ref ibrManagerV90hf00
+      InfrastructureConfigurationArn: !Ref ibInfraManagerServer
+      Name: Checkmarx CxSAST v90 HFna Manager      

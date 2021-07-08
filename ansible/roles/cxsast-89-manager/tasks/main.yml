@@ -1,0 +1,256 @@
+---
+# - name: Configure Windows Defender
+#   become: yes
+#   script: ../../../scripts/configure/configure-windows-defender.ps1
+
+# # Equivalent to scripts/install/common/install-iis.ps1
+# - name: Ensure IIS features present
+#   win_feature:
+#     name: Web-Server, Web-Mgmt-Console, Web-Metabase, Web-Static-Content, Web-Asp-Net45, Web-Scripting-Tools, Web-Http-Tracing, Web-Dyn-Compression
+#     state: present
+
+# - name: Install IIS URL Rewrite Module
+#   become: yes
+#   script: ../../../scripts/install/common/install-iis-url-rewrite-module.ps1
+#   when: not use_chocolatey
+
+# - name: Install IIS Application Request Routing Module
+#   become: yes
+#   script: ../../../scripts/install/common/install-iis-application-request-routing-module.ps1  
+#   when: not use_chocolatey  
+
+# - name: Install IIS URL Rewrite, Application Request Routing
+#   win_chocolatey:
+#     name: 
+#       - urlrewrite
+#       - iis-arr
+#     state: present
+#   when: use_chocolatey
+
+# # Its helpful to do this before install to avoid waiting on service starts that will thrash and timeout due to no license
+# - name: Generate License
+#   become: yes
+#   script:  ../../../scripts/configure/license-from-alg.ps1  
+
+- name:  Install Checkmarx
+  become: yes
+  script:  ../../../scripts/install/cxsast/install-cxsast89.ps1 -ACCEPT_EULA -ENGINE -MANAGER -WEB -BI
+
+- name:  Configure Concurrent Scans to 1
+  become: yes
+  script:  ../../../scripts/configure/configure-max-scans-per-machine.ps1 -scans 1
+
+- name: Harden IIS
+  become: yes
+  script:  ../../../scripts/configure/configure-iis-hardening.ps1
+
+- name: Configure CxARM Reverse Proxy
+  become: yes
+  script:  ../../../scripts/configure/configure-cxarm-iis-reverseproxy.ps1
+
+- name: Configure Service URLs
+  become: yes
+  script:  ../../../scripts/configure/configure-service-urls.ps1
+
+
+
+
+
+
+
+
+
+
+
+
+# - name: Add checkmarx_install user as local admin
+#   win_group_membership:
+#     name: Administrators
+#     members:
+#       - "{{ checkmarx_install_domain_user }}"
+#     state: present
+
+# - name: Install CxSAST 8.9 Manager
+#   win_command: >
+#     CxSetup.exe /install /quiet ACCEPT_EULA=Y 
+#     ENGINE=0 MANAGER=1 AUDIT=0 BI=1 WEB=0
+#     SQLSERVER={{ database_server }} CXARM_DB_HOST={{ database_server }}
+#   args:
+#     chdir: "{{ cx_installers }}\\CxSAST.890.Release.Setup_8.9.0.210"
+#     creates: "{{ cx_home }}\\Checkmarx System Manager"
+#   become: yes
+#   become_user: "{{ checkmarx_install_domain_user }}"
+#   vars:
+#     ansible_become_pass: "{{ checkmarx_install_domain_password }}"
+
+# - name: Backup DBConnectionData.config
+#   win_copy:
+#     src: "{{ cx_home }}\\Configuration\\DBConnectionData.config"
+#     dest: "{{ cx_home }}\\Configuration\\DBConnectionData.config.backup"
+#     remote_src: yes
+
+# - name: Install CxSAST 8.9 Web
+#   win_command: >
+#     CxSetup.exe /install /quiet ACCEPT_EULA=Y 
+#        ENGINE=0 MANAGER=1 AUDIT=0 BI=1 WEB=1 
+#     SQLSERVER={{ database_server }} CXARM_DB_HOST={{ database_server }}
+#   args:
+#     chdir: "{{ cx_installers }}\\CxSAST.890.Release.Setup_8.9.0.210"
+#     creates: "{{ cx_home }}\\CheckmarxWebPortal"
+#   become: yes
+#   become_user: "{{ checkmarx_install_domain_user }}"
+#   vars:
+#     ansible_become_pass: "{{ checkmarx_install_domain_password }}"
+
+# - name: Install CxSAST 8.9 Engine
+#   win_command: >
+#     CxSetup.exe /install /quiet ACCEPT_EULA=Y 
+#        ENGINE=1 MANAGER=1 AUDIT=0 BI=1 WEB=1 
+#   args:
+#     chdir: "{{ cx_installers }}\\CxSAST.890.Release.Setup_8.9.0.210"
+#     creates: "{{ cx_home }}\\Checkmarx Engine Server"
+#   become: yes  
+#   become_user: "{{ checkmarx_install_domain_user }}"
+#   vars:
+#     ansible_become_pass: "{{ checkmarx_install_domain_password }}"
+
+# # Need to configure services to run as service account..
+
+# - name: Run Checkmarx services as service account
+#   win_service:
+#     name: "{{ item }}"
+#     username: "{{ checkmarx_domain_user }}"
+#     password: "{{ checkmarx_domain_password }}"
+#   become: yes
+#   loop:
+#     - CxSystemManager
+#     - CxJobsManager
+#     - CxScansManager
+#     - CxScanEngine
+#     - CxARM
+#     - CxARMETL
+#     - ActiveMQ
+
+# - name: Run Checkmarx IIS App Pools as service account
+#   win_iis_webapppool:
+#     name: "{{ item }}"
+#     attributes:
+#       processModel.identityType: SpecificUser
+#       processModel.userName: "{{ checkmarx_domain_user }}"
+#       processModel.password: "{{ checkmarx_domain_password }}" 
+#       autoStart: yes
+#   become: yes
+#   loop:
+#     - CxClientPool
+#     - CxPool
+#     - CxPoolRestAPI
+
+
+# #############################################################################
+# # HotFix
+# #############################################################################
+
+# # Stop Cx Services before installing hotfix...
+# - name: Stop Checkmarx services
+#   win_service:
+#     name: "{{ item }}"
+#     state: stopped
+#   become: yes
+#   loop:
+#     - CxSystemManager
+#     - CxJobsManager
+#     - CxScansManager
+#     - CxScanEngine
+#     - CxARM
+#     - CxARMETL
+#     - ActiveMQ
+#     - W3SVC
+
+# - name: Install CxSAST 8.9 HotFix 7
+#   win_command: 8.9.0.HF7.exe -cmd
+#   args:
+#     chdir: "{{ cx_installers }}\\8.9.0.HF7"
+#   become: yes  
+#   become_user: "{{ checkmarx_install_domain_user }}"
+#   vars:
+#     ansible_become_pass: "{{ checkmarx_install_domain_password }}"
+
+# # Start Cx Services after installing hotfix
+# # Errors are ignored when starting services because we don't know if the product is licensed and lack of licensing will cause many services to not start
+# # Stop Cx Services before installing hotfix...
+# - name: Start Checkmarx services
+#   win_service:
+#     name: "{{ item }}"
+#     state: started
+#   ignore_errors: yes
+#   become: yes
+#   loop:
+#     - CxSystemManager
+#     - CxJobsManager
+#     - CxScansManager
+#     - CxScanEngine
+#     - CxARM
+#     - CxARMETL
+#     - ActiveMQ
+#     - W3SVC
+
+
+#############################################################################
+# Content Pack
+#############################################################################
+
+# Stop Cx Services before installing content pack...
+#- name: Stop Checkmarx services
+#  win_service:
+#    name: "{{ item }}"
+#   state: stopped
+# become: yes
+# loop:
+#    - CxSystemManager
+#    - CxJobsManager
+#    - CxScansManager
+#    - CxScanEngine
+#    - CxARM
+#    - CxARMETL
+#    - ActiveMQ
+#    - W3SVC
+
+
+#- name: Install CxSAST 8.9 Content Pack CP12
+#  win_command: CxSAST-8.9.0-CP12.exe -cmd
+#  args:
+#    chdir: "{{ cx_installers }}\\8.9.0-CP12"
+#  become: yes  
+#  become_user: "{{ checkmarx_install_domain_user }}"
+#  vars:
+#    ansible_become_pass: "{{ checkmarx_install_domain_password }}"
+
+# Start Cx Services after installing hotfix
+# Errors are ignored when starting services because we don't know if the product is licensed and lack of licensing will cause many services to not start
+# Stop Cx Services before installing hotfix...
+#- name: Start Checkmarx services
+#  win_service:
+#    name: "{{ item }}"
+#    state: started
+#  ignore_errors: yes
+#  become: yes
+#  loop:
+#    - CxSystemManager
+#    - CxJobsManager
+#    - CxScansManager
+#    - CxScanEngine
+#    - CxARM
+#    - CxARMETL
+#    - ActiveMQ
+#    - W3SVC
+
+
+# Ports
+# ActivMQ
+#  Message Broker: 61616
+# Apache Tomcat
+#  HTTP Port: 8080
+#  HTTPS Port: 8443
+#  Shutdown Port: 8005
+#  AJP Port: 8009
+

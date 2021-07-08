@@ -1,0 +1,11 @@
+---
+- name: Configure CxSAST Manager
+  hosts: cxsastmanager
+  become_user: Administrator 
+  become_method: runas
+  roles:
+    #- role: dependencies/sql-server-express
+    #- role: cxsast-89-manager
+    #- role: cxsast-hotfix
+    - role: lab/tools
+  

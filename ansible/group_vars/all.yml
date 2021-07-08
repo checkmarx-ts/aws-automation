@@ -1,0 +1,39 @@
+---
+###############################################################################
+# Ansible General Options
+############################################################################### 
+ansible_user: Administrator
+ansible_port: 5986
+ansible_connection: winrm
+ansible_become_pass: "{{ ansible_password }}"
+# The following is necessary for Python 2.7.9+ when using default WinRM self-signed certificates:
+ansible_winrm_server_cert_validation: ignore
+# Increase timeouts for intermittent network issues and read timeout errors keep occurring
+ansible_winrm_operation_timeout_sec: 60   # default: 20
+ansible_winrm_read_timeout_sec: 120       # default: 30
+
+###############################################################################
+# Checkmarx Paths
+###############################################################################
+cx_automation: C:\\ProgramData\\checkmarx\\automation
+cx_installers: "{{ cx_automation }}\\installers"
+cx_dependencies: "{{ cx_automation }}\\dependencies"
+cx_home: C:\Program Files\Checkmarx
+
+
+###############################################################################
+# Checkmarx Dependency Sources
+###############################################################################
+# The s3 bucket and key prefix from which the dependencies and installers will be obtained.
+s3_bucket_name: cx-na-lab-bucket
+# Controls if dependencies will be installed from public chocolatey or from internal via script
+# This does NOT control the sql-server-express role which will ALWAYS use chocolatey.
+use_chocolatey: false
+
+
+###############################################################################
+# Checkmarx Services URIs
+###############################################################################
+# The MS SQL Server address checkmarx will connect to for CxDB, CxArm, and CxActivity databases
+database_server: localhost\SQLExpress
+

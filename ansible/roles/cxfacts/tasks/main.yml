@@ -1,0 +1,90 @@
+---
+# These "Component Installation Facts" are used by the Cx Component roles to hold the install state
+# of a component. Even with the /install flag (and not /uninstall) if you send in a "0" for
+# certain Cx Components they will be removed, and since the roles in this playbook are designed
+# to install one role at a time (for modularity and because all roles at one time hangs) we have
+# to keep track of whats installed as "facts" from the beginning of the play and let individual 
+# installers set their fact to 1 after install. Without this, components would seem to come and go
+# in an unpredictable manner. Look at roles/cxsastengine/tasks/*.yml to see an example of 
+# how these facts are used in the installer command line args. 
+- name: Initialize Checkmarx Component Installation Facts
+  set_fact:
+    cx_web: 0
+    cx_manager: 0
+    cx_audit: 0
+    cx_engine: 0
+    cx_bi: 0
+    cpp_redist: 0
+    dotnet: 0
+
+
+
+#############################################################################
+# For each component: determine install state from registry and set fact
+# to 1 if installed.
+#
+# Note: there is lots of interesting info (like version and hotfix version)
+#       in the win_reg_stat return values other than 'exists' that might
+#       be useful in future. ref: https://docs.ansible.com/ansible/latest/modules/win_reg_stat_module.html#return-values
+#############################################################################
+- name: Get Checkmarx Web Portal Registry 
+  win_reg_stat:
+    path: HKLM:\SOFTWARE\Checkmarx\Installation\CheckmarxWebPortal
+  register: webportal
+- name: Set Cx Web Portal Component State
+  set_fact:
+    cx_web: 1
+  when: webportal.exists
+
+- name: Get Checkmarx Manager Registry 
+  win_reg_stat:
+    path: HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx System Manager
+  register: manager
+- name: Set Cx Manager Component State
+  set_fact:
+    cx_manager: 1
+  when: manager.exists
+
+- name: Get Checkmarx Audit Registry 
+  win_reg_stat:
+    path: HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Audit
+  register: audit
+- name: Set Cx Audit Component State
+  set_fact:
+    cx_audit: 1
+  when: audit.exists
+
+- name: Get Checkmarx Engine Registry 
+  win_reg_stat:
+    path: HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Engine Server
+  register: engine
+- name: Set Cx Engine Component State
+  set_fact:
+    cx_engine: 1
+  when: engine.exists
+
+- name: Get Checkmarx ARM Registry 
+  win_reg_stat:
+    path: HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx BI Analytics
+  register: bi
+- name: Set CxARM Component State
+  set_fact:
+    cx_bi: 1
+  when: bi.exists
+
+
+- name: CPP Redist
+  win_reg_stat:
+    path: HKLM:\SOFTWARE\Classes\Installer\Products\1926E8D15D0BCE53481466615F760A7F
+  register: cpp
+- set_fact:
+    cpp_redist: 1
+  when: cpp.exists
+
+- name: Dotnet prereq
+  win_reg_stat:
+    path: HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full
+  register: dotnet
+
+- debug:
+    var: dotnet

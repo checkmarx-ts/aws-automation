@@ -1,0 +1,15 @@
+- name: Install Tools
+  become: yes
+  win_chocolatey:
+    name:
+      - notepadplusplus
+      - vim
+      - googlechrome
+      - firefox
+      - 7zip
+      - sql-server-management-studio
+      - wireshark
+      - vscode
+      - postman
+      - sysinternals
+    state: present

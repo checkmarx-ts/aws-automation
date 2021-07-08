@@ -1,0 +1,304 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Create Checkmarx SAST servers
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: Network
+      Parameters:
+      - pVpcId
+      - pManagerSubnets
+      - pEngineSubnets
+      - pManagerAvailabilityZones
+      - pEngineAvailabilityZones
+    - Label:
+        default: Environment
+      Parameters:
+      - pS3Bucket
+      - pEbsKey
+      - pEc2Key      
+    - Label: 
+        default: Database
+      Parameters:
+      - pSqlServerHost    
+    - Label:
+        default: Manager
+      Parameters:
+      - pManagerAmi
+      - pManagerInstanceType
+      - pManagerIamProfile
+      - pManagerSecurityGroups  
+    - Label:
+        default: Engines
+      Parameters:
+      - pEngineAmi
+      - pEngineIamProfile
+      - pEngineSecurityGroups
+      - pEngineSmallInstanceType
+
+Parameters:
+  pManagerAmi:
+    Description: AMI for the Checkmarx Manager
+    Type: String
+    Default: ami-09e5cda96996376bc
+  pEngineAmi:
+    Description: AMI for the Checkmarx Engines
+    Type: String
+    Default: ami-02f241c8bc3f4eeb3
+  pManagerSubnets:
+    Description: Subnets into which to deploy the manager server(s)
+    Type: List<AWS::EC2::Subnet::Id>
+    Default: subnet-07af776b4c0432034, subnet-0dcb2bf661216b285
+  pEngineSubnets:
+    Description: Subnets into which to deploy the engine server(s)
+    Type: List<AWS::EC2::Subnet::Id>
+    Default: subnet-07af776b4c0432034, subnet-0dcb2bf661216b285
+  pVpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VpcId into which to deploy
+    Default: vpc-03fcc783b081498d9
+  pSqlServerHost:
+    Type: String
+    Description: The sql server hostname, port to connect to
+    Default: localhost\SQLExpress
+  pS3Bucket: 
+    Type: String 
+    Description: The checkmarx s3 bucket
+    Default: cx-na-lab-bucket
+  pManagerInstanceType:
+    Type: String
+    Description: The instance type of the manager server
+    Default: t3.large
+  pEngineSmallInstanceType:
+    Type: String
+    Description: Instance type of the small engine servers
+    Default: t3.large
+  pEbsKey:
+    Type: String
+    Description: The key used to encrypt ebs volumes. Find the default key arn with aws kms describe-key --key-id alias/aws/ebs
+    Default: arn:aws:kms:us-east-1:275043232443:key/e4a9a443-febd-4f97-abdb-2ced64df395a
+  pManagerIamProfile:
+    Type: String
+    Description: IAM Profile for the manager. Format of arn:aws:iam::<account-id>:instance-profile/<instance-profile-name>.
+    Default: arn:aws:iam::275043232443:instance-profile/checkmarx-cxsast-manager
+  pEngineIamProfile:
+    Type: String
+    Description: IAM Profile for the engine. Format of arn:aws:iam::<account-id>:instance-profile/<instance-profile-name>.
+    Default: arn:aws:iam::275043232443:instance-profile/checkmarx-cxsast-engine
+  pEc2Key:
+    Type: String
+    Default: stokes-oregon	
+    Description: The key for ec2 instances
+  pManagerSecurityGroups:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Manager security groups
+    Default: sg-04a9345758d510fb0, sg-0a2771a87f57be756
+  pEngineSecurityGroups:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Manager security groups 
+    Default: sg-0d9467fb3bfe94fbc, sg-0a2771a87f57be756
+  pManagerAvailabilityZones:
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+    Description: AZs for the manager servers
+    Default: us-east-2a, us-east-2b
+  pEngineAvailabilityZones:
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+    Description: AZs for the engine servers
+    Default: us-east-2a, us-east-2b
+  pDnsName:
+    Type: String
+    Description: The value for the checkmarx:dns tag. Route53 routes for the hosted zone will be created.
+    Default: example.dev.checkmarx-ts.com
+  pLetsEncryptContact:
+    Type: String
+    Description: The email for the letsencrypt.org account owner - used for provisioning certs. 
+    Default: ben.stokes@checkmarx.com
+  
+Resources:
+###############################################################################
+# Checkmarx Manager Server
+#  - Launch template
+#  - Auto scaling group
+#  - Target group
+#  - Network loadbalancer
+#  - NLB Listener
+###############################################################################
+  CxManagerLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs:
+              VolumeSize: 100
+              Encrypted: true
+              #KmsKeyId: !Ref pEbsKey
+              VolumeType: gp2
+          - DeviceName: /dev/sdm
+            Ebs:
+              VolumeSize: 250
+              Encrypted: true
+              #KmsKeyId: !Ref pEbsKey
+              VolumeType: gp2
+        EbsOptimized: true
+        IamInstanceProfile:
+          Arn: !Ref pManagerIamProfile
+        ImageId: !Ref pManagerAmi
+        InstanceType: !Ref pManagerInstanceType
+        KeyName: !Ref pEc2Key
+        SecurityGroupIds: !Ref pManagerSecurityGroups
+        UserData: 
+          Fn::Base64: 
+            Fn::Sub: |
+              <powershell>
+              ${!env:CheckmarxBucket} = "${pS3Bucket}"
+
+              # Automatic License Generator
+              Read-S3Object -BucketName ${!env:CheckmarxBucket} -KeyPrefix installation/field/alg -Folder c:\programdata\checkmarx\alg
+              C:\programdata\checkmarx\aws-automation\scripts\configure\license-from-alg.ps1
+
+              # Put CxArm behind a SSL Termination proxy 
+              #C:\programdata\checkmarx\aws-automation\scripts\configure\configure-cxarm-iis-reverseproxy.ps1
+
+              # Cloudwatch Logs Configuration
+              #c:\programdata\checkmarx\aws-automation\scripts\configure\configure-cloudwatch-logs.ps1
+              
+              # Install Lab Toolset
+              c:\programdata\checkmarx\aws-automation\scripts\lab\install-tools.ps1
+
+              # Set up route 53 (server must be tagged w/ checkmarx:dns with a name in a R53 hosted zone)
+              c:\programdata\checkmarx\aws-automation\scripts\configure\configure-route53-recordset.ps1
+
+              # Get certificates for the machine using lets encrypt. You can provision  your certs some  
+              # other way and then pass them to configure-manager-ssl.ps1 for customization. 
+              c:\programdata\checkmarx\aws-automation\scripts\ssl\request-lets-encrypt.ps1
+              #c:\programdata\checkmarx\aws-automation\scripts\ssl\configure-manager-ssl.ps1
+
+              </powershell>
+      LaunchTemplateName: CxManagerTemplate
+
+
+  CxManagerAsg:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    CreationPolicy:
+      ResourceSignal:
+        Count: '1'
+        Timeout: PT1H
+    Properties:
+      AutoScalingGroupName: CxAutoScaleManager
+      AvailabilityZones: !Ref pManagerAvailabilityZones
+      DesiredCapacity: "1"
+      LaunchTemplate:
+        LaunchTemplateId: !Ref CxManagerLaunchTemplate
+        Version: !GetAtt CxManagerLaunchTemplate.LatestVersionNumber
+      MaxSize: "1"
+      MinSize: "1"
+      TargetGroupARNs: 
+        - !Ref CxManagerTargetGroup
+      VPCZoneIdentifier: !Ref pManagerSubnets
+      Tags:
+        - Key: Name
+          PropagateAtLaunch: True
+          Value: CxManagerAsg
+        - Key: checkmarx:component
+          PropagateAtLaunch: True
+          Value: manager
+
+  CxManagerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties: 
+      Name: CxManagerTargetGroup
+      Port: 80
+      Protocol: TCP
+      TargetType: instance
+      VpcId: !Ref pVpcId
+
+  CxManagerNLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties: 
+      IpAddressType: ipv4 #required for NLB
+      Name: CxManagerNLB
+      Scheme: internet-facing
+      Subnets: !Ref pManagerSubnets
+      Type: network
+
+  CxManagerNLB80Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties: 
+      DefaultActions: 
+        - Type: forward
+          TargetGroupArn: !Ref CxManagerTargetGroup
+      LoadBalancerArn: !Ref CxManagerNLB
+      Port: 80
+      Protocol: TCP
+
+###############################################################################
+# Checkmarx Engine Server - Small
+#  - Launch template
+#  - Auto scaling group
+#  - Target group
+###############################################################################
+  CxEngineSmallLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: CxEngingeSTemplate
+      LaunchTemplateData:
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs:
+              VolumeSize: 100
+              Encrypted: true
+              #KmsKeyId: !Ref pEbsKey
+              VolumeType: gp2
+        EbsOptimized: true
+        IamInstanceProfile:
+          Arn: !Ref pEngineIamProfile
+        ImageId: !Ref pEngineAmi
+        InstanceType: !Ref pEngineSmallInstanceType
+        KeyName: !Ref pEc2Key
+        SecurityGroupIds: !Ref pEngineSecurityGroups
+        UserData: 
+          Fn::Base64: 
+            Fn::Sub: |
+              <powershell>
+              c:\programdata\checkmarx\aws-automation\scripts\configure-max-scans-per-machine.ps1 -scans 1
+              </powershell>
+
+  CxEngineSAsg:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: PT1H30M
+    Properties:
+      AutoScalingGroupName: CxAutoScaleEngineS
+      AvailabilityZones: !Ref pEngineAvailabilityZones
+      DesiredCapacity: 1
+      LaunchTemplate:
+        LaunchTemplateId: !Ref CxEngineSmallLaunchTemplate
+        Version: !GetAtt CxEngineSmallLaunchTemplate.LatestVersionNumber
+      MaxSize: 1
+      MinSize: 1
+      TargetGroupARNs: 
+        - !Ref CxEngineSmallTargetGroup
+      VPCZoneIdentifier: !Ref pEngineSubnets
+      Tags:
+        - Key: Name
+          PropagateAtLaunch: True
+          Value: CxEngineSmallAsg
+        - Key: checkmarx:component
+          PropagateAtLaunch: True
+          Value: engine
+ 
+  CxEngineSmallTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties: 
+      Name: CxEngineSmallTargetGroup
+      Port: 80
+      Protocol: TCP
+      TargetType: instance
+      VpcId: !Ref pVpcId
+
+

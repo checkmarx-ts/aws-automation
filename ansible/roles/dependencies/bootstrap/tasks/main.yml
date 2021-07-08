@@ -1,0 +1,16 @@
+---
+- name: Create cache folders
+  win_file:
+    path: "{{ item }}" 
+    state: directory 
+  loop:
+     - "{{ cx_automation }}"
+     - "{{ cx_installers }}"
+     - "{{ cx_dependencies }}"
+
+- name: Set CheckmarxBucket environment variable
+  win_environment:
+    state: present
+    name: CheckmarxBucket
+    value: "{{ s3_bucket_name }}"
+    level: machine     

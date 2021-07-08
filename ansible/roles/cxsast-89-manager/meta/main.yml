@@ -1,0 +1,8 @@
+--- 
+dependencies:
+  - cxfacts
+  - dependencies/bootstrap
+  #- dependencies/cpp2010sp1
+ # - dependencies/git
+  #- dependencies/adoptopenjdk8
+  #- dependencies/dotnet48

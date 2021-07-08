@@ -1,0 +1,6 @@
+--- 
+dependencies:
+  - cxfacts
+  - dependencies/bootstrap
+  - dependencies/cpp2010sp1
+  - dependencies/dotnet48

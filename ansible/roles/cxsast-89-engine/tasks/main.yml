@@ -1,0 +1,12 @@
+---
+- name: Configure Windows Defender
+  become: yes
+  script: ../../../scripts/configure/configure-windows-defender.ps1
+
+- name:  Install Checkmarx
+  become: yes
+  script:  ../../../scripts/install/cxsast/install-cxsast89.ps1 -ACCEPT_EULA -ENGINE
+
+- name:  Configure Concurrent Scans to 1
+  become: yes
+  script:  ../../../scripts/configure/configure-max-scans-per-machine.ps1 -scans 1
