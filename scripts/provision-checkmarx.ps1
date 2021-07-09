@@ -793,9 +793,9 @@ if ($isManager) {
 ###############################################################################
 # Trusted Certs
 ###############################################################################
-$certalias = 0
+$certalias = "unknown"
 $config.Ssl.TrustedCerts | ForEach-Object {
-    $certalias++
+    
     if (!([String]::IsNullOrEmpty($_))) {
 
         $cert = [DependencyFetcher]::new($_).Fetch()  
@@ -808,9 +808,9 @@ $config.Ssl.TrustedCerts | ForEach-Object {
             $log.Warn("An error occured attempting to import $_ into LocaMachine\Root and LocalMachine\TrustedPublisher cert stores")
         }
 
-        $certalias = $_
+        $certalias = [Utility]::Basename($cert)
 
-        gci "C:\Program Files\Checkmarx" -Recurse -Filter "cacerts" | ForEach-Object {
+        gci "C:\Program Files" -Recurse -Filter "cacerts" | ForEach-Object {
             $cacerts = $_.FullName 
             try {
                 if (![String]::IsNullOrEmpty($cacerts)) {
