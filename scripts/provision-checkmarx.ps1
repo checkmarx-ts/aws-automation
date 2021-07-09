@@ -916,7 +916,7 @@ if ($isManager) {
     Write-Host "$(Get-Date) restarting IIS"
     iisreset
     Write-Host "$(Get-Date) waking up the identity authority"
-    iwr -uri "https://$($config.Checkmarx.fqdn)/cxrestapi/auth" -UseBasicParsing
+    iwr -uri "$($config.CxComponentConfiguration.IdentityAuthority)" -UseBasicParsing
 }
 
 
