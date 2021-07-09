@@ -964,7 +964,8 @@ $log.Info("provisioning has completed. Rebooting.")
 
 # Copy the log to installation folder so it can be downloaded by server administrator
 try {
-    Copy-Item C:\provision-checkmarx.log 'C:\Program Files\Checkmarx\Logs\Installation\provision-checkmarx.log'
+    md -force "C:\Program Files\Checkmarx\Logs\Installation"
+    Copy-Item -Path "C:\provision-checkmarx.log" -Destination 'C:\Program Files\Checkmarx\Logs\Installation\provision-checkmarx.log'
 } catch {
     $_
 }
