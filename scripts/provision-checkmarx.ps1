@@ -411,7 +411,12 @@ if ($config.MsSql.UseSqlAuth -eq "True") {
 }
 
 
-
+# Update the dynamic installer arguments based on the environment and configuration
+$jrepath = $(Get-ChildItem "C:\Program Files\AdoptOpenJdk" -Recurse -Filter "jre" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
+if ($null -eq $jrepath) {
+    $jrepath = $(Get-ChildItem "C:\Program Files\Amazon Corretto" -Recurse -Filter "jre" | Sort -Descending | Select -First 1 -ExpandProperty FullName)
+}
+$config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) CX_JAVA_HOME=""${jrepath}"""
 
 
 
@@ -443,7 +448,7 @@ if ($isEngine -and (!($isManager))) {
        Write-Host "Downloading from s3://$env:CheckmarxBucket/$s3object"
        Read-S3Object -BucketName $env:CheckmarxBucket -Key $s3object -File "C:\ProgramData\CheckmarxAutomation\Artifacts\engineConfiguration.json"
        Write-Host "Finished downloading $filename"
-       $config.Checkmarx.InstallerArgs = "$($config.Checkmarx.InstallerArgs) ENGINE_SETTINGS_FILE=""C:\ProgramData\CheckmarxAutomation\Artifacts\engineConfiguration.json"""
+       $config.Checkmarx.Installer.Args = "$($config.Checkmarx.Installer.Args) ENGINE_SETTINGS_FILE=""C:\ProgramData\CheckmarxAutomation\Artifacts\engineConfiguration.json"""
     } catch {
        Throw "ERROR: An exception occured calling Read-S3Object cmdlet. Check IAM Policies and if AWS Powershell is installed"
        exit 1
