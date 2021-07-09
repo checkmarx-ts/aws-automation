@@ -912,7 +912,7 @@ if ($isManager) {
 #Reconfigure Access Control on Manager
 if ($isManager) {
     Write-Host "$(Get-Date) reconfiguring access control"
-    Start-Installer -command (Find-Artifact -artifact "CxSetup.exe") -installerArguments "/install /quiet RECONFIGURE_ACCESS_CONTROL=1"
+    Start-Installer -command ([Utility]::Find("CxSetup.exe")) -installerArguments "/install /quiet RECONFIGURE_ACCESS_CONTROL=1"
     Write-Host "$(Get-Date) restarting IIS"
     iisreset
     Write-Host "$(Get-Date) waking up the identity authority"
@@ -937,7 +937,7 @@ if ($isManager) {
 
     if ($isEngine) {
         Write-Host "$(Get-Date) Reconfiguring the local engine"
-        $p = Start-Process (Find-Artifact -Artifact "*CxSetup.exe") -ArgumentList "/install /quiet RECONFIGURE_ENGINE=1 ENGINE_SETTINGS_FILE=""$engineConfigFile""" -Wait -NoNewWindow -PassThru
+        $p = Start-Process ([Utility]::Find("CxSetup.exe")) -ArgumentList "/install /quiet RECONFIGURE_ENGINE=1 ENGINE_SETTINGS_FILE=""$engineConfigFile""" -Wait -NoNewWindow -PassThru
         Write-Host "$(Get-Date) Reconfigure engine exit code: $($p.ExitCode)"
     }
 
