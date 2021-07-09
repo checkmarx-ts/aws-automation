@@ -582,7 +582,7 @@ try {
 
         if (!([String]::IsNullOrEmpty($config.ActiveMq.Host))) {
             $log.Info("Updating ACTIVE_MESSAGE_QUEUE_URL")
-            $cxdb.ExecuteNonQuery("update [Config].[CxEngineConfigurationKeysMeta] set [value] = '$($config.ActiveMq.Host)' where [key] = 'ACTIVE_MESSAGE_QUEUE_URL'")
+            $cxdb.ExecuteNonQuery("update [Config].[CxEngineConfigurationKeysMeta] set [DefaultValue] = '$($config.ActiveMq.Host)' where [KeyName] = 'ACTIVE_MESSAGE_QUEUE_URL'")
         }
 
         if (!([String]::IsNullOrEmpty($config.CxComponentConfiguration.WebServer))) {
