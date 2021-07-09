@@ -911,11 +911,11 @@ if ($isManager) {
 
 #Reconfigure Access Control on Manager
 if ($isManager) {
-    Write-Host"$(Get-Date) reconfiguring access control"
+    Write-Host "$(Get-Date) reconfiguring access control"
     Start-Installer -command (Find-Artifact -artifact "CxSetup.exe") -installerArguments "/install /quiet RECONFIGURE_ACCESS_CONTROL=1"
-    Write-Host"$(Get-Date) restarting IIS"
+    Write-Host "$(Get-Date) restarting IIS"
     iisreset
-    Write-Host"$(Get-Date) waking up the identity authority"
+    Write-Host "$(Get-Date) waking up the identity authority"
     iwr -uri "https://$($config.Checkmarx.fqdn)/cxrestapi/auth" -UseBasicParsing
 }
 
