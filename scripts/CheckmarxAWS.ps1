@@ -1071,6 +1071,86 @@ Class CxSastHotfixInstaller : Base {
 }
 
 
+# TLS 1.2 has nearly universal adoption, so we need to configure the 
+# .Net Framework and OS to use TLS 1.2 (it is not the default)
+# https://checkmarx.atlassian.net/wiki/spaces/KC/pages/1357611111/Enabling+TLS+1.2+Support+on+the+CxManager
+function Set-SystemTlsConfiguration() {
+  Write-Host "$(Get-Date) Entering Set-SystemTlsConfiguration"
+
+  $isRegistryDirty = $False
+
+  # dotnet x64
+  $RegistryPath = "HKLM:\SOFTWARE\Microsoft\.NETFramework\v4.0.30319"
+  if ((Get-ItemProperty $RegistryPath).SchUseStrongCrypto -eq $null) {
+      Write-Host "$(Get-Date) Setting '$RegistryPath' SchUseStrongCrypto to 1"
+      New-ItemProperty -Path $RegistryPath -Name "SchUseStrongCrypto" -Value "1" -PropertyType DWORD -Force | Out-Null
+      $isRegistryDirty = $True
+  }
+
+  # dotnet x86
+  $RegistryPath = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\.NETFramework\v4.0.30319"
+  if ((Get-ItemProperty $RegistryPath).SchUseStrongCrypto -eq $null) {
+      Write-Host "$(Get-Date) Setting '$RegistryPath' SchUseStrongCrypto to 1"
+      New-ItemProperty -Path $RegistryPath -Name "SchUseStrongCrypto" -Value "1" -PropertyType DWORD -Force | Out-Null
+      $isRegistryDirty = $True
+  }
+
+
+  # Create the TLS 1.2 Key if needed.
+  $RegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2"
+  if ((Test-Path -Path $RegistryPath) -eq $False) {
+      Write-Host "$(Get-Date) Creating '$RegistryPath'"
+      New-Item -Path $RegistryPath | Out-Null
+      $isRegistryDirty = $True
+  }
+
+
+  # System TLS 1.2 - DisabledByDefault off
+  $RegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2"
+  if ((Get-ItemProperty $RegistryPath).DisabledByDefault -eq $null) {
+      Write-Host "$(Get-Date) Setting '$RegistryPath' DisabledByDefault to 0"
+      New-ItemProperty -Path $RegistryPath -Name "DisabledByDefault" -Value "0" -PropertyType DWORD -Force | Out-Null
+      $isRegistryDirty = $True
+  }
+
+  # System TLS 1.2 - Enabled
+  $RegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2"
+  if ((Get-ItemProperty $RegistryPath).Enabled -eq $null) {
+      Write-Host "$(Get-Date) Setting '$RegistryPath' Enabled to 1"
+      New-ItemProperty -Path $RegistryPath -Name "Enabled" -Value "1" -PropertyType DWORD -Force | Out-Null
+      $isRegistryDirty = $True
+  }
+
+
+  # Create the TLS 1.2 Client Key if needed.
+  $RegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Client"
+  if ((Test-Path -Path $RegistryPath) -eq $False) {
+      Write-Host "$(Get-Date) Creating '$RegistryPath'"
+      New-Item -Path $RegistryPath | Out-Null
+      $isRegistryDirty = $True
+  }
+  
+  # Client TLS 1.2 - DisabledByDefault off
+  $RegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Client"
+  if ((Get-ItemProperty $RegistryPath).DisabledByDefault -eq $null) {
+      Write-Host "$(Get-Date) Setting '$RegistryPath' DisabledByDefault to 0"
+      New-ItemProperty -Path $RegistryPath -Name "DisabledByDefault" -Value "0" -PropertyType DWORD -Force | Out-Null
+      $isRegistryDirty = $True
+  }
+
+  # Client TLS 1.2 - Enabled
+  $RegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Client"
+  if ((Get-ItemProperty $RegistryPath).Enabled -eq $null) {
+      Write-Host "$(Get-Date) Setting '$RegistryPath' Enabled to 1"
+      New-ItemProperty -Path $RegistryPath -Name "Enabled" -Value "1" -PropertyType DWORD -Force | Out-Null
+      $isRegistryDirty = $True
+  }
+
+  if ($isRegistryDirty) {
+      Write-Warning "The registry has been modified and you may need a reboot before continuing on if there is not one you can piggy back on."
+  }
+}
+
 Class CxEnginesApiClient {
   [string] $username 
   [string] $password 

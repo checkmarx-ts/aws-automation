@@ -199,6 +199,11 @@ if ($isManager)  {
     }
 }
 
+# Set the system (via registry) to use TLS 1.2.
+if (!([Utility]::Exists("${lockdir}\system-tls.lock"))) {
+    Set-SystemTlsConfiguration
+    "Complete" | Set-Content "${lockdir}\system-tls.lock"
+}
 
 ###############################################################################
 #  Fetch Checkmarx Installation Media and Unzip
