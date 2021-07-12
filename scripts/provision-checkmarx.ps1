@@ -917,7 +917,7 @@ if ($isManager) {
 #Reconfigure Access Control on Manager
 if ($isManager) {
     Write-Host "$(Get-Date) reconfiguring access control"
-    Start-Installer -command ([Utility]::Find("CxSetup.exe")) -installerArguments "/install /quiet RECONFIGURE_ACCESS_CONTROL=1"
+    [BasicInstaller]::new([Utility]::Find("CxSetup.exe"), "/install /quiet RECONFIGURE_ACCESS_CONTROL=1").BaseInstall()
     Write-Host "$(Get-Date) restarting IIS"
     iisreset
     Write-Host "$(Get-Date) waking up the identity authority"
