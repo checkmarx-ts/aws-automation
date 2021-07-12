@@ -498,7 +498,7 @@ if (!([Utility]::Exists("${lockdir}\cxsastinstall.lock"))) {
 if (!([Utility]::Exists("${lockdir}\cxhfinstall.lock"))) {
     #[CxSastInstaller]::new([Utility]::Find("CxSetup.exe"), $config.Checkmarx.Installer.Args).Install()
     [CxSastHotfixInstaller]::new([Utility]::Find("*HF*.exe")).Install()
-    [CxSastServiceController]::new().EnableAll()
+    
     "complete" | Set-Content "${lockdir}\cxhfinstall.lock"
     #restart-computer -Force
     #sleep 900
@@ -606,9 +606,6 @@ try {
     $log.Warn("An error occured updating the database")
     $_
 }
-
-
-
 
 
 
@@ -851,7 +848,7 @@ if (!([String]::IsNullOrEmpty($config.Ssl.Url))) {
 
 
     Write-Host "$(Get-Date) restarting services"
-    Stop-Service cx* -Force
+    [CxSastServiceController]::new().EnableAll()
     if ($isManager) {
         start-service CxSystemManager
     }
