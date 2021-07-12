@@ -839,7 +839,8 @@ $config.Ssl.TrustedCerts | ForEach-Object {
 # SSL Configuration
 ###############################################################################
 $log.Info("Configuring SSL")
-$hostname = get-ec2instancemetadata -Category LocalHostname
+# Pull hostname from the webserver configuration without the protocol
+$hostname = $config.CxComponentConfiguration.WebServer.replace("https://","").replace("http://","")
 $ssl_file = ""
 if (!([String]::IsNullOrEmpty($config.Ssl.Url))) {
     try {
