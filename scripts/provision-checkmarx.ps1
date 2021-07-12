@@ -721,19 +721,6 @@ if ($config.aws.UseCloudwatchLogs) {
 }
 
 
-###############################################################################
-# Configure max scans on engine
-###############################################################################
-if ($config.Checkmarx.Installer.Args.Contains("ENGINE=1")) {
-    $log.Info("Configuring engine MAX_SCANS_PER_MACHINE to $($config.Checkmarx.MaxScansPerMachine)")
-    $config_file = "$(Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Engine Server' -Name 'Path')\CxSourceAnalyzerEngine.WinService.exe.config"
-    [Xml]$xml = Get-Content "$config_file"
-    $obj = $xml.configuration.appSettings.add | where {$_.Key -eq "MAX_SCANS_PER_MACHINE" }
-    $obj.value = "$($config.Checkmarx.MaxScansPerMachine)" 
-    $xml.Save("$config_file")     
-    $log.Info("... finished configuring engine MAX_SCANS_PER_MACHINE" )
-}
-
 
 ###############################################################################
 # Activate Git trace logging
