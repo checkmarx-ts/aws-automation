@@ -959,5 +959,6 @@ try {
 } catch {
     $_
 }
+[CxSastServiceController]::new().EnableAll()
 restart-computer -force 
 sleep 900
