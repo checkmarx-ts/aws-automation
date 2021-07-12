@@ -222,9 +222,9 @@ Class CheckmarxSystemInfo {
   
     $this.IsEngine = ( !([String]::IsNullOrEmpty($this.EngineConfigFile)) -and (Test-Path -Path $this.EngineConfigFile))
     $this.IsWebPortal = ( !([String]::IsNullOrEmpty($this.WebConfigFile)) -and (Test-Path -Path $this.WebConfigFile))
-    $this.IsSystemManager = ( !([String]::IsNullOrEmpty($this.isSystemManager)) -and (Test-Path -Path $this.isSystemManager))
-    $this.IsJobsManager = ( !([String]::IsNullOrEmpty($this.isJobsManager)) -and (Test-Path -Path $this.isJobsManager))
-    $this.IsScansManager = ( !([String]::IsNullOrEmpty($this.isScansManager)) -and (Test-Path -Path $this.isScansManager))
+    $this.IsSystemManager = ( !([String]::IsNullOrEmpty($this.SystemManagerConfigFile)) -and (Test-Path -Path $this.SystemManagerConfigFile))
+    $this.IsJobsManager = ( !([String]::IsNullOrEmpty($this.JobsManagerConfigFile)) -and (Test-Path -Path $this.JobsManagerConfigFile))
+    $this.IsScansManager = ( !([String]::IsNullOrEmpty($this.ScansManagerConfigFile)) -and (Test-Path -Path $this.ScansManagerConfigFile))
   }
 }
 
