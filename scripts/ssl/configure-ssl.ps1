@@ -81,14 +81,22 @@ log "Importing the certificate to Cert:\LocalMachine\TrustedPublisher"
 Import-Certificate -FilePath c:\cxserver.cer -CertStoreLocation Cert:\LocalMachine\TrustedPublisher | Out-Null
 log "Finished configuring this cert to be trusted locally"
 
-try {
-  $cacerts = (gci "C:\Program Files\Checkmarx" -Recurse -Filter "cacerts").FullName
-  if (![String]::IsNullOrEmpty($cacerts)) {
-      keytool -importcert -file "c:\cxserver.cer" -keystore "${cacerts}" -storepass "changeit" -alias "cxserver.cer" -noprompt
+
+gci "C:\Program Files" -Recurse -Filter "cacerts" | ForEach-Object {
+  $cacerts = $_.FullName 
+  $cert = "c:\cxserver.cer"
+  $certalias = "cxserver.cer"
+  try {
+      if (![String]::IsNullOrEmpty($cacerts)) {
+          log "Importing ${cert} to ${cacerts} with alias $($certalias)"
+          keytool -importcert -file "${cert}" -keystore "${cacerts}" -storepass "changeit" -alias "$certalias" -noprompt
+          log "Finished import ${cert} to ${cacerts}"
+      }
+  } catch {      
+    log "Could not import cert into cacerts"
   }
-} catch {
-  log "WARN: Could not import cert into cacerts"
 }
+
 
 
 [CxSASTEngineTlsConfigurer]::New($thumbprint).Configure()
