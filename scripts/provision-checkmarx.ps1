@@ -199,6 +199,11 @@ if ($isManager)  {
     }
 }
 
+# Set the system (via registry) to use TLS 1.2.
+if (!([Utility]::Exists("${lockdir}\system-tls.lock"))) {
+    Set-SystemTlsConfiguration
+    "Complete" | Set-Content "${lockdir}\system-tls.lock"
+}
 
 ###############################################################################
 #  Fetch Checkmarx Installation Media and Unzip
@@ -498,7 +503,7 @@ if (!([Utility]::Exists("${lockdir}\cxsastinstall.lock"))) {
 if (!([Utility]::Exists("${lockdir}\cxhfinstall.lock"))) {
     #[CxSastInstaller]::new([Utility]::Find("CxSetup.exe"), $config.Checkmarx.Installer.Args).Install()
     [CxSastHotfixInstaller]::new([Utility]::Find("*HF*.exe")).Install()
-    [CxSastServiceController]::new().EnableAll()
+    
     "complete" | Set-Content "${lockdir}\cxhfinstall.lock"
     #restart-computer -Force
     #sleep 900
@@ -606,9 +611,6 @@ try {
     $log.Warn("An error occured updating the database")
     $_
 }
-
-
-
 
 
 
@@ -721,19 +723,6 @@ if ($config.aws.UseCloudwatchLogs) {
 }
 
 
-###############################################################################
-# Configure max scans on engine
-###############################################################################
-if ($config.Checkmarx.Installer.Args.Contains("ENGINE=1")) {
-    $log.Info("Configuring engine MAX_SCANS_PER_MACHINE to $($config.Checkmarx.MaxScansPerMachine)")
-    $config_file = "$(Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Checkmarx\Installation\Checkmarx Engine Server' -Name 'Path')\CxSourceAnalyzerEngine.WinService.exe.config"
-    [Xml]$xml = Get-Content "$config_file"
-    $obj = $xml.configuration.appSettings.add | where {$_.Key -eq "MAX_SCANS_PER_MACHINE" }
-    $obj.value = "$($config.Checkmarx.MaxScansPerMachine)" 
-    $xml.Save("$config_file")     
-    $log.Info("... finished configuring engine MAX_SCANS_PER_MACHINE" )
-}
-
 
 ###############################################################################
 # Activate Git trace logging
@@ -839,7 +828,8 @@ $config.Ssl.TrustedCerts | ForEach-Object {
 # SSL Configuration
 ###############################################################################
 $log.Info("Configuring SSL")
-$hostname = get-ec2instancemetadata -Category LocalHostname
+# Pull hostname from the webserver configuration without the protocol
+$hostname = $config.CxComponentConfiguration.WebServer.replace("https://","").replace("http://","")
 $ssl_file = ""
 if (!([String]::IsNullOrEmpty($config.Ssl.Url))) {
     try {
@@ -863,7 +853,7 @@ if (!([String]::IsNullOrEmpty($config.Ssl.Url))) {
 
 
     Write-Host "$(Get-Date) restarting services"
-    Stop-Service cx* -Force
+    [CxSastServiceController]::new().EnableAll()
     if ($isManager) {
         start-service CxSystemManager
     }
@@ -917,7 +907,7 @@ if ($isManager) {
 #Reconfigure Access Control on Manager
 if ($isManager) {
     Write-Host "$(Get-Date) reconfiguring access control"
-    Start-Installer -command ([Utility]::Find("CxSetup.exe")) -installerArguments "/install /quiet RECONFIGURE_ACCESS_CONTROL=1"
+    [BasicInstaller]::new([Utility]::Find("CxSetup.exe"), "/install /quiet RECONFIGURE_ACCESS_CONTROL=1").BaseInstall()
     Write-Host "$(Get-Date) restarting IIS"
     iisreset
     Write-Host "$(Get-Date) waking up the identity authority"
@@ -974,5 +964,6 @@ try {
 } catch {
     $_
 }
+[CxSastServiceController]::new().EnableAll()
 restart-computer -force 
 sleep 900

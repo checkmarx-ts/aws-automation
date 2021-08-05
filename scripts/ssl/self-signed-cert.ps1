@@ -14,18 +14,20 @@ Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManage
 $ProgressPreference = "SilentlyContinue"
 function log([string] $msg) { Write-Host "$(Get-Date) [$PSCommandPath] $msg" }
 
-log "Script is running with arguments:"
-log "pfxpassword = $pfxpassword"
-log "domainname = $domainname"
+Write-Host "$(Get-Date) Script is running with arguments:"
+Write-Host "$(Get-Date) pfxpassword = $pfxpassword"
+Write-Host "$(Get-Date) domainname = $domainname"
 
-if ([String]::IsNullOrEmpty($domainname)) {
-    # Get the private ec2 dns name
-    log "domainname parameter is empty. defaulting to use ec2 private dns"
-    $domainname = get-ec2instancemetadata -Category LocalHostname
-}
 
-log "Creating a self signed certificate for $domainname"
-$ssc = New-SelfSignedCertificate -DnsName $domainname -FriendlyName "$domainname" -Subject "cn=$domainname" -CertStoreLocation cert:\LocalMachine\My
+$serverNames = @(
+    $domainname,
+    (get-ec2instancemetadata -Category LocalHostname),
+    (get-ec2instancemetadata -Category PublicHostname),
+    $env:COMPUTERNAME   
+)
+Write-Host "$(Get-Date) Generating self signed certificate with $($serverNames -join ",")."
+$ssc = New-SelfSignedCertificate -DnsName $serverNames -CertStoreLocation "cert:\LocalMachine\My"
+
 log "Certificate created:"
 $ssc 
 log "ensuring c:\programdata\checkmarx\ssl folder exists"
